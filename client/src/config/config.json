@@ -1,0 +1,27 @@
+{
+  "logo": "logo.svg",
+  "ISBNDB_API_KEY": "52758_309271323d4be5b47814f457b0897dd0",
+  "website": {
+    "title": "Hemlock",
+    "description": "Description of your website",
+    "theme": {
+      "primary": "#89023e",
+      "bgBase": "#ffffff",
+      "textBase": "#cc7178",
+      "sizeStep": 6,
+      "borderRadius": 4,
+      "secondary": "#f23E1dd",
+      "tertiary": "#ffd9da"
+    }
+  },
+  "contact_info": {
+    "address": "Your Company Address",
+    "phone": "+1234567890",
+    "email": "info@example.com",
+    "social": {
+      "twitter": "@your_twitter_handle",
+      "facebook": "your_facebook_page",
+      "instagram": "@your_instagram_handle"
+    }
+  }
+}

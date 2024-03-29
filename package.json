@@ -1,0 +1,24 @@
+{
+  "name": "hemlock",
+  "version": "0.1.0",
+  "description": "Book database for my wife",
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "nodemon": "^3.1.0"
+  },
+  "scripts": {
+    "start-server": "nodemon -r dotenv/config ./server/main.js dotenv_config_path=.env.dev",
+    "start-client": "cd client && npm start",
+    "dev": "npm run db:init-dev && npm run copy-covers && concurrently \"npm run start-server\" \"npm run start-client\"",
+    "build-client": "cd client && npm run build",
+    "db:init-dev": "sqlite3 ./server/hemlock.db < ./server/schema.sql && sqlite3 ./server/hemlock.db < ./test_data/test.sql",
+    "copy-covers": "cp -r ./test_data/covers ./client/public/",
+    "build": "npm run build-client && sqlite3 ./server/hemlock.db < ./server/schema.sql",
+    "install-all": "npm install && npm run install-client && npm run install-server",
+    "install-client": "cd client && npm install",
+    "install-server": "cd server && npm install"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5"
+  }
+}

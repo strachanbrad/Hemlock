@@ -1,0 +1,33 @@
+server {
+    listen 80;
+    server_name hemlock.thestrachan.com;
+
+    # Root directory for the client application
+    root /var/www/hemlock/client;
+
+    index index.html index.htm;
+
+    # Serve client files
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Location for the static images
+    location /covers/ {
+        alias /var/www/hemlock/static/covers/;
+    }
+
+    # Proxy API requests to Node.js
+    location /api {
+        proxy_pass http://localhost:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    # Error and access logs
+    error_log /var/log/nginx/hemlock_error.log;
+    access_log /var/log/nginx/hemlock_access.log;
+}

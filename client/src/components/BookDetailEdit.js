@@ -1,3 +1,12 @@
+/*BookDetailEdit.js
+ *
+ * Copyright (c) 2023 Hemlock
+ * Author: Bradly Strachan
+ * 
+ * This file is part of Hemlock, which is released under the GNU General Public License v3.0.
+ * See the file LICENSE in this distribution for more information.
+ */
+
 import React, { useState, useEffect } from 'react';
 import { Form, Input, Layout, Upload, Descriptions, Select } from 'antd';
 import AuthorSelector from './AuthorSelector';

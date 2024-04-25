@@ -1,3 +1,12 @@
+/*BookDetailReadonly.js
+ *
+ * Copyright (c) 2023 Hemlock
+ * Author: Bradly Strachan
+ * 
+ * This file is part of Hemlock, which is released under the GNU General Public License v3.0.
+ * See the file LICENSE in this distribution for more information.
+ */
+
 import React from 'react';
 import { Descriptions, Image, Layout } from 'antd';
 import ToggleIcon from './ToggleIcon'

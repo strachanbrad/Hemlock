@@ -1,24 +1,32 @@
 {
   "name": "hemlock",
   "version": "0.1.0",
-  "description": "Book database for my wife",
-  "devDependencies": {
-    "concurrently": "^8.2.2",
-    "nodemon": "^3.1.0"
+  "private": true,
+  "description": "A book catalogue for one household's library",
+  "license": "GPL-3.0-only",
+  "type": "module",
+  "engines": {
+    "node": ">=26"
   },
+  "workspaces": [
+    "client",
+    "server"
+  ],
   "scripts": {
-    "start-server": "nodemon -r dotenv/config ./server/main.js dotenv_config_path=.env.dev",
-    "start-client": "cd client && npm start",
-    "dev": "npm run db:init-dev && npm run copy-covers && concurrently \"npm run start-server\" \"npm run start-client\"",
-    "build-client": "cd client && npm run build",
-    "db:init-dev": "sqlite3 ./server/hemlock.db < ./server/schema.sql && sqlite3 ./server/hemlock.db < ./test_data/test.sql",
-    "copy-covers": "cp -r ./test_data/covers ./client/public/",
-    "build": "npm run build-client && sqlite3 ./server/hemlock.db < ./server/schema.sql",
-    "install-all": "npm install && npm run install-client && npm run install-server",
-    "install-client": "cd client && npm install",
-    "install-server": "cd server && npm install"
+    "dev": "concurrently --kill-others-on-fail -n server,client -c blue,magenta \"npm run dev -w server\" \"npm run dev -w client\"",
+    "build": "npm run build -w client",
+    "start": "node server/src/index.js",
+    "lint": "eslint . --max-warnings=0",
+    "test": "npm test --workspaces",
+    "db:migrate": "node server/scripts/migrate.js",
+    "db:new": "node server/scripts/new-migration.js",
+    "db:reset": "node server/scripts/reset.js"
   },
-  "dependencies": {
-    "dotenv": "^16.4.5"
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "concurrently": "^10.0.6",
+    "eslint": "^10.13.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0"
   }
 }

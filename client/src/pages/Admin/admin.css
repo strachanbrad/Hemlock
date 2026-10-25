@@ -1,0 +1,116 @@
+/*
+ * Copyright (c) 2023 Hemlock
+ * SPDX-License-Identifier: GPL-3.0-only
+ */
+
+.admin {
+  max-width: 1040px;
+}
+
+.admin-checking {
+  display: flex;
+  justify-content: center;
+  padding: 48px 0;
+}
+
+.admin-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  align-items: start;
+  gap: 20px;
+}
+
+:root .admin-card {
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  background: var(--lift);
+  box-shadow: 0 18px 40px -30px rgba(0, 0, 0, 0.9);
+}
+
+:root .admin-card .ant-card-head {
+  border-bottom-color: var(--hairline-faint);
+}
+
+:root .admin-card .ant-card-head-title {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-style: italic;
+  font-weight: 500;
+}
+
+.admin-signin {
+  max-width: 400px;
+}
+
+.admin-signin .admin-help {
+  margin: 16px 0 0;
+}
+
+.admin-help {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.admin-status {
+  margin: 0 0 12px;
+  color: var(--cream);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-test {
+  margin: 12px 0 0;
+  font-family: var(--font-text);
+  font-size: 13.5px;
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+
+.admin-test-ok {
+  color: var(--sage);
+}
+
+.admin-test-error {
+  color: var(--danger);
+}
+
+.admin-session {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  margin-top: 28px;
+  padding-top: 16px;
+  border-top: 1px solid var(--hairline-faint);
+}
+
+.admin-session .admin-help {
+  max-width: 60ch;
+  margin: 0;
+}
+
+.admin code {
+  color: var(--brass);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 767.98px) {
+  :root .admin-card .ant-card-head,
+  :root .admin-card .ant-card-body {
+    padding-inline: 16px;
+  }
+
+  :root .admin-card .ant-card-body {
+    padding-block: 16px;
+  }
+}

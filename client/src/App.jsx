@@ -19,6 +19,8 @@ import './styles/shell.css'
 const { Header, Content, Sider } = Layout
 
 const Display = lazy(() => import('./pages/Display/Display.jsx'))
+// Reached only by its address: no sider item and no tab leads to it.
+const Admin = lazy(() => import('./pages/Admin/Admin.jsx'))
 
 const NAV = [
   { key: 'library', to: '/library', label: 'Library', icon: <BookOutlined /> },
@@ -102,6 +104,7 @@ const App = () => (
       <Route path="library/:id?" element={<Library />} />
       <Route path="add" element={<AddBook />} />
       <Route path="authors" element={<Authors />} />
+      <Route path="admin" element={<Suspense fallback={null}><Admin /></Suspense>} />
       <Route path="*" element={<Navigate to="/library" replace />} />
     </Route>
     <Route path="/display" element={<Suspense fallback={null}><Display /></Suspense>} />

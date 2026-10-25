@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { authorFromLookup, bookFromLookup, creditLine, editionFromLookup, formatHint } from '../src/lib/prefill.js'
+import { authorFromLookup, bookFromLookup, creditLine, editionFromLookup, formatHint, fromClaude, sourceHost } from '../src/lib/prefill.js'
 
 const AUTHORS = [{ id: 3, name: 'Emily Brontë' }, { id: 7, name: 'Caroline Peckham & Susanne Valenti' }]
 const ALL = ['hardcover', 'paperback', 'ebook']
@@ -80,5 +80,21 @@ describe('creditLine', () => {
     expect(creditLine(null)).toBe('Book data from Open Library')
     expect(creditLine(RECORD)).toBe('Book data from Open Library')
     expect(creditLine({ ...RECORD, sources: { ...RECORD.sources, google: 'not_found' } })).toBe('Book data from Open Library and Google Books')
+  })
+})
+
+describe('sourceHost', () => {
+  it("names a listing's host without www.", () => {
+    expect(sourceHost('https://www.amazon.com/dp/1969253096')).toBe('amazon.com')
+    expect(sourceHost('https://bookshop.org/p/books/x')).toBe('bookshop.org')
+    expect(sourceHost('https://www.goodreads.com/book/show/1')).toBe('goodreads.com')
+    expect(sourceHost(null)).toBeNull()
+    expect(sourceHost('not a url')).toBeNull()
+  })
+
+  it('tells a Claude record from a catalogue one', () => {
+    expect(fromClaude({ sources: { anthropic: 'ok' } })).toBe(true)
+    expect(fromClaude({ sources: { anthropic: 'disabled', open_library: 'ok' } })).toBe(false)
+    expect(fromClaude(null)).toBe(false)
   })
 })

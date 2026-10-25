@@ -1,6 +1,6 @@
 # Roku channel
 
-The Hemlock is also a Roku channel: the TV slideshow of [TV display](display.md)
+Hemlock is also a Roku channel: the TV slideshow of [TV display](display.md)
 as a native SceneGraph app, so a Roku TV shows the library without a computer
 or a mirrored screen. It runs the same slideshow, pauses and steps from the
 remote, edits a paused book's Read, Stars, Spice and Gore, and picks up
@@ -26,7 +26,7 @@ Channel Store; a Roku device holds one sideloaded channel at a time.
 | `roku/components/HemlockScene.xml`, `.brs` | The scene: the slides, the keys, the rating saves, the settings and the status screens. |
 | `roku/components/slideshow.brs` | The timing functions of `client/src/pages/Display/slideshow.js` in BrightScript (`createShow`, `currentIndex`, `applyBooks`, `moveShow`, `togglePause`). |
 | `roku/components/Slide.xml`, `.brs` | One slide: the cover box, the cloth cover, the text column and its layout. |
-| `roku/components/RatingsPanel.xml`, `.brs` | The Read, Stars, Spice and Gore rows and their highlight. |
+| `roku/components/RatingsPanel.xml`, `.brs` | The editing panel: Read, Stars, Spice and Gore drawn with their icons, and the highlighted row. |
 | `roku/components/SettingsDialog.xml`, `.brs` | The settings dialog on the Options key. |
 | `roku/components/HttpTask.xml`, `.brs` | The one Task thread that makes every request, the long poll included. |
 | `roku/components/common.brs` | The clock, the address check, and number, text and JSON helpers. |
@@ -38,10 +38,10 @@ The images are not tracked: `npm run roku:build` renders them into the
 package with `sharp` (`roku/scripts/images.js`). The icons
 (`mm_icon_focus_fhd` 540×405, `mm_icon_focus_hd` 290×218) and splash screens
 (1920×1080, 1280×720, 720×480) draw `client/public/logo-cream.svg` over the
-wordmark on the stage's ink; the rating icons are the library's
-(`client/src/images/`) drawn white and tinted on the TV; the umbel is the
-theme's ornament; the background and the cloth cover repeat the gradients of
-`display.css`.
+wordmark "Hemlock" on the stage's ink; the rating and read icons are the
+library's (`client/src/images/`) drawn white and tinted on the TV; the umbel
+is the theme's ornament; the background and the cloth cover repeat the
+gradients of `display.css`.
 
 ## A slide
 
@@ -56,13 +56,13 @@ slide is laid out like the web stage at 1080p
   the umbel.
 - On the right, in a column 989 pixels wide: the title in Cormorant Garamond
   (at most 3 lines), the author in Lora italic and dusty rose (at most 2), the
-  format in small capitals, the four rating rows, and the synopsis in Lora
-  with as many lines as are left; the last line ends in an ellipsis. The
-  column is centred on the cover box.
-- The rating rows: Read (an open book in sage, or a closed one in ash), and
-  five stars in brass, chillies in rust and knives in rose, the unfilled ones
-  in ash.
-- "The Hemlock" in brass at the lower right with an umbel, "Paused" above the
+  format in small capitals with a read mark beside it when the book is read
+  (an open book and "Read" in sage), the stars (five, brass when filled and
+  ash when not, for display only), and the synopsis in Lora with as many
+  lines as are left; the last line ends in an ellipsis. The column is centred
+  on the cover box. Spice and gore show only on the cover, as the chilli and
+  the blood.
+- "Hemlock" in brass at the lower right with an umbel, "Paused" above the
   column while the show is paused.
 - Slides crossfade over one second.
 
@@ -80,8 +80,9 @@ stretched over the cover's face (the image as it is scaled into the box, or
 the whole box for the cloth cover), so a cover that is not 2:3 bleeds a
 little longer or shorter than on the page; the chilli sits in the face's
 bottom right corner, scaled with its width. On the cloth cover the brass
-frame draws over the blood and under the chilli, as on the page. Both fade in over a second each
-time a slide becomes current, once the cover has loaded.
+frame draws over the blood and under the chilli, as on the page. Both fade
+in over a second each time a slide becomes current, once the cover has
+loaded, and an overlay fades in again when an edit changes its level.
 
 ## Timing
 
@@ -99,25 +100,33 @@ and the next one, whose cover is already loading.
 
 | Key | Effect |
 |---|---|
-| Play/Pause, OK | Pause and resume. Resuming keeps the time that remained and clears the highlight. |
-| Right, Left | The next or previous book, which then gets a full interval. While a rating is highlighted, they change it instead. |
-| Fast Forward, Rewind | The next or previous book, always. |
-| Up, Down (paused) | The first press highlights Stars; then they move the highlight through Read, Stars, Spice and Gore. |
-| Left, Right (highlighted) | Lower or raise the rating, 0 to 5; on Read they toggle it. OK toggles Read too. |
-| Back | Leaves rating editing when a row is highlighted; otherwise leaves the channel. |
+| Play/Pause | Pause and resume. Resuming keeps the time that remained and closes the editing panel. |
+| OK | Pause and resume while the editing panel is closed; in the panel it toggles Read on the Read row and does nothing on the others. |
+| Right, Left | The next or previous book, which then gets a full interval; in the panel they change the highlighted row. |
+| Fast Forward, Rewind | The next or previous book, always; they close the panel. |
+| Up, Down (paused) | The first press opens the editing panel on Stars; then they move between Read, Stars, Spice and Gore. |
+| Back | Closes the editing panel when it is open; otherwise leaves the channel. |
 | Options (`*`) | Opens the settings dialog. |
 
 ### Rating edits
 
+The editing panel lies over the lower part of the text column, never the
+cover, from y 680 to 972. Its rows are the library's icons, drawn white and
+tinted: Read is an open book in sage with "Read", or a closed one in ash with
+"Not read"; Stars, Spice and Gore are five stars in brass, chillies in rust
+or knives in rose, filled up to the rating and ash beyond it. The
+highlighted row has a brass wash and bar.
+
 Each change is one `PATCH /api/books/:id` with that one field, the request
-the library page's quick saves make. The slide shows the new value at once;
+the library page's quick saves make. The panel, the stars and the overlays
+show the new value at once;
 the saves go one at a time, in order, so a quick run of presses ends on the
 last value; once none of a book's saves is left, the slide shows the values
 the server answered. A failed save puts back the server's last values, drops
 the book's saves queued behind it, and shows "Not saved: <message>" at the top
 right for 3 seconds (the server's `error`, or "can't reach Hemlock"). A
-refetched list waits while a row is highlighted, so the book being edited
-never moves; it is applied when the highlight clears.
+refetched list waits while the panel is open, so the book being edited never
+moves; it is applied when the panel closes.
 
 ## Changes made elsewhere
 
@@ -181,7 +190,7 @@ set -a; . ~/.config/hemlock/rokudev.env; set +a; npm run roku:install
 ```
 
 The install replaces the sideloaded channel and starts it; it then sits in
-the TV's home screen as "The Hemlock" until another channel is sideloaded or
+the TV's home screen as "Hemlock" until another channel is sideloaded or
 developer mode is turned off.
 
 ## Commands

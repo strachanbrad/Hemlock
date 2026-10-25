@@ -49,9 +49,9 @@ export function resetDatabase(dataDir) {
     const count = (table) => db.prepare(`SELECT COUNT(*) FROM ${table}`).pluck().get()
     return {
       schema: schemaVersion(db),
-      authors: count('Authors'),
-      books: count('Books'),
-      ebooks: count('EBooks'),
+      authors: count('authors'),
+      books: count('books'),
+      editions: count('editions'),
       covers: fs.readdirSync(covers).length,
     }
   } finally {

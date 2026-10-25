@@ -9,6 +9,10 @@ export function httpError(status, message) {
   return Object.assign(new Error(message), { status, expose: true })
 }
 
+export function conflictError(message, conflict) {
+  return Object.assign(httpError(409, message), { conflict })
+}
+
 const UNIQUE = new Set(['SQLITE_CONSTRAINT_PRIMARYKEY', 'SQLITE_CONSTRAINT_UNIQUE'])
 
 // CRITICAL: Express treats a middleware as an error handler only when it declares four parameters.
@@ -25,7 +29,9 @@ export function errorHandler(err, req, res, _next) {
   }
 
   if (Number.isInteger(err.status) && err.status >= 400 && err.status < 500) {
-    return res.status(err.status).json({ error: err.expose ? err.message : 'Bad request' })
+    const body = { error: err.expose ? err.message : 'Bad request' }
+    if (err.expose && err.conflict) body.conflict = err.conflict
+    return res.status(err.status).json(body)
   }
 
   console.error(`${req.method} ${req.originalUrl}:`, err)

@@ -53,7 +53,7 @@ describe('openDb', () => {
       assert.equal(db.pragma('journal_mode', { simple: true }), 'wal')
       assert.equal(db.pragma('busy_timeout', { simple: true }), 5000)
       assert.equal(db.pragma('synchronous', { simple: true }), 1)
-      assert.deepEqual(tables(db), ['Authors', 'Books', 'EBooks', 'schema_migrations'])
+      assert.deepEqual(tables(db), ['authors', 'books', 'editions', 'schema_migrations'])
       assert.deepEqual(db.prepare('SELECT version, name FROM schema_migrations').all(), [{ version: 1, name: '001_init.sql' }])
     } finally {
       db.close()
@@ -63,13 +63,13 @@ describe('openDb', () => {
   it('applies nothing twice and keeps the data on a second open', () => {
     const dataDir = scratch()
     const first = openDb(dataDir)
-    first.prepare("INSERT INTO Authors (first_name, last_name) VALUES ('Jane', 'Austen')").run()
+    first.prepare("INSERT INTO authors (name) VALUES ('Jane Austen')").run()
     first.close()
 
     const second = openDb(dataDir)
     try {
       assert.equal(second.prepare('SELECT COUNT(*) FROM schema_migrations').pluck().get(), 1)
-      assert.equal(second.prepare('SELECT COUNT(*) FROM Authors').pluck().get(), 1)
+      assert.equal(second.prepare('SELECT COUNT(*) FROM authors').pluck().get(), 1)
     } finally {
       second.close()
     }
@@ -79,7 +79,7 @@ describe('openDb', () => {
     const db = openDb(scratch())
     try {
       assert.throws(
-        () => db.prepare("INSERT INTO Books (isbn, title, author_id, media) VALUES ('9780553212587', 'x', 99, 'Hardcover')").run(),
+        () => db.prepare("INSERT INTO books (title, author_id) VALUES ('x', 99)").run(),
         { code: 'SQLITE_CONSTRAINT_FOREIGNKEY' },
       )
     } finally {

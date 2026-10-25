@@ -31,15 +31,15 @@ describe('resetRefusal', () => {
 describe('resetDatabase', () => {
   it('loads the seed library and its covers, in place under an open connection', () => {
     const running = openDb(dataDir)
-    running.exec("INSERT INTO Authors (first_name, last_name) VALUES ('Left', 'Over')")
+    running.exec("INSERT INTO authors (name) VALUES ('Left Over')")
     fs.mkdirSync(path.join(dataDir, 'covers'), { recursive: true })
-    fs.writeFileSync(path.join(dataDir, 'covers', '9999999999999.jpg'), 'stale')
+    fs.writeFileSync(path.join(dataDir, 'covers', 'e999-00000000.jpg'), 'stale')
 
     const first = resetDatabase(dataDir)
-    assert.deepEqual(first, { schema: 1, authors: 12, books: 10, ebooks: 10, covers: 10 })
-    assert.equal(running.prepare("SELECT COUNT(*) FROM Authors WHERE last_name = 'Over'").pluck().get(), 0)
-    assert.equal(running.prepare('SELECT COUNT(*) FROM Books').pluck().get(), 10)
-    assert.ok(!fs.existsSync(path.join(dataDir, 'covers', '9999999999999.jpg')))
+    assert.deepEqual(first, { schema: 1, authors: 13, books: 23, editions: 25, covers: 10 })
+    assert.equal(running.prepare("SELECT COUNT(*) FROM authors WHERE name = 'Left Over'").pluck().get(), 0)
+    assert.equal(running.prepare('SELECT COUNT(*) FROM books').pluck().get(), 23)
+    assert.ok(!fs.existsSync(path.join(dataDir, 'covers', 'e999-00000000.jpg')))
     running.close()
 
     assert.deepEqual(resetDatabase(dataDir), first)

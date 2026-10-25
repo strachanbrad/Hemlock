@@ -21,6 +21,18 @@ export default defineConfig({
     // Fail on a busy port; by default Vite moves on to the next free one.
     strictPort: true,
     proxy: {
+      // The proxy keeps the browser's end of the event stream open when the server drops it (a
+      // restart under node --watch), so EventSource never reconnects; cutting it lets it retry.
+      '/api/events': {
+        target: server,
+        configure: (proxy) => {
+          proxy.on('proxyRes', (proxyRes, req, res) => {
+            proxyRes.on('close', () => {
+              if (!proxyRes.complete) res.destroy()
+            })
+          })
+        },
+      },
       '/api': server,
       '/covers': server,
     },

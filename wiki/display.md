@@ -63,7 +63,7 @@ tables ([Library § The model](library.md#the-model)):
 | `client/src/pages/Display/effects.js` | The geometry of the cover effects: `bloodOf(gore, seed, height)` lays out the blood for a level, `seedOf(id)` seeds it per book, `faceHeight` sizes the cover's face, the path builders draw it, and `CHILLI` holds the chilli's paths and level lines. Pure. |
 | `client/src/pages/Display/CoverEffects.jsx` | The blood and the chilli as inline SVG over the cover. |
 | `client/src/pages/Display/display.css` | The stage, the slide layout, the effects' colours and motion, and the palette. |
-| `client/src/api/display.js` | `fetchDisplayBooks(filter)`, the page's only request. |
+| `client/src/api/display.js` | `fetchDisplayBooks(filter)`, the page's only request besides the live updates stream it holds through `useChanges()` ([Library § Live updates](library.md#live-updates)). |
 
 The shell's **Display** menu item opens `/display` in a new tab.
 
@@ -164,10 +164,18 @@ computed from the clock rather than counted by a timer:
   has throttled or hidden catches up at once instead of drifting.
 - The previous slide (fading out), the current one and the next one are in the
   page, so the next cover is already loaded when it is shown.
-- The list is fetched again every 5 minutes, or 30 seconds after a failed
-  fetch. A refetch keeps the book on screen, matched by `id`, for the rest of
-  its time; if that book is gone, the book now at its position takes over its
-  remaining time. A failed refetch keeps the last list.
+- The list is fetched when the page opens and then only when the library
+  changes: a book added, edited or deleted on another device reaches the
+  television about a third of a second later, over the live updates stream
+  ([Library § Live updates](library.md#live-updates)). The stream
+  reconnecting after an outage fetches it too, since a change may have
+  happened meanwhile. A failed fetch is tried again 30 seconds later.
+- A refetch keeps the book on screen, matched by `id`, for the rest of its
+  time, so a change elsewhere never moves the slide; a new book takes its
+  place in the order, and a deleted one drops out. If the book on screen is
+  the one deleted, the book now at its position takes over its remaining
+  time. A failed refetch keeps the last list.
+- A browser without `EventSource` fetches the list every 5 minutes instead.
 - An empty list shows "No books to show."; a first load that fails shows
   "Cannot reach the library. Retrying."
 - A clock that jumps backwards re-anchors instead of showing an invalid slide.
@@ -208,7 +216,8 @@ ways:
    on a Fire TV stick.
 
 Whichever way, the browser opens `/display` without an interactive login, so
-the reverse proxy has to let the page, `/api/display` and `/covers/` through
+the reverse proxy has to let the page, `/api/display`, `/api/events` and
+`/covers/` through
 ([Deployment § The reverse proxy](deployment.md#the-reverse-proxy)).
 
 The browser must meet Vite's default build target: Chrome or Edge 111,
@@ -225,9 +234,11 @@ the whole picture shows.
 A native Roku channel is a possible later client of the same endpoint: a
 SceneGraph channel sideloaded in developer mode (one sideloaded channel per
 device). It prefixes each `cover_url` with its configured base URL, and Roku's
-image node loads the JPEG, PNG and WebP covers the server stores. It needs
-`/api/display` and `/covers/` reachable without an interactive login, as the
-television's browser does
+image node loads the JPEG, PNG and WebP covers the server stores. It cannot
+hold an event stream, so it learns of changes from the long poll
+`GET /api/changes` ([Library § Live updates](library.md#live-updates)). It
+needs `/api/display`, `/api/changes` and `/covers/` reachable without an
+interactive login, as the television's browser does
 ([Deployment § The reverse proxy](deployment.md#the-reverse-proxy)).
 
 ## Tests
@@ -242,9 +253,11 @@ television's browser does
   many seeds: which corners, how many drips, how far they run, the heavier
   runs, the pools, and the 12-unit edge.
 - `client/test/Display.test.jsx`: the page under `StrictMode` with fake
-  timers: the schedule, catch-up on `visibilitychange`, the refetch, the
-  notices, the keys, fullscreen, the idle cursor, and no interval, timer,
-  listener or wake lock left behind after an unmount; the effects by gore and
+  timers: the schedule, catch-up on `visibilitychange`, the refetch on a
+  change and on a reconnect with no poll beside it (with `EventSource`
+  stubbed), the 5-minute refetch without it, the notices, the keys,
+  fullscreen, the idle cursor, and no interval, timer, listener, wake lock
+  or event stream left behind after an unmount; the effects by gore and
   spice, `effects=off`, and the face fitted to a loaded image or the cloth
   cover.
 

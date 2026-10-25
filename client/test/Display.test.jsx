@@ -7,6 +7,7 @@ import { StrictMode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render } from '@testing-library/react'
 import Display from '../src/pages/Display/Display.jsx'
+import { stubEventSource } from './eventSource.js'
 
 const T0 = 1_700_000_000_000
 const OWN_EVENTS = ['keydown', 'pointermove', 'pointerdown', 'visibilitychange', 'fullscreenchange']
@@ -44,6 +45,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   delete navigator.wakeLock
   delete document.fullscreenEnabled
   delete document.documentElement.requestFullscreen
@@ -89,6 +91,31 @@ describe('Display', () => {
     expect(titleOf(container)).toBe('Alpha')
     await advance(10_000)
     expect(titleOf(container)).toBe('Beta')
+  })
+
+  it('fetches again when the library changes, keeping the book on screen, and never polls', async () => {
+    const { live } = stubEventSource()
+    let list = books('Alpha', 'Beta', 'Gamma')
+    const fetch = serve(() => ok(list))
+    const { container } = await mount()
+    const calls = fetch.mock.calls.length
+    live()[0].emit('open')
+    await advance(4000)
+
+    list = books('Aardvark', 'Alpha', 'Gamma')
+    live()[0].emit('changed')
+    await advance(300)
+    expect(fetch.mock.calls.length).toBe(calls + 1)
+    expect(titleOf(container)).toBe('Alpha')
+    await advance(5700)
+    expect(titleOf(container)).toBe('Gamma')
+
+    await advance(10 * 60 * 1000)
+    expect(fetch.mock.calls.length).toBe(calls + 1)
+    live()[0].emit('error')
+    live()[0].emit('open')
+    await advance(300)
+    expect(fetch.mock.calls.length).toBe(calls + 2)
   })
 
   it('shows a retry notice when the first load fails and the books once a retry succeeds', async () => {
@@ -223,7 +250,8 @@ describe('Display', () => {
     expect(root.classList.contains('is-idle')).toBe(false)
   })
 
-  it('leaves no interval, timer, listener or wake lock behind after a StrictMode unmount', async () => {
+  it('leaves no interval, timer, listener, wake lock or event stream behind after a StrictMode unmount', async () => {
+    const { live } = stubEventSource()
     serve(() => ok(books('Alpha', 'Beta')))
     const sentinels = []
     navigator.wakeLock = {
@@ -263,5 +291,6 @@ describe('Display', () => {
 
     expect(sentinels.length).toBeGreaterThan(0)
     expect(sentinels.filter((sentinel) => !sentinel.released)).toEqual([])
+    expect(live()).toEqual([])
   })
 })

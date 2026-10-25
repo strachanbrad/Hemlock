@@ -1,10 +1,9 @@
 ' Copyright (c) 2023 Hemlock
 ' SPDX-License-Identifier: GPL-3.0-only
 
-' The rows in the order Up and Down move through them; `highlight` names one by its field.
+' Four rows, in the order Up and Down move through them: the book glyph with Read or Not read, then five stars,
+' chillies or knives filled to the rating.
 sub init()
-    m.rowHeight = 46
-    m.rowGap = 6
     m.rows = {}
     specs = [
         { field: "read", label: "READ" },
@@ -12,24 +11,17 @@ sub init()
         { field: "spice_rating", label: "SPICE", icon: "chilli", tint: "0xB5582CFF" },
         { field: "gore_rating", label: "GORE", icon: "knife", tint: "0xC98B8BFF" },
     ]
+    rows = m.top.FindNode("rows")
     for i = 0 to specs.Count() - 1
         spec = specs[i]
-        row = m.top.CreateChild("Group")
-        row.translation = [0, i * (m.rowHeight + m.rowGap)]
-        wash = row.CreateChild("Rectangle")
-        wash.width = 470
-        wash.height = m.rowHeight
-        wash.color = "0xC9A86A2E"
-        wash.visible = false
-        bar = row.CreateChild("Rectangle")
-        bar.width = 4
-        bar.height = m.rowHeight
-        bar.color = "0xC9A86AFF"
-        bar.visible = false
+        row = rows.CreateChild("Group")
+        row.translation = [2, i * 64]
+        wash = rectangle(row, 985, "0xC9A86A2E")
+        bar = rectangle(row, 4, "0xC9A86AFF")
         label = row.CreateChild("Label")
-        label.translation = [20, 0]
-        label.width = 130
-        label.height = m.rowHeight
+        label.translation = [28, 0]
+        label.width = 150
+        label.height = 56
         label.vertAlign = "center"
         label.color = "0xC9A86AFF"
         label.font = fontOf("pkg:/fonts/Inter-SemiBold.ttf", 20)
@@ -37,27 +29,34 @@ sub init()
         icons = []
         state = invalid
         if spec.field = "read"
-            icons.Push(iconOf(row, 160))
+            icons.Push(iconOf(row, 190))
             state = row.CreateChild("Label")
-            state.translation = [208, 0]
-            state.height = m.rowHeight
+            state.translation = [238, 0]
+            state.height = 56
             state.vertAlign = "center"
-            state.font = fontOf("pkg:/fonts/Inter-Regular.ttf", 24)
+            state.font = fontOf("pkg:/fonts/Inter-Regular.ttf", 26)
         else
             for j = 0 to 4
-                icons.Push(iconOf(row, 160 + j * 44))
+                icons.Push(iconOf(row, 190 + j * 50))
             end for
         end if
         m.rows[spec.field] = { spec: spec, wash: wash, bar: bar, icons: icons, state: state }
     end for
-    m.top.rowsHeight = specs.Count() * m.rowHeight + (specs.Count() - 1) * m.rowGap
 end sub
+
+function rectangle(row as Object, width as Integer, color as String) as Object
+    node = row.CreateChild("Rectangle")
+    node.width = width
+    node.height = 56
+    node.color = color
+    return node
+end function
 
 function iconOf(row as Object, x as Integer) as Object
     icon = row.CreateChild("Poster")
-    icon.translation = [x, 5]
-    icon.width = 36
-    icon.height = 36
+    icon.translation = [x, 8]
+    icon.width = 40
+    icon.height = 40
     return icon
 end function
 
@@ -77,8 +76,7 @@ sub render()
         row.wash.visible = on
         row.bar.visible = on
         if field = "read"
-            read = book.read = true
-            if read
+            if book.read = true
                 row.icons[0].uri = "pkg:/images/book-open.png"
                 row.icons[0].blendColor = "0x7F9B7AFF"
                 row.state.text = "Read"

@@ -5,10 +5,18 @@ SPDX-License-Identifier: GPL-3.0-only
 -->
 <component name="RatingsPanel" extends="Group">
   <interface>
+    <!-- { read, star_rating, spice_rating, gore_rating } of the book on screen, and the row being edited. -->
     <field id="book" type="assocarray" onChange="render" />
     <field id="highlight" type="string" onChange="render" />
-    <field id="rowsHeight" type="float" />
   </interface>
   <script type="text/brightscript" uri="pkg:/components/common.brs" />
   <script type="text/brightscript" uri="pkg:/components/RatingsPanel.brs" />
+  <children>
+    <Rectangle width="989" height="292" color="0x262030FF" />
+    <Rectangle width="989" height="2" color="0xC9A86A4D" />
+    <Rectangle translation="[0, 290]" width="989" height="2" color="0xC9A86A4D" />
+    <Rectangle width="2" height="292" color="0xC9A86A4D" />
+    <Rectangle translation="[987, 0]" width="2" height="292" color="0xC9A86A4D" />
+    <Group id="rows" translation="[0, 22]" />
+  </children>
 </component>

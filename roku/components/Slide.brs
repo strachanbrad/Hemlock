@@ -13,8 +13,10 @@ sub init()
     m.text = m.top.FindNode("text")
     m.title = m.top.FindNode("title")
     m.author = m.top.FindNode("author")
+    m.metaLine = m.top.FindNode("metaLine")
     m.meta = m.top.FindNode("meta")
-    m.ratings = m.top.FindNode("ratings")
+    m.readIcon = m.top.FindNode("readIcon")
+    m.readText = m.top.FindNode("readText")
     m.synopsis = m.top.FindNode("synopsis")
     m.fade = m.top.FindNode("fade")
     m.fadeTo = m.top.FindNode("fadeTo")
@@ -22,8 +24,21 @@ sub init()
     m.frame = m.top.FindNode("frame")
     m.blood = m.top.FindNode("blood")
     m.chilli = m.top.FindNode("chilli")
-    m.effectsFade = m.top.FindNode("effectsFade")
+    m.bloodFade = m.top.FindNode("bloodFade")
+    m.chilliFade = m.top.FindNode("chilliFade")
     m.face = invalid
+    m.gore = 0
+    m.spice = 0
+
+    m.stars = []
+    row = m.top.FindNode("stars")
+    for i = 0 to 4
+        star = row.CreateChild("Poster")
+        star.translation = [i * 50, 0]
+        star.width = 40
+        star.height = 40
+        m.stars.Push(star)
+    end for
 
     probe = m.top.FindNode("probe")
     probe.text = "A"
@@ -43,7 +58,17 @@ sub onBook()
     if format = invalid then format = ""
     m.meta.text = format
     m.synopsis.text = textOf(book.synopsis)
-    m.ratings.book = { read: book.read = true, star_rating: book.star_rating, spice_rating: book.spice_rating, gore_rating: book.gore_rating }
+    layoutMeta(book.read = true)
+    stars = ratingOf(book.star_rating)
+    for i = 0 to 4
+        if i < stars
+            m.stars[i].uri = "pkg:/images/star-filled.png"
+            m.stars[i].blendColor = "0xC9A86AFF"
+        else
+            m.stars[i].uri = "pkg:/images/star-empty.png"
+            m.stars[i].blendColor = "0x7F7079FF"
+        end if
+    end for
 
     uri = textOf(book.cover_url)
     if uri <> "" then uri = m.top.base + uri
@@ -55,12 +80,26 @@ sub onBook()
         if uri = "" then m.face = boxFace()
         m.blood.opacity = 0
         m.chilli.opacity = 0
-        if m.top.current and m.face <> invalid then fadeEffects()
+        m.gore = 0
+        m.spice = 0
     end if
     showEffects()
     m.clothTitle.text = title
     layoutCloth()
     layout()
+end sub
+
+' The read mark follows the format on its line, or starts the line when there is no format.
+sub layoutMeta(read as Boolean)
+    m.readIcon.visible = read
+    m.readText.visible = read
+    if not read then return
+    x = 0
+    if m.meta.text <> "" then x = m.meta.BoundingRect().width + 28
+    height = m.meta.BoundingRect().height
+    if m.meta.text = "" then height = m.readText.BoundingRect().height
+    m.readIcon.translation = [x, (height - 28) / 2]
+    m.readText.translation = [x + 38, 0]
 end sub
 
 sub onCoverStatus()
@@ -74,8 +113,9 @@ sub onCoverStatus()
     else
         return
     end if
+    m.gore = 0
+    m.spice = 0
     showEffects()
-    if m.top.current then fadeEffects()
 end sub
 
 sub showCloth(shown as Boolean)
@@ -96,7 +136,8 @@ function imageFace(width as Float, height as Float) as Object
 end function
 
 ' roku:build renders blood-<gore>.png at the box's size, stretched here to the face, and chilli-<spice>.png from
-' the face's bottom right corner (96 by 136 at full width), scaled with the face's width.
+' the face's bottom right corner (96 by 136 at full width), scaled with the face's width. A new level on the
+' current slide fades in.
 sub showEffects()
     book = m.top.book
     if m.face = invalid or book = invalid
@@ -113,6 +154,7 @@ sub showEffects()
         m.blood.translation = [face.x, face.y]
         m.blood.width = face.width
         m.blood.height = face.height
+        if gore <> m.gore and m.top.current then fadeIn(m.blood, m.bloodFade)
     end if
     m.chilli.visible = spice > 0
     if spice > 0
@@ -121,14 +163,16 @@ sub showEffects()
         m.chilli.width = 96 * scale
         m.chilli.height = 136 * scale
         m.chilli.translation = [face.x + face.width - 96 * scale, face.y + face.height - 136 * scale]
+        if spice <> m.spice and m.top.current then fadeIn(m.chilli, m.chilliFade)
     end if
+    m.gore = gore
+    m.spice = spice
 end sub
 
-sub fadeEffects()
-    m.effectsFade.control = "stop"
-    m.blood.opacity = 0
-    m.chilli.opacity = 0
-    m.effectsFade.control = "start"
+sub fadeIn(overlay as Object, animation as Object)
+    animation.control = "stop"
+    overlay.opacity = 0
+    animation.control = "start"
 end sub
 
 sub layoutCloth()
@@ -145,10 +189,14 @@ sub layout()
     y = 0
     y = place(m.title, y, 0)
     y = place(m.author, y, 19)
-    y = place(m.meta, y, 23)
-    y = y + 30
-    m.ratings.translation = [0, y]
-    y = y + m.ratings.rowsHeight
+    m.metaLine.visible = m.meta.text <> "" or m.readText.visible
+    if m.metaLine.visible
+        y = y + 23
+        m.metaLine.translation = [0, y]
+        y = y + m.metaLine.BoundingRect().height
+    end if
+    m.top.FindNode("stars").translation = [0, y + 22]
+    y = y + 22 + 40
     m.synopsis.visible = false
     if m.synopsis.text <> ""
         room = m.boxHeight - 48 - (y + 38)
@@ -173,16 +221,16 @@ function place(label as Object, y as Float, gap as Integer) as Float
     return y + gap + label.BoundingRect().height
 end function
 
+' A slide that becomes current fades its overlays in once its face is known.
 sub onCurrent()
     target = 0.0
     if m.top.current then target = 1.0
     m.fade.control = "stop"
     m.fadeTo.keyValue = [m.body.opacity, target]
     m.fade.control = "start"
-    if m.top.current and m.face <> invalid then fadeEffects()
-    if not m.top.current then m.ratings.highlight = ""
-end sub
-
-sub onHighlight()
-    m.ratings.highlight = m.top.highlight
+    if m.top.current
+        m.gore = 0
+        m.spice = 0
+        showEffects()
+    end if
 end sub

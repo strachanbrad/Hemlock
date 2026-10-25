@@ -18,6 +18,7 @@ sub init()
     m.notice = m.top.FindNode("notice")
     m.noticeBox = m.top.FindNode("noticeBox")
     m.noticeText = m.top.FindNode("noticeText")
+    m.panel = m.top.FindNode("ratingsPanel")
     m.settingsDialog = m.top.FindNode("settings")
     m.settingsDialog.ObserveField("result", "onSettingsClosed")
     layoutCaption()
@@ -252,10 +253,7 @@ sub present(t as Double)
     key = bookKey(book.id)
     if m.current < 0 or m.keys[m.current] <> key
         slide = slideFor(key)
-        if m.current >= 0
-            m.slides[m.current].highlight = ""
-            m.slides[m.current].current = false
-        end if
+        if m.current >= 0 then m.slides[m.current].current = false
         m.previous = m.current
         m.current = slide
         fill(slide, book)
@@ -268,6 +266,12 @@ sub present(t as Double)
         following = books[(index + 1) mod books.Count()]
         if bookKey(following.id) <> key then fill(slideFor(bookKey(following.id)), following)
     end if
+    if m.highlight <> "" then showPanel(book)
+end sub
+
+sub showPanel(book as Object)
+    values = ratingsOf(book)
+    if FormatJson(values) <> FormatJson(m.panel.book) then m.panel.book = values
 end sub
 
 function slideFor(key as String) as Integer
@@ -316,9 +320,10 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     if key = "play"
         togglePlay(t)
     else if key = "OK"
+        ' On a rating row OK does nothing, so a press meant for Read never resumes the show.
         if m.highlight = "read"
             changeValue(1)
-        else
+        else if m.highlight = ""
             togglePlay(t)
         end if
     else if key = "right" or key = "left"
@@ -339,7 +344,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     else if key = "back"
         if m.highlight = "" then return false
         setHighlight("")
-        note("editing left")
+        note("panel closed")
     else if key = "options"
         openSettings()
         return true
@@ -381,9 +386,13 @@ sub moveHighlight(down as Boolean)
     note("highlight " + m.highlight)
 end sub
 
+' The editing panel is open while a row is highlighted.
 sub setHighlight(field as String)
     m.highlight = field
-    if m.current >= 0 then m.slides[m.current].highlight = field
+    m.panel.highlight = field
+    m.panel.visible = field <> ""
+    book = currentBook()
+    if field <> "" and book <> invalid then showPanel(book)
     if field = "" and m.deferred <> invalid
         books = m.deferred
         m.deferred = invalid

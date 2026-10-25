@@ -8,7 +8,6 @@ SPDX-License-Identifier: GPL-3.0-only
     <field id="base" type="string" />
     <field id="book" type="assocarray" onChange="onBook" />
     <field id="current" type="boolean" onChange="onCurrent" />
-    <field id="highlight" type="string" onChange="onHighlight" />
   </interface>
   <script type="text/brightscript" uri="pkg:/components/common.brs" />
   <script type="text/brightscript" uri="pkg:/components/Slide.brs" />
@@ -43,10 +42,17 @@ SPDX-License-Identifier: GPL-3.0-only
         <Label id="author" width="989" wrap="true" maxLines="2" ellipsizeOnBoundary="true" color="0xC98B8BFF">
           <Font role="font" uri="pkg:/fonts/Lora-Italic.ttf" size="38" />
         </Label>
-        <Label id="meta" width="989" color="0xB8A9A0FF">
-          <Font role="font" uri="pkg:/fonts/Inter-Regular.ttf" size="25" />
-        </Label>
-        <RatingsPanel id="ratings" />
+        <!-- The format, and a read mark when the book is read; the stars below it show the rating only. -->
+        <Group id="metaLine">
+          <Label id="meta" color="0xB8A9A0FF">
+            <Font role="font" uri="pkg:/fonts/Inter-Regular.ttf" size="25" />
+          </Label>
+          <Poster id="readIcon" uri="pkg:/images/book-open.png" width="28" height="28" blendColor="0x7F9B7AFF" />
+          <Label id="readText" color="0x7F9B7AFF" text="READ">
+            <Font role="font" uri="pkg:/fonts/Inter-Regular.ttf" size="25" />
+          </Label>
+        </Group>
+        <Group id="stars" />
         <Label id="synopsis" width="989" wrap="true" ellipsizeOnBoundary="true" color="0xEFE6DAFF" lineSpacing="8">
           <Font role="font" uri="pkg:/fonts/Lora-Regular.ttf" size="30" />
         </Label>
@@ -58,8 +64,10 @@ SPDX-License-Identifier: GPL-3.0-only
     <Animation id="fade" duration="1" easeFunction="linear">
       <FloatFieldInterpolator id="fadeTo" key="[0.0, 1.0]" keyValue="[0.0, 1.0]" fieldToInterp="body.opacity" />
     </Animation>
-    <Animation id="effectsFade" duration="1" easeFunction="linear">
+    <Animation id="bloodFade" duration="1" easeFunction="linear">
       <FloatFieldInterpolator key="[0.0, 1.0]" keyValue="[0.0, 1.0]" fieldToInterp="blood.opacity" />
+    </Animation>
+    <Animation id="chilliFade" duration="1" easeFunction="linear">
       <FloatFieldInterpolator key="[0.0, 1.0]" keyValue="[0.0, 1.0]" fieldToInterp="chilli.opacity" />
     </Animation>
   </children>

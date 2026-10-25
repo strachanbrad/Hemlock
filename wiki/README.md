@@ -22,8 +22,8 @@ A newcomer starts with [Development setup](dev-setup.md) to run the app,
 - [Migrations](migrations.md): numbered SQL files, how they are applied, and
   the rules for writing one.
 - [Lookup](lookup.md): ISBN lookup from Open Library and Google Books, the
-  Claude lookup when both miss, cover downloads and barcode scanning with
-  the phone camera.
+  Claude lookup when both miss, cover downloads, finding a better cover
+  with Claude, and barcode scanning with the phone camera.
 - [Admin](admin.md): the hidden `/admin` page, its password and sessions,
   the lookup keys and settings, and how their secrets are encrypted.
 - [Security](security.md): bind address, error bodies, upload bounds,

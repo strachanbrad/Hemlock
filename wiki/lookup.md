@@ -494,9 +494,13 @@ value or a function read at each lookup), and
 - `server/test/fixtures/anthropic/` holds Messages API answers written by hand from the
   documented shape (each says so in `_source`; the book in them is
   invented): a paused search, a `report_book` call, a turn without one,
-  `found: false`, a refusal, a cut-off call and a 401.
+  `found: false`, a refusal, a cut-off call and a 401, and for the cover
+  search a `report_cover` call and its `found: false`.
   `server/test/anthropic.test.js` replays them through the client's
-  injected `fetch` and checks each request it sends.
+  injected `fetch` and checks each request it sends;
+  `server/test/coverFinder.test.js` replays them behind
+  `POST /api/books/:id/cover/find`, with the image host's answers built
+  with sharp.
 - `client/test/BarcodeScanner.test.jsx` mounts the scanner under StrictMode
   with a fake `getUserMedia` whose streams the test releases, so a stream that
   arrives after cleanup is covered.

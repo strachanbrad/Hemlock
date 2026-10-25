@@ -338,7 +338,7 @@ The owner's reverse proxy sits in front of nginx and needs:
   listens on 443, and nginx's redirects are relative (`absolute_redirect off`),
   so they keep the browser's `https`.
 - **The upstream.** Port 80 on the box. The site is nginx's default server, so
-  any `Host` header reaches it.
+  any `Host` header reaches it ([narrowing it](#answering-only-hemlocks-names-optional)).
 - **The body limit.** At least 12 MB a request. A cover upload is up to 10 MB
   plus the multipart framing, and a lower limit at the proxy answers 413
   before nginx sees the upload.
@@ -348,6 +348,86 @@ The owner's reverse proxy sits in front of nginx and needs:
   That page loads the client (`/`, `/assets/`) and then reads `/api/display`
   and `/covers/`; with authentication at the proxy, these paths reach the TV
   without it (by the TV's LAN address, for one).
+
+### Answering only Hemlock's names (optional)
+
+The shipped site answers any `Host`. A page on another domain that a
+household browser opens can point its own name at the box's LAN address (DNS
+rebinding) and then call `/api/` as Hemlock's own pages do, reading or
+deleting the library. Many home routers refuse such DNS answers, and Chromium
+asks before a public page reaches a private address; Firefox does neither.
+Naming the hosts nginx serves Hemlock for, and closing every other
+connection, stops it. This is defence in depth, not access control: the
+reverse proxy, and port 80 on the box being reachable from the LAN only,
+remain the boundary.
+
+`server_name` keeps:
+
+- the `Host` the proxy sends: most proxies pass the browser's own through,
+  so it is the public name (`hemlock.example.com`); a proxy that rewrites
+  it sends the box's address;
+- the LAN address the TV opens `/display` by (`192.168.1.20`, say);
+- `127.0.0.1` and `localhost`: `deploy.sh` polls `http://127.0.0.1/api/health`
+  through nginx, and without them every deploy stops with `nginx on port 80
+  does not reach hemlock`, after the new server has started.
+
+`deploy.sh` installs `deploy/nginx/hemlock.conf` from the checkout over
+`/etc/nginx/sites-available/hemlock` on every deploy, so an edit to the
+installed file lasts only until the next deploy. The names go into the
+checkout's copy, and the catch-all into a file of its own that no deploy
+touches. On the box:
+
+1. Edit the checkout's site (`sudoedit /opt/hemlock/deploy/nginx/hemlock.conf`)
+   so that its first three lines inside `server {` read, with the real names:
+
+   ```nginx
+       listen 80;
+       listen [::]:80;
+       server_name hemlock.example.com 192.168.1.20 127.0.0.1 localhost;
+   ```
+
+2. Write the catch-all (`sudoedit /etc/nginx/conf.d/hemlock-default.conf`);
+   `444` closes the connection without an answer:
+
+   ```nginx
+   server {
+       listen 80 default_server;
+       listen [::]:80 default_server;
+       server_name _;
+       return 444;
+   }
+   ```
+
+3. Install the site and reload nginx:
+
+   ```bash
+   sudo install -m 0644 /opt/hemlock/deploy/nginx/hemlock.conf /etc/nginx/sites-available/hemlock
+   sudo nginx -t && sudo systemctl reload nginx
+   ```
+
+4. Check it:
+
+   ```bash
+   curl -s http://127.0.0.1/api/health
+   curl -s -H 'Host: elsewhere.example' http://127.0.0.1/api/health; echo "curl exit $?"
+   ```
+
+   The first answers `{"ok":true,…}`; the second prints only `curl exit 52`
+   (an empty reply).
+
+The edit is a local change to a tracked file in the checkout:
+
+- `git pull --ff-only` keeps it unless the update also changes
+  `deploy/nginx/hemlock.conf`; the pull then stops with `Your local changes
+  to the following files would be overwritten by merge`. Run
+  `sudo git -C /opt/hemlock stash`, the pull, and
+  `sudo git -C /opt/hemlock stash pop`, then deploy.
+- `git reset --hard`, the first step of a rollback, discards it.
+- A lost edit does not reopen the box silently: the site then claims
+  `default_server` beside `hemlock-default.conf`, `nginx -t` fails on the
+  duplicate default server, and `deploy.sh` puts the previous site back and
+  stops ([When a deploy fails](#when-a-deploy-fails)). Make the edit again
+  and rerun `deploy.sh`.
 
 ## Retiring the old pm2 install
 

@@ -1,0 +1,21 @@
+{
+  "_source": "recorded 2026-10-25 by npm run lookup:record -- 9780553212587",
+  "type": {
+    "key": "/type/edition"
+  },
+  "key": "/books/OL7820421M",
+  "title": "Wuthering Heights",
+  "physical_format": "Mass Market Paperback",
+  "description": {
+    "type": "/type/text",
+    "value": "\"My greatest thought in living is Heathcliff. If all else perished, and he remained, I should still continue to be... Nelly, I am Heathcliff! He's always, always in my mind: not as a pleasure... but as my own being.\" \r\n\r\nWuthering Heights is the only novel of Emily Bronte, who died a year after its publication, at the age of thirty. A brooding Yorkshire tale of a love that is stronger than death, it is also a fierce vision of metaphysical passion, in which heaven and hell, nature and society, are powerfully juxtaposed. Unique, mystical, with a timeless appeal, it has become a classic of English literature.\r\n--back cover"
+  },
+  "publishers": [
+    "Bantam Books"
+  ],
+  "publish_date": "1981-03",
+  "covers": [
+    14839277,
+    11100650
+  ]
+}

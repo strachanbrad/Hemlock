@@ -20,7 +20,8 @@
     "test": "npm test --workspaces",
     "db:migrate": "node server/scripts/migrate.js",
     "db:new": "node server/scripts/new-migration.js",
-    "db:reset": "node server/scripts/reset.js"
+    "db:reset": "node server/scripts/reset.js",
+    "lookup:record": "node server/scripts/lookup-record.js"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

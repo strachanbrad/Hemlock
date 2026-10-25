@@ -1,0 +1,32 @@
+{
+  "_source": "recorded 2026-10-25 by npm run lookup:record -- 9798322853480",
+  "numFound": 1,
+  "docs": [
+    {
+      "key": "/works/OL38557616W",
+      "title": "Breaking Rosalind",
+      "author_name": [
+        "Gigi Styx"
+      ],
+      "cover_i": 15139497,
+      "editions": {
+        "numFound": 1,
+        "docs": [
+          {
+            "key": "/books/OL52466785M",
+            "title": "Breaking Rosalind ",
+            "publisher": [
+              "Independently published"
+            ],
+            "publish_date": [
+              "16/06/2024"
+            ],
+            "isbn": [
+              "9798322853480"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

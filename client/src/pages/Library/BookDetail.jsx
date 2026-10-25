@@ -6,7 +6,7 @@
 import { useState } from 'react'
 import { App, Button, Skeleton } from 'antd'
 import { Link } from 'react-router'
-import { deleteBook, updateBook } from '../../api/books.js'
+import { deleteBook, findBetterCover, updateBook } from '../../api/books.js'
 import { addEdition, updateEdition } from '../../api/editions.js'
 import BookCover from '../../components/BookCover.jsx'
 import { BookRating, RATINGS, ReadToggle } from '../../components/BookRatings.jsx'
@@ -21,6 +21,14 @@ import EditionList from './EditionList.jsx'
 
 const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`
 
+const hostOf = (url) => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return null
+  }
+}
+
 const CORNERS = ['tl', 'tr', 'bl', 'br']
 
 const FramedCover = ({ book }) => (
@@ -34,6 +42,7 @@ const BookDetail = ({ book, loaded, initialMode, onSave, onReplace, onDeleted })
   const { message, modal } = App.useApp()
   const [mode, setMode] = useState(initialMode === 'purchase' && book.wishlist ? { form: 'purchase' } : { form: null })
   const [coverBusy, setCoverBusy] = useState(false)
+  const [finding, setFinding] = useState(false)
   const view = () => setMode({ form: null })
 
   const saved = (next) => {
@@ -71,6 +80,24 @@ const BookDetail = ({ book, loaded, initialMode, onSave, onReplace, onDeleted })
     }
   }
 
+  const findCover = async () => {
+    setFinding(true)
+    try {
+      const { replaced, book: next, source_url, width, height } = await findBetterCover(book.id)
+      onReplace(next)
+      if (replaced) {
+        const host = hostOf(source_url)
+        message.success(`Cover replaced${host ? `, from ${host}` : ''} (${width} × ${height})`)
+      } else {
+        message.info('The current cover is already the largest found')
+      }
+    } catch (err) {
+      message.error(err.message)
+    } finally {
+      setFinding(false)
+    }
+  }
+
   if (mode.form === 'book') {
     return <BookEditForm book={book} onSaved={saved} onCancel={view} />
   }
@@ -94,6 +121,7 @@ const BookDetail = ({ book, loaded, initialMode, onSave, onReplace, onDeleted })
           <div className="book-detail-buttons">
             <Button onClick={() => setMode({ form: 'book' })} disabled={!loaded}>Edit</Button>
             {book.editions.length === 0 && <ChangeCoverButton size="middle" busy={coverBusy} onFile={changeBookCover} />}
+            <Button onClick={findCover} loading={finding}>{finding ? 'Asking Claude…' : 'Find a better cover'}</Button>
           </div>
         </div>
       </div>

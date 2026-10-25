@@ -14,3 +14,6 @@ export const createBook = (payload, cover) => request('/api/books', { method: 'P
 export const updateBook = (id, payload, cover) => request(`/api/books/${id}`, { method: 'PATCH', ...payloadBody(payload, cover) })
 
 export const deleteBook = (id) => request(`/api/books/${id}`, { method: 'DELETE' })
+
+// One Claude web search; resolves to { replaced, book, source_url, width, height }.
+export const findBetterCover = (id) => request(`/api/books/${id}/cover/find`, { method: 'POST' })

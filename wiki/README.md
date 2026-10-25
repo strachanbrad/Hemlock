@@ -30,8 +30,8 @@ A newcomer starts with [Development setup](dev-setup.md) to run the app,
 - [Admin](admin.md): the hidden `/admin` page, its password and sessions,
   the lookup keys and settings, and how their secrets are encrypted.
 - [Security](security.md): bind address, error bodies, upload bounds,
-  generated cover names, downloads, the live updates stream, SQL, admin
-  sessions and secrets.
+  generated cover names, downloads, the live updates stream, SQL, raw
+  markup, admin sessions and secrets.
 - [Style](style.md): comments, license headers, wiki pages, commits, Ant
   Design usage and responsive layout.
 - [Theme](theme.md): the look of Hemlock: palette and contrast, fonts,

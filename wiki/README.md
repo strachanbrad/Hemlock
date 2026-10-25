@@ -20,4 +20,7 @@ A newcomer starts with [Development setup](dev-setup.md) to run the app,
   generated cover names, downloads and SQL.
 - [Style](style.md): comments, license headers, wiki pages, commits, Ant
   Design usage and responsive layout.
+- [Deployment](deployment.md): the box, install and redeploy, the paths,
+  secrets, backups and restore, logs, the reverse proxy's requirements, and
+  retiring the old pm2 install.
 - [Roadmap](roadmap.md): planned work, in order, and what was decided against.

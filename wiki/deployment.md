@@ -388,12 +388,31 @@ The owner's reverse proxy sits in front of nginx and needs:
   requests of up to 90 seconds each before it answers; the nginx site gives
   that path a 300-second `proxy_read_timeout`, and a shorter timeout at the
   proxy answers 504 while Claude is still searching.
+- **The event stream.** `GET /api/events` stays open for as long as a page
+  that shows the library is open
+  ([Library § Live updates](library.md#live-updates)). The proxy passes it
+  through without buffering the response, over HTTP/1.1 to nginx, with a
+  read timeout above 25 seconds (the server pings every 25), and without
+  compressing it. A proxy that buffers it holds every event back with no
+  error anywhere: each page fetches once when opened and then stays stale,
+  and the display does not fall back to polling, since its browser has live
+  updates. The server sends `X-Accel-Buffering: no`, which nginx and the
+  proxies built on it honour. The site on the box gives the path a location
+  of its own (`location = /api/events`: HTTP/1.1, `proxy_buffering off`,
+  `proxy_cache off`, a one-hour `proxy_read_timeout`), and its `gzip_types`
+  leaves out `text/event-stream`. To check it from any machine,
+  `curl -N https://<the public name>/api/events` prints `retry: 5000` at once
+  and `event: changed` within a second of a change made on another device.
+  `GET /api/changes`, the long poll for clients that cannot hold a stream,
+  needs no location of its own: it holds a request for at most 30 seconds,
+  inside nginx's default 60-second `proxy_read_timeout`, so only a proxy
+  whose read timeout is under 30 seconds cuts it (with a 504).
 - **Access control.** Hemlock has no login: anyone who reaches it can edit or
   delete the library. Keep it LAN-only, or authenticate at the proxy.
 - **The TV.** The TV's browser opens `/display` without an interactive login.
-  That page loads the client (`/`, `/assets/`) and then reads `/api/display`
-  and `/covers/`; with authentication at the proxy, these paths reach the TV
-  without it (by the TV's LAN address, for one).
+  That page loads the client (`/`, `/assets/`) and then reads `/api/display`,
+  `/api/events` and `/covers/`; with authentication at the proxy, these paths
+  reach the TV without it (by the TV's LAN address, for one).
 
 ### Answering only Hemlock's names (optional)
 

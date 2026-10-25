@@ -98,6 +98,18 @@ a cover only:
 A refused or failed download leaves no file and is logged in one line;
 the book or edition is saved without the cover.
 
+## Live updates
+
+`GET /api/events` ([Library § Live updates](library.md#live-updates)) tells
+every open page only that the library changed: the stream carries the one
+event `changed` with `{"kind":"library"}`, never an id, a title or any field,
+so a page learns nothing from it that it could not fetch, and it is sent only
+after a write that succeeded. The long poll, `GET /api/changes`, answers only
+a version number. Each open stream and each held poll holds a socket, so
+`createEvents()` (`server/src/events.js`) caps them together at 50 and
+answers 503 past that; a page that is refused or closed tries again after 5
+seconds. A poll holds for at most 30 seconds, whatever `wait` asks.
+
 ## SQL
 
 SQL never interpolates a request value. Values are bound as parameters; table

@@ -104,6 +104,8 @@ JSON in and out; lists are arrays. Every route is in `server/src/routes/`.
 | `PATCH /api/authors/:id` | 200, `{ id, name, book_count }` |
 | `DELETE /api/authors/:id` | 204 |
 | `GET /api/health` | 200, `{ ok: true, version, schema }` |
+| `GET /api/events` | 200, an event stream that stays open ([Live updates](#live-updates)); 503 `{ error }` past 50 open streams and polls |
+| `GET /api/changes?since=&wait=` | 200, `{ version }`, at once or after a hold of up to `wait` seconds ([Live updates](#live-updates)); 503 `{ error }` past 50 open streams and polls |
 
 A book in a response:
 
@@ -183,14 +185,84 @@ server log only ([Security](security.md#error-bodies)).
 | 409 | A conflict, with the existing record: `{ error, conflict: { book_id } }` for a title the author already has; `{ error, conflict: { book_id, edition_id } }` for an ISBN already in the library, or a second edition of one format without an ISBN; `{ error, conflict: { author_id } }` for an author name in use; `{ error, conflict: { book_count } }` for deleting an author who has books. |
 | 413 | A cover over 10 MB (nginx answers its own 413 with an HTML body). |
 
+## Live updates
+
+A page that shows the library learns of a change made on another device
+without a reload, and fetches only then: once when it opens, and again when
+it is told.
+
+- **The stream.** `GET /api/events` (`server/src/events.js`) answers
+  `text/event-stream` and stays open. It starts with `retry: 5000` (the
+  browser waits 5 seconds before reconnecting), sends a `: ping` comment
+  every 25 seconds on one timer shared by every page, and, after a change,
+  `event: changed` with `data: {"kind":"library"}`. Nothing else goes down
+  it. At most 50 streams and held polls (below) are open at once; the next
+  one is answered 503.
+- **What sends `changed`.** One middleware in `server/src/app.js`, not the
+  routes: a `POST`, `PATCH`, `PUT` or `DELETE` under `/api/books`,
+  `/api/editions` or `/api/authors` whose response finishes with a 2xx
+  status. A refused write (4xx or 5xx), a read, the admin routes and the
+  lookups send nothing. The writer's own pages are told too and fetch
+  again. A write whose client disconnects before the answer (a phone that
+  loses its connection while a cover downloads) is saved but sends
+  nothing; the pages catch up at the next change.
+- **The pages.** `watchChanges()` in `client/src/api/events.js` holds an
+  `EventSource` on `/api/events`; `useChanges()` in
+  `client/src/lib/useChanges.js` subscribes once per page and calls the page
+  once 300 ms after the first event of a burst. `/library` fetches the list
+  for its current filters and the open book again, `/authors` its list, and
+  `/display` its books ([TV display § Timing](display.md#timing)). The add
+  page, the admin page and the scanner listen to nothing. A fetch that fails
+  keeps what the page shows, except the open book once it answers 404,
+  which the drawer reports as not found.
+- **Saves in flight.** A list or book fetched while a rating, read or
+  wishlist save is pending keeps the value that save shows
+  (`pending(bookId)` in `client/src/lib/fieldSaves.js`), so a fetch that
+  started before the save never flips it back; once the save settles, the
+  next fetch shows what the server holds.
+- **Reconnecting.** The browser reconnects a dropped stream by itself, but
+  gives up for good on an error answer (nginx's 502 while the server
+  restarts, or the 503), so `watchChanges()` opens a new `EventSource` 5
+  seconds after one closes. Every open after a failure counts as a change
+  (`reconnected`), since one may have happened meanwhile, and the page
+  fetches again.
+- **Without `EventSource`.** `liveUpdatesSupported()` is false, nothing is
+  opened, `/library` and `/authors` fetch only when opened, and `/display`
+  falls back to fetching every 5 minutes.
+- **The long poll.** A client that cannot hold a stream (a Roku channel)
+  asks `GET /api/changes?since=<version>&wait=<seconds>` in a loop. The
+  server keeps a `version`: the time it started, in milliseconds, plus one
+  for every `changed` it has sent. The answer is always `{ version }` with
+  `Cache-Control: no-store`: at once when `since` is absent, not a number,
+  or not the current version; otherwise the request is held until the next
+  change (answered with the new version) or for `wait` seconds (25 when
+  absent or not a number, at most 30; answered with the same version).
+  A client fetches the library when the version it gets differs from the
+  one it sent, and asks again with the new one. A held request is dropped
+  when its client closes, and counts toward the 50 with the streams.
+
+Over HTTP/1.1 a browser opens at most six connections to one host, and each
+open Library, Authors or Display tab holds one for its stream: with six such
+tabs open, every other request to the host waits. The dev server speaks
+HTTP/1.1; a proxy that serves HTTP/2 carries every stream on one
+connection. The proxy's part is in
+[Deployment § The reverse proxy](deployment.md#the-reverse-proxy).
+
+The tests: `server/test/events.test.js` (the stream's headers and lines,
+what sends `changed` and what does not, the pings, the cap, and the long
+poll's answers and holds); `client/test/useChanges.test.jsx` (the stream,
+reconnecting, the 300 ms window), `useLibrary.test.jsx`, `fieldSaves.test.js`,
+`AuthorsPage.test.jsx` and `Display.test.jsx`, with `EventSource` stubbed by
+`client/test/eventSource.js` (jsdom has none).
+
 ## The pages
 
 The client asks the server only through `client/src/api/books.js`,
 `editions.js` and `authors.js`, over `request.js`, which never assumes an
-error body is JSON. A phone is below 768px: `useIsPhone()` in
-`client/src/lib/viewport.js` reads `matchMedia('(max-width: 767.98px)')`
-through `useSyncExternalStore`, so the first render already has the right
-layout. Styles are in `client/src/styles/`; the palette, fonts, ornaments and
+error body is JSON, and hears of changes through `events.js`. A phone is
+below 768px: `useIsPhone()` in `client/src/lib/viewport.js` reads
+`matchMedia('(max-width: 767.98px)')` through `useSyncExternalStore`, so the
+first render already has the right layout. Styles are in `client/src/styles/`; the palette, fonts, ornaments and
 the rules for a new page are in [Theme](theme.md).
 
 ### The shell

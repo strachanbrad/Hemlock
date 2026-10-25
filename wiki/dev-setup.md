@@ -42,6 +42,11 @@ there is no compiler step and no `sqlite3` command-line tool to install.
 
    Express listens on `127.0.0.1:5000` and Vite on `http://localhost:5173`.
    Open `http://localhost:5173`; Vite proxies `/api` and `/covers` to Express.
+   `/api/events` has a proxy entry of its own in `client/vite.config.js`:
+   Vite's proxy streams it as it comes, but when Express restarts under
+   `node --watch` it would keep the browser's end of the stream open with
+   nothing behind it, so the entry cuts it and the page reconnects
+   ([Library § Live updates](library.md#live-updates)).
 
 ## Layout
 
@@ -50,7 +55,7 @@ there is no compiler step and no `sqlite3` command-line tool to install.
 | `client/` | The React and Ant Design client, built by Vite (`client/vite.config.js`, `client/index.html`, `client/src/`). |
 | `client/src/api/` | The only modules that call `fetch`, one per resource. |
 | `client/src/lib/isbn.js` | ISBN-10/13 validation and conversion; identical to `server/src/lib/isbn.js`. |
-| `server/src/` | The Express server: `index.js` starts it, `app.js` builds it, `config.js` reads the environment, `db.js` opens the database, `migrate.js` applies migrations, `covers.js` downloads and deletes cover files, `coverFiles.js` writes uploads and ties cover files to transactions, `body.js` reads JSON and multipart bodies, `validate.js` checks every payload, `library.js` holds the book queries, `settings.js` keeps the settings and encrypts their secrets, `auth.js` holds the admin password and sessions ([Admin](admin.md)), `routes/` holds one module per resource ([Library](library.md)). |
+| `server/src/` | The Express server: `index.js` starts it, `app.js` builds it, `config.js` reads the environment, `db.js` opens the database, `migrate.js` applies migrations, `covers.js` downloads and deletes cover files, `coverFiles.js` writes uploads and ties cover files to transactions, `body.js` reads JSON and multipart bodies, `validate.js` checks every payload, `library.js` holds the book queries, `settings.js` keeps the settings and encrypts their secrets, `auth.js` holds the admin password and sessions ([Admin](admin.md)), `events.js` holds the live updates stream ([Library § Live updates](library.md#live-updates)), `routes/` holds one module per resource ([Library](library.md)). |
 | `server/src/lookup/` | The Open Library, Google Books and Claude clients and the merge of the catalogues' answers ([Lookup](lookup.md)). |
 | `server/migrations/` | The numbered SQL migrations ([Migrations](migrations.md)). |
 | `server/seed/` | The dev library: `seed.sql` and `covers/`. |

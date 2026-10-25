@@ -165,7 +165,7 @@ commit and points the row at the file in a second statement
   available" PNG rather than a 404; that exact image (SHA-256
   `e3f8c414…eca12`) is refused.
 - The file is written to a temp name inside `DATA_DIR/covers/` and renamed
-  into place, as uploads are ([Security § Cover file names](security.md#cover-file-names)).
+  into place ([Security § Cover file names](security.md#cover-file-names)).
 
 ## Barcode scanning
 
@@ -237,7 +237,7 @@ loads the scanner the first time it is tapped and shows it in a dialog
 
 The lookup and download tests never touch the network.
 `createLookup({ fetch, googleKey, contact, now, sleep, timeoutMs, log })` and
-`saveCoverFromUrl(url, id, { fetch, timeoutMs, log })` take their `fetch`,
+`saveCoverFromUrl(url, base, { fetch, timeoutMs, log })` take their `fetch`,
 clock and logger from the caller, and `server/test/support/fixtures.js`
 answers each upstream URL from a file in `server/test/fixtures/lookup/`.
 

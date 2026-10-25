@@ -61,8 +61,9 @@ A client wrapper never assumes an error body is JSON: nginx answers 413 and
   under the systemd unit's `PrivateTmp` that is another mount, and the rename
   fails with `EXDEV`.
 - `deleteCover()` refuses any name that does not match the server's own
-  patterns (`^(e\d+-[0-9a-f]{8}|b\d+-[0-9a-f]{8}|\d{13})\.(jpg|png|webp)$`) and
-  ignores a file that is already gone.
+  pattern (`COVER_NAME` in `server/src/covers.js`,
+  `^[eb][1-9]\d*-[0-9a-f]{8}\.(jpg|png|webp)$`) and ignores a file that is
+  already gone.
 
 ## Downloads
 

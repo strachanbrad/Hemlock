@@ -200,9 +200,11 @@ restart, into `/var/lib/hemlock/backups/`:
   copy of `hemlock.db` is not a backup: in WAL mode the latest commits are in
   `hemlock.db-wal` until a checkpoint.
 - `covers-<stamp>/`: a hardlink snapshot of `covers/` (`cp -al`), which costs
-  no space for the images. It stays a true snapshot because
-  `server/src/covers.js` never writes into an existing cover file; it writes a
-  temporary file and renames it.
+  no space for the images. It stays a true snapshot because neither cover
+  writer writes into an existing file: `writeCover()` in
+  `server/src/coverFiles.js` creates an upload with the `wx` flag, and
+  `saveCoverFromUrl()` in `server/src/covers.js` writes a temporary file and
+  renames it.
 
 `<stamp>` is the UTC time as `YYYYMMDDTHHMMSSZ`, so the names sort by age. The
 deploy keeps the newest 10 pairs and deletes the rest; other names in the

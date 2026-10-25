@@ -137,6 +137,23 @@ describe('PATCH /api/editions/:id', () => {
     assert.equal((await api.patch('/api/editions/1', { format: 'ebook' })).status, 200)
   })
 
+  it('clears the wishlist when an ebook edition becomes a paperback', async () => {
+    seed()
+    app.db.exec("INSERT INTO editions (id, book_id, format) VALUES (3, 2, 'ebook')")
+    const { status, body } = await api.patch('/api/editions/3', { format: 'paperback' })
+    assert.equal(status, 200)
+    assert.equal(body.wishlist, false)
+    assert.equal(app.db.prepare('SELECT wishlist FROM books WHERE id = 2').pluck().get(), 0)
+  })
+
+  it('keeps a wishlist set by hand when a hardcover edition becomes a paperback', async () => {
+    seed()
+    app.db.exec("INSERT INTO editions (id, book_id, format) VALUES (3, 2, 'hardcover')")
+    const { status, body } = await api.patch('/api/editions/3', { format: 'paperback' })
+    assert.equal(status, 200)
+    assert.equal(body.wishlist, true)
+  })
+
   it('answers 404 for an unknown edition and 400 for a field it does not have', async () => {
     seed()
     assert.deepEqual(await api.patch('/api/editions/99', { format: 'ebook' }), { status: 404, body: { error: 'Edition not found' } })

@@ -48,6 +48,8 @@ export default function editionRoutes(db, saveCover) {
         values.cover = req.cover ? files.write(req.cover, `e${id}`) : null
       }
       library.updateEdition(id, values)
+      // Only an ebook turning physical: a wishlist set by hand on a physical book stays.
+      if (edition.format === 'ebook' && PHYSICAL.has(values.format)) library.updateBook(edition.book_id, { wishlist: 0 })
       return edition.book_id
     })
     if (input.cover_from_url) await attachDownloadedCovers(db, [{ table: 'editions', id, url: input.cover_from_url }], saveCover)

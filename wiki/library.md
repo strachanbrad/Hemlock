@@ -22,9 +22,11 @@ What the rows mean:
 - **Owned** means the book has at least one edition. A book with none is
   only on the wishlist.
 - **`wishlist`** means a physical copy is wanted; the Wishlist is every book
-  with it set. Adding a hardcover or paperback edition clears it; adding an
-  ebook edition does not. A book created with a physical edition never has
-  it set.
+  with it set. Adding a hardcover or paperback edition clears it, and so does
+  changing an ebook edition to one of them (`PATCH /api/editions/:id`, in the
+  same transaction); adding an ebook edition does not, and neither does
+  changing a hardcover to a paperback or back. A book created with a physical
+  edition never has it set.
 - **A title is unique per author** (`books_author_title`), so a second format
   of a book is an edition of it, not a second book.
 - **`isbn`** is always ISBN-13 or NULL (store-only ebooks have none), and is

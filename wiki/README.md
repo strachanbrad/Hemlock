@@ -19,6 +19,9 @@ A newcomer starts with [Development setup](dev-setup.md) to run the app,
   dev seed.
 - [TV display](display.md): the `/display` slideshow, `GET /api/display`,
   and the ways to get the page onto a television.
+- [Roku channel](roku.md): the slideshow as a sideloaded Roku channel, its
+  keys and rating edits, its settings, building and installing it, and the
+  screensaver.
 - [Migrations](migrations.md): numbered SQL files, how they are applied, and
   the rules for writing one.
 - [Lookup](lookup.md): ISBN lookup from Open Library and Google Books, the

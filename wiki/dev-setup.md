@@ -62,7 +62,9 @@ to install.
 | `server/migrations/` | The numbered SQL migrations ([Migrations](migrations.md)). |
 | `server/seed/` | The dev library: `seed.sql` and `covers/`. |
 | `server/scripts/` | The `db:migrate`, `db:new`, `db:reset`, `lookup:record` and `admin:password` commands. |
+| `roku/` | The Roku channel: BrightScript and SceneGraph sources, fonts, and the scripts that build and install it ([Roku channel](roku.md)). |
 | `data/` | The dev data directory (gitignored): `hemlock.db`, `covers/`, and `secrets.key` once a secret is saved. |
+| `dist/` | The Roku package that `npm run roku:build` writes (gitignored). |
 
 ## Commands
 
@@ -80,6 +82,9 @@ All run from the root of the checkout.
 | `npm run db:reset` | Rebuilds the dev library from `server/seed/` (below). |
 | `npm run lookup:record -- <isbn>` | Asks Open Library for an ISBN, over the network, and writes its answers as test fixtures ([Lookup § Tests](lookup.md#tests)). |
 | `npm run admin:password` | Sets the password of `/admin`, read from a hidden prompt or a pipe, and signs every browser out ([Admin § The password](admin.md#the-password)). |
+| `npm run roku:build` | Builds the Roku channel into `dist/hemlock-roku.zip` for the address in `HEMLOCK_BASE_URL` ([Roku channel § Commands](roku.md#commands)). |
+| `npm run roku:install` | Sideloads that package to the TV named by `ROKU_IP`, `ROKU_USERNAME` and `ROKU_PASSWORD`, which come from `~/.config/hemlock/rokudev.env` and never from the repository ([Roku channel § Developer mode and sideloading](roku.md#developer-mode-and-sideloading)). |
+| `npm run roku:check` | Validates the channel's BrightScript and SceneGraph XML with BrighterScript. |
 
 ## Configuration
 

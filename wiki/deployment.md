@@ -418,6 +418,15 @@ The owner's reverse proxy sits in front of nginx and needs:
   That page loads the client (`/`, `/assets/`) and then reads `/api/display`,
   `/api/events` and `/covers/`; with authentication at the proxy, these paths
   reach the TV without it (by the TV's LAN address, for one).
+- **The Roku channel.** The channel talks to the box over the LAN at the
+  address built into it (`http://10.0.5.10` unless `HEMLOCK_BASE_URL` says
+  otherwise, [Roku channel § Settings](roku.md#settings)), straight to nginx,
+  so the proxy plays no part and nginx needs nothing more. A channel built
+  with the proxy's name instead needs the proxy to pass `GET /api/display`,
+  `GET /api/changes`, `GET /covers/` and `PATCH /api/books/<id>` without a
+  login, and to hold a request open for at least 30 seconds. The channel
+  checks an https certificate against the TV's own bundle
+  (`common:/certs/ca-bundle.crt`).
 
 ### Answering only Hemlock's names (optional)
 
@@ -436,7 +445,8 @@ remain the boundary.
 - the `Host` the proxy sends: most proxies pass the browser's own through,
   so it is the public name (`hemlock.example.com`); a proxy that rewrites
   it sends the box's address;
-- the LAN address the TV opens `/display` by (`192.168.1.20`, say);
+- the LAN address the TV opens `/display` by, which is also the address the
+  Roku channel is built with (`192.168.1.20`, say);
 - `127.0.0.1` and `localhost`: `deploy.sh` polls `http://127.0.0.1/api/health`
   through nginx, and without them every deploy stops with `nginx on port 80
   does not reach hemlock`, after the new server has started.

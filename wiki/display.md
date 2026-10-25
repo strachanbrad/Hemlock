@@ -69,8 +69,8 @@ The shell's **Display** menu item opens `/display` in a new tab.
 
 - The cover sits on the left in a 2:3 box that is sized before the image
   loads, so a slide never reflows. The image is scaled to fit inside the box.
-  When a book has no cover, or its image fails to load, the box shows the
-  title instead.
+  When a book has no cover, or its image fails to load, the box shows a cloth
+  cover with the title and a small umbel instead.
 - On the right: the title (at most 3 lines), the author, the format and the
   stars, and the synopsis (at most 8 lines). Spice and gore show only with
   `?ratings=all`.
@@ -78,10 +78,14 @@ The shell's **Display** menu item opens `/display` in a new tab.
   (`--u`, a hundredth of the stage width), so 720p, 1080p and 4K look the same
   and nothing passes the edge of the screen. A portrait phone shows the same
   stage, small; there is no portrait layout.
-- `display.css` sets its own dark background, text colours and font. It has
-  to: Ant Design's `App` wrapper sets the shell's text colour and font on
-  everything beneath it. The accent (the border of a missing cover) is the
-  theme's `colorPrimary`, passed in as the `--display-accent` custom property.
+- `display.css` sets its own background, text colours and fonts. It has to:
+  Ant Design's `App` wrapper sets the shell's text colour and font on
+  everything beneath it. It takes them from the palette's custom properties
+  on `:root` in `client/src/styles/index.css` ([Theme](theme.md)): ink with a
+  vignette, cream text, the title in Cormorant Garamond, the author in Lora
+  italic and dusty rose, the synopsis in Lora.
+- "The Hemlock" sits small in brass in the stage's lower right corner, with
+  an umbel.
 - Slides crossfade over one second; `prefers-reduced-motion` turns that off.
 
 ### Address parameters

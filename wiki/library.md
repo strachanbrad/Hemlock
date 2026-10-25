@@ -20,8 +20,8 @@ Three tables:
 What the rows mean:
 
 - **Owned** means the book has at least one edition. A book with none is
-  wanted but not owned.
-- **`wishlist`** means a physical copy is wanted; the buy list is every book
+  only on the wishlist.
+- **`wishlist`** means a physical copy is wanted; the Wishlist is every book
   with it set. Adding a hardcover or paperback edition clears it; adding an
   ebook edition does not. A book created with a physical edition never has
   it set.
@@ -180,39 +180,46 @@ The client asks the server only through `client/src/api/books.js`,
 error body is JSON. A phone is below 768px: `useIsPhone()` in
 `client/src/lib/viewport.js` reads `matchMedia('(max-width: 767.98px)')`
 through `useSyncExternalStore`, so the first render already has the right
-layout. Styles are in `client/src/styles/`.
+layout. Styles are in `client/src/styles/`; the palette, fonts, ornaments and
+the rules for a new page are in [Theme](theme.md).
 
 ### The shell
 
-`client/src/App.jsx`. On a desktop, a header and a sider with Library, Buy
-list, Add book, Authors, and Display (opens `/display` in a new tab). On a
-phone, a 56px header and a fixed bottom tab bar of Library, Buy list, Add and
-Authors; Display is not on it. Content padding is 24px, 16px on a phone. `/`
-goes to `/library`.
+`client/src/App.jsx`. The header carries the wordmark, the logo and "The
+Hemlock". On a desktop, a sider with Library, Wishlist, Add book, Authors,
+and Display (opens `/display` in a new tab); the current item has a brass bar
+and a small umbel. On a phone, a 56px header and a fixed bottom tab bar of
+Library, Wishlist, Add and Authors; Display is not on it. Content padding is
+24px, 16px on a phone. `/` goes to `/library`. Every page title is a
+`PageHeading` (`components/Headings.jsx`), with the count of what it lists
+beside it on Library, Wishlist and Authors.
 
 ### Library
 
 `/library` (`pages/Library/Library.jsx`) keeps its filters in the address:
-the buy list is `/library?wishlist=1`, physical books `?format=physical`,
+the Wishlist is `/library?wishlist=1`, physical books `?format=physical`,
 ebooks `?format=ebook`, one author's books `?author_id=<id>`. The search
 waits 250 ms after the last keystroke.
 
-- **Desktop:** a toolbar of search and Format, Owned, Wishlist and Read
-  selects, and a table that scrolls inside its own box: cover, title,
-  author, format tags (and Wishlist), read, stars, spice, gore, and the date
-  added (hidden below 992px). Every column but the cover sorts; 25 rows a
+- **Desktop:** a toolbar of search and Format, Owned (Owned or Wishlist
+  only), Wishlist (On the wishlist) and Read selects, and a table that
+  scrolls inside its own box: cover, title, author, formats (a bookmark
+  toggle for the wishlist, then a tag per edition), read, stars, spice, gore,
+  and the date added (hidden below 992px). Every column but the cover sorts; 25 rows a
   page. Read and the ratings change in place; a click elsewhere on a row
   opens the book.
-- **Phone:** a sticky search with a Filters button (its badge counts the
-  active filters) that opens a bottom drawer with the four filters and a
-  Sort select (title, author, stars, spice, gore, recently added). Active
-  filters show as closable tags. One card per book: cover, title, author,
-  format tags, a 32px read toggle, and the three ratings as read-only
-  numbers, since a tap on a scrolling list would mis-rate. On the buy list
-  each card has Purchased, which opens the book's purchase form.
-- An empty result says "No books match" with Clear filters.
+- **Phone:** a sticky search on its own row, then a Filters button (its
+  badge counts the active filters) and the view toggle; Filters opens a
+  bottom drawer with the four filters and a Sort select (title, author,
+  stars, spice, gore, recently added). Active filters show as closable tags. One card per book: cover, title, author,
+  format tags, 32px wishlist and read toggles, and the three ratings as
+  read-only numbers, since a tap on a scrolling list would mis-rate. On the
+  Wishlist each card has Purchased, which opens the book's purchase form.
+- An empty library says "Nothing on the shelf yet" with Add a book; an
+  empty Wishlist "Nothing on the wishlist"; any other empty result "No books
+  match" with Clear filters (`components/ShelfEmpty.jsx`).
 
-A rating or read change shows at once, is saved with `PATCH`, reverts with an
+A wishlist, rating or read change shows at once, is saved with `PATCH`, reverts with an
 error message if the save fails, and of overlapping saves to one book only
 the newest answer is applied (`useLibrary.js`, `client/src/lib/latest.js`).
 
@@ -233,9 +240,10 @@ applied) as a row of covers in 3D instead of the table or the cards
   covers either side stand turned about 60° toward it, smaller and pushed
   back, overlapping, each with a faded mirror image beneath (a flipped copy
   under a `mask-image` gradient, since Firefox has no `-webkit-box-reflect`).
-  A book without a cover shows `BookCover`'s placeholder in the same 2:3 box.
-  Under the row: the centre book's title (a link to it), author, format tags
-  (with Wishlist when set) and its position, "12 of 23". An empty result
+  A book without a cover shows `BookCover`'s cloth cover with its title in
+  the same 2:3 box. Under the row, set like the book's drawer: the centre
+  book's title (a link to it), author, format tags, "On the wishlist" when
+  set, and its position, "12 of 23". An empty result
   shows the list's "No books match".
 - **Moving.** The wheel steps one book per notch, either axis; a stream of
   small trackpad deltas adds up to steps, at most one per 70 ms. A drag with
@@ -270,8 +278,12 @@ applied) as a row of covers in 3D instead of the table or the cards
 `/library/:id` opens a drawer over the list (640px; the full screen on a
 phone); Back closes it.
 
-- The cover, the author (a link to their books), the format tags, read and
-  the three ratings as 32px controls, the synopsis.
+- The header holds the title and a bookmark button, "Add to wishlist" or
+  "On the wishlist", which saves `{ wishlist }` with `PATCH` like the
+  toggles in the list.
+- The cover in a frame with brass corners, the author (a link to their
+  books), the format tags, read and the three ratings as 32px controls, the
+  synopsis.
 - **Edit** turns title, author and synopsis into a form; Save sends only the
   changed fields and returns to the view only when the save succeeds; a
   conflict shows under the title.
@@ -290,15 +302,29 @@ long side (`client/src/lib/resizeImage.js`) before it is sent.
 
 ### Add a book
 
-`/add` (`pages/AddBook/AddBook.jsx`), one column on a phone and two from
-992px: ISBN, title, author, format (Hardcover, Paperback, Ebook or Not owned
-yet), "Want a physical copy" for an ebook (always on for Not owned yet),
-publisher and date behind "More", cover, read, ratings, synopsis. The author
-field (`AuthorSelect.jsx`) lists the authors and, when the typed name matches
-none of them without regard to case, offers Add "<name>", which sends
-`author_name`. A book not owned yet keeps its cover on the book. When the
-title or the ISBN is already in the library, the page offers Open the
-existing book and, for a title, Add this as an edition.
+`/add` (`pages/AddBook/AddBook.jsx`) is four sections:
+
+1. **Find it:** the ISBN field with Scan and Look up (below), Scan the
+   primary button, and one line of help.
+2. **The book:** the cover picker beside its preview at the left (above the
+   fields on a phone), then title, author and the ownership choice, "I own
+   it" or "On my wishlist". Owned, it asks for the format (Hardcover,
+   Paperback or Ebook), "Want a physical copy" for an ebook, and publisher
+   and date behind "More". On the wishlist, it asks for no format and says
+   the book goes on the wishlist.
+3. **Your take:** read and the three ratings in one labelled row (one row
+   each on a phone).
+4. **Synopsis.**
+
+Then Reset and Add book, a bar stuck above the tab bar on a phone. The body
+is built by `bookPayload()` in `pages/AddBook/payload.js`: an owned book is
+sent with its `edition` and `wishlist` set only for an ebook wanting a
+physical copy; a wishlist book is sent with `wishlist: true`, no edition,
+and its cover on the book. The author field (`AuthorSelect.jsx`) lists the
+authors and, when the typed name matches none of them without regard to
+case, offers Add "<name>", which sends `author_name`. When the title or the
+ISBN is already in the library, the page offers Open the existing book and,
+for a title, Add this as an edition.
 
 **Scan and look up.** The ISBN field (`components/IsbnField.jsx`, also in
 the edition form) is checked with `client/src/lib/isbn.js` and has two
@@ -317,8 +343,9 @@ format hint when no format is chosen yet. A scan never preselects Ebook: the
 person is holding a printed book. A lookup that finds nothing says so and
 leaves the form for typing.
 
-The lookup's cover shows as a preview, the one image the browser loads from
-another host (Open Library's cover server, which redirects to archive.org, or
+The cover preview shows what the book will be saved with: a chosen file, else
+the lookup's cover, else a cloth cover with the typed title. The lookup's
+cover is the one image the browser loads from another host (Open Library's cover server, which redirects to archive.org, or
 Google Books). It is sent as
 `cover_from_url` on save unless a file is chosen or "Don't use this cover"
 is tapped; if the server cannot download it, the book is saved without it
@@ -329,7 +356,8 @@ set.
 ### Authors
 
 `/authors` (`pages/Authors/Authors.jsx`): a table on a desktop, a list on a
-phone, with a search. A name opens that author's books. Rename is inline; a
+phone, with a search; "No authors yet" or "No authors match" when there is
+nothing to list. A name opens that author's books. Rename is inline; a
 name in use is refused with "An author named … exists". Delete is offered
 only for an author with no books.
 
@@ -341,11 +369,11 @@ with its covers in `server/seed/covers/`. It holds 13 authors, 23 books and
 25 editions, and covers the cases the model has:
 
 - physical books with real ISBN-13s for their titles, publishers and dates;
-- ebooks without an ISBN, several on the buy list;
+- ebooks without an ISBN, several on the wishlist;
 - books in two formats (Fifty Shades of Grey, War and Peace, One Hundred
   Years of Solitude), so physical-first ordering shows;
 - a co-authored book (Zodiac Academy: Shadow Princess);
-- a book wanted but not owned (Emma), with no edition;
+- a book only on the wishlist (Emma), with no edition;
 - books without a cover, and a PNG cover among JPEGs.
 
 `server/test/seed.test.js` checks that every ISBN is valid and that the

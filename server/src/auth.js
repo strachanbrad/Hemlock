@@ -31,6 +31,8 @@ export function verifyPassword(password, stored) {
   if (kind !== 'scrypt' || rest.length > 0 || !salt || !hash) return false
   if (!Number.isInteger(N) || N < 2 || N > 2 ** 20 || !Number.isInteger(R) || R < 1 || R > 16 || !Number.isInteger(P) || P < 1 || P > 4) return false
   const expected = Buffer.from(hash, 'base64url')
+  // A hash that decodes to nothing would compare equal to a zero-length derivation.
+  if (expected.length < 32) return false
   const actual = crypto.scryptSync(password, Buffer.from(salt, 'base64url'), expected.length, { N, r: R, p: P, maxmem: 256 * N * R })
   return crypto.timingSafeEqual(actual, expected)
 }

@@ -295,6 +295,8 @@ describe('npm run admin:password', () => {
       assert.match(stored, /^scrypt\$32768\$8\$1\$[A-Za-z0-9_-]{22}\$[A-Za-z0-9_-]{86}$/)
       assert.ok(verifyPassword('a new password', stored))
       assert.ok(!verifyPassword('a new passwor', stored))
+      // A stored hash that decodes to no bytes must not match every password.
+      assert.ok(!verifyPassword('a new password', 'scrypt$32768$8$1$c2FsdHNhbHRzYWx0c2FsdA$!'))
       assert.equal(db.prepare('SELECT COUNT(*) FROM sessions').pluck().get(), 0)
       assert.equal(fs.statSync(path.join(dir, 'secrets.key')).mode & 0o777, 0o600)
     } finally {

@@ -8,6 +8,7 @@ import { Alert, Button, Empty, Spin } from 'antd'
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import { useIsPhone } from '../../lib/viewport.js'
 import BookDrawer from './BookDrawer.jsx'
+import CoverFlow, { ViewToggle, useLibraryView } from './CoverFlow.jsx'
 import { ActiveFilters, DesktopFilters, PhoneFilters } from './FilterControls.jsx'
 import LibraryCards from './LibraryCards.jsx'
 import LibraryTable from './LibraryTable.jsx'
@@ -31,6 +32,7 @@ const Library = () => {
     [filters, setParams],
   )
   const changeSearch = useCallback((q) => changeFilters({ q }), [changeFilters])
+  const [view, changeView] = useLibraryView(filters.view, changeFilters)
 
   const linkTo = (bookId) => ({ pathname: `/library/${bookId}`, search: location.search })
   const openBook = (bookId, state = {}) => navigate(linkTo(bookId), { state: { fromList: true, ...state } })
@@ -43,7 +45,7 @@ const Library = () => {
   const buyList = isBuyList(filters)
   const authorName = filters.author_id && library.books.find((book) => String(book.author.id) === filters.author_id)?.author.name
   const filtered = filters.q.trim() !== '' || activeFilterCount(filters) > 0
-  const clearFilters = () => setParams(searchFromFilters(EMPTY_FILTERS), { replace: true })
+  const clearFilters = () => setParams(searchFromFilters({ ...EMPTY_FILTERS, view: filters.view }), { replace: true })
 
   let body
   if (library.error) {
@@ -54,6 +56,8 @@ const Library = () => {
         {filtered ? <Button onClick={clearFilters}>Clear filters</Button> : <Button type="primary" onClick={() => navigate('/add')}>Add a book</Button>}
       </Empty>
     )
+  } else if (view === 'flow') {
+    body = <CoverFlow books={books} loading={library.loading} linkTo={linkTo} onOpen={openBook} />
   } else if (isPhone) {
     body = (
       <Spin spinning={library.loading}>
@@ -72,6 +76,7 @@ const Library = () => {
           <div className="library-search-row">
             <SearchBox className="library-search-input" value={filters.q} onChange={changeSearch} />
             <PhoneFilters filters={filters} open={filtersOpen} onOpen={() => setFiltersOpen(true)} onClose={() => setFiltersOpen(false)} onChange={changeFilters} />
+            <ViewToggle compact view={view} onChange={changeView} />
           </div>
           <ActiveFilters filters={filters} authorName={authorName} onChange={changeFilters} />
         </div>
@@ -80,6 +85,7 @@ const Library = () => {
           <SearchBox className="toolbar-search" value={filters.q} onChange={changeSearch} />
           <DesktopFilters filters={filters} onChange={changeFilters} />
           <ActiveFilters filters={{ ...EMPTY_FILTERS, author_id: filters.author_id }} authorName={authorName} onChange={changeFilters} />
+          <ViewToggle view={view} onChange={changeView} />
         </div>
       )}
       {body}

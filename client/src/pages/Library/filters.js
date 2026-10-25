@@ -23,7 +23,9 @@ export const SORTS = { title: 'Title', author: 'Author', stars: 'Stars', spice: 
 const CHOICE_KEYS = Object.keys(FILTER_LABELS)
 const API_KEYS = [...CHOICE_KEYS, 'author_id']
 
-export const EMPTY_FILTERS = { q: '', format: null, owned: null, wishlist: null, read: null, author_id: null, sort: 'title' }
+export const VIEWS = ['list', 'flow']
+
+export const EMPTY_FILTERS = { q: '', format: null, owned: null, wishlist: null, read: null, author_id: null, sort: 'title', view: null }
 
 // Unknown or malformed values in the address are ignored rather than sent to the server.
 export function filtersFromSearch(params) {
@@ -36,6 +38,8 @@ export function filtersFromSearch(params) {
   if (authorId && /^[1-9]\d*$/.test(authorId)) filters.author_id = authorId
   const sort = params.get('sort')
   if (sort && Object.hasOwn(SORTS, sort)) filters.sort = sort
+  const view = params.get('view')
+  if (VIEWS.includes(view)) filters.view = view
   return filters
 }
 
@@ -45,6 +49,7 @@ export function searchFromFilters(filters) {
   if (filters.q) params.set('q', filters.q)
   for (const key of API_KEYS) if (filters[key] !== null) params.set(key, filters[key])
   if (filters.sort !== 'title') params.set('sort', filters.sort)
+  if (filters.view) params.set('view', filters.view)
   return params.toString()
 }
 

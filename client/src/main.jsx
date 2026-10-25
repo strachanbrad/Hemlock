@@ -37,9 +37,6 @@ const defaultTheme = {
     Typography: {
       titleMarginTop: '0em',
     },
-    Carousel: {
-      colorBgContainer: theme.primary,
-    },
   },
 }
 

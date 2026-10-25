@@ -67,10 +67,13 @@ const COVER_STEM = /^[eb][1-9]\d*$/
 
 class DownloadError extends Error {}
 
-// A cover URL comes from the client, so the server fetches only the lookup sources' image hosts:
-// Open Library (redirecting to archive.org), Google Books, and the Amazon and Goodreads images a
-// Claude lookup finds on a listing.
-const COVER_HOSTS = new Set(['covers.openlibrary.org', 'archive.org', 'books.google.com', 'm.media-amazon.com', 'images-na.ssl-images-amazon.com', 'i.gr-assets.com', 'images.gr-assets.com'])
+// A cover URL comes from the client, so the server fetches only the cover sources' image hosts:
+// Open Library (redirecting to archive.org), Google Books, Barnes & Noble (its Shopify CDN, where any
+// Shopify store's images live too), Amazon, AbeBooks and Goodreads.
+const COVER_HOSTS = new Set([
+  'covers.openlibrary.org', 'archive.org', 'books.google.com', 'cdn.shopify.com', 'prodimage.images-bn.com',
+  'm.media-amazon.com', 'images-na.ssl-images-amazon.com', 'pictures.abebooks.com', 'i.gr-assets.com', 'images.gr-assets.com',
+])
 const COVER_DOMAINS = ['.archive.org', '.images-amazon.com']
 
 export function allowedCoverUrl(input) {

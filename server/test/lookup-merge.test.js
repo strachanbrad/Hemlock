@@ -178,6 +178,31 @@ describe('merge', () => {
   })
 })
 
+describe('the cover choice', () => {
+  const BN = 'https://cdn.shopify.com/s/files/1/0674/5433/7265/files/9780553212587_p0.jpg'
+  const AMAZON = 'https://images-na.ssl-images-amazon.com/images/P/0553212583.01.LZZZZZZZ.jpg'
+  const noEditionCover = () => without(without(olFull(), 'edition.covers'), 'searchEdition.cover_i')
+  const cover = (google, openLibrary, covers) => {
+    const record = merge(ISBN, google, openLibrary, covers)
+    return [record.cover_url, record.sources.fields.cover_url]
+  }
+
+  it('takes Barnes & Noble, then Amazon, then the Open Library edition, then Google, then the work', () => {
+    assert.deepEqual(cover(googleExact(), olFull(), { barnes_noble: BN, amazon: AMAZON }), [BN, 'barnes_noble'])
+    assert.deepEqual(cover(googleExact(), olFull(), { barnes_noble: null, amazon: AMAZON }), [AMAZON, 'amazon'])
+    assert.deepEqual(cover(googleExact(), olFull(), { barnes_noble: null, amazon: null }), [olCover(111), 'open_library'])
+    assert.deepEqual(cover(googleExact(), noEditionCover(), { barnes_noble: null, amazon: null }), [GOOGLE_COVER, 'google'])
+    assert.deepEqual(cover(DISABLED, noEditionCover(), {}), [olCover(222), 'open_library_work'])
+  })
+
+  it('takes the probes through answer() only when they answered', () => {
+    const covers = { status: 'ok', barnes_noble: BN, amazon: null }
+    assert.equal(answer(ISBN, DISABLED, olFull(), { covers }).body.cover_url, BN)
+    assert.equal(answer(ISBN, DISABLED, olFull(), { covers: { status: 'failed' } }).body.cover_url, olCover(111))
+    assert.equal(answer(ISBN, DISABLED, olFull()).body.cover_url, olCover(111))
+  })
+})
+
 describe('answer', () => {
   const cases = [
     ['ok', 'not_found', 200],

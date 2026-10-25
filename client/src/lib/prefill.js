@@ -52,8 +52,13 @@ export function sourceHost(url) {
 
 export const fromClaude = (record) => record?.sources?.anthropic === 'ok'
 
-// The courtesy line names Google Books once a lookup shows it is configured.
+export const COVER_SOURCES = { barnes_noble: 'Barnes & Noble', amazon: 'Amazon', open_library: 'Open Library' }
+
+// The courtesy line names Google Books once a lookup shows it is configured, and a cover taken from a
+// retailer rather than a catalogue.
 export const creditLine = (record) => {
   const google = record?.sources?.google
-  return google && google !== 'disabled' ? 'Book data from Open Library and Google Books' : 'Book data from Open Library'
+  const data = google && google !== 'disabled' ? 'Book data from Open Library and Google Books' : 'Book data from Open Library'
+  const cover = record?.sources?.fields?.cover_url
+  return cover === 'barnes_noble' || cover === 'amazon' ? `${data}; cover from ${COVER_SOURCES[cover]}` : data
 }

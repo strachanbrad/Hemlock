@@ -6,6 +6,7 @@
 import { config, userAgent } from '../config.js'
 import { DEFAULT_MODEL, createAnthropic } from './anthropic.js'
 import { createGoogle } from './google.js'
+import { probeIsbnCovers } from './isbnCovers.js'
 import { answer } from './merge.js'
 import { createOpenLibrary } from './openLibrary.js'
 
@@ -76,6 +77,7 @@ export function createLookup({ fetch = globalThis.fetch, googleKey = null, conta
   }
 
   const askOpenLibrary = cached('Open Library', openLibrary)
+  const probeCovers = cached('Cover probe', (isbn) => probeIsbnCovers(isbn, { fetch, timeoutMs, userAgent: agent() }))
   const askGoogleWith = cached('Google Books', (isbn, key) => googleWith(key)(isbn))
   const askGoogle = async (isbn) => {
     const key = readGoogleKey()
@@ -83,8 +85,8 @@ export function createLookup({ fetch = globalThis.fetch, googleKey = null, conta
   }
 
   return shared((isbn) =>
-    Promise.all([askGoogle(isbn), askOpenLibrary(isbn)]).then(([fromGoogle, fromOpenLibrary]) =>
-      answer(isbn, fromGoogle, fromOpenLibrary, { claude: Boolean(readAnthropicKey()) })))
+    Promise.all([askGoogle(isbn), askOpenLibrary(isbn), probeCovers(isbn)]).then(([fromGoogle, fromOpenLibrary, covers]) =>
+      answer(isbn, fromGoogle, fromOpenLibrary, { claude: Boolean(readAnthropicKey()), covers })))
 }
 
 const RECORD_FIELDS = ['title', 'authors', 'publisher', 'published', 'synopsis', 'format', 'cover_url']

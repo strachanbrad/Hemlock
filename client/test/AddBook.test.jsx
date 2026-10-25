@@ -88,6 +88,19 @@ const CLAUDE = {
 }
 
 describe('AddBook', () => {
+  it("credits Barnes & Noble for the cover a lookup took from it, and saves that cover", async () => {
+    const bn = 'https://cdn.shopify.com/s/files/1/0674/5433/7265/files/9780553212587_p0.jpg'
+    const record = { ...WUTHERING, cover_url: bn, sources: { ...WUTHERING.sources, fields: { title: 'open_library', cover_url: 'barnes_noble' } } }
+    const posts = fakeServer({ lookups: { 9780553212587: record }, create: () => json({ id: 9, title: record.title, cover_url: '/covers/e9-0123abcd.jpg' }, 201) })
+    mount()
+    await lookUp('9780553212587', 'Wuthering Heights')
+    expect(screen.getByText('Book data from Open Library; cover from Barnes & Noble')).toBeTruthy()
+    expect(screen.getByAltText('The cover the lookup found').getAttribute('src')).toBe(bn)
+    fireEvent.click(screen.getByRole('button', { name: 'Add book' }))
+    await screen.findByText('Book page')
+    expect(posts[0].edition.cover_from_url).toBe(bn)
+  })
+
   it("fills the form from Claude's record, credits the listing and saves with its cover", async () => {
     const posts = fakeServer({ identified: { 9781969253096: CLAUDE }, create: () => json({ id: 9, title: CLAUDE.title, cover_url: '/covers/e9-0123abcd.jpg' }, 201) })
     mount()

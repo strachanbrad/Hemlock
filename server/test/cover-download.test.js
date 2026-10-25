@@ -232,8 +232,11 @@ describe('saveCoverFromUrl', () => {
     assert.equal(covers.allowedCoverUrl('https://www.googleapis.com/books/v1/volumes'), null)
   })
 
-  it("accepts Amazon's and Goodreads' image hosts and no other host of theirs", () => {
+  it("accepts Barnes & Noble's, Amazon's, AbeBooks' and Goodreads' image hosts and no other host of theirs", () => {
     const allowed = [
+      'https://cdn.shopify.com/s/files/1/0674/5433/7265/files/9781969253096_p0.jpg',
+      'https://prodimage.images-bn.com/pimages/9781969253096_p0_v1_s1200x630.jpg',
+      'https://pictures.abebooks.com/isbn/9781969253096-us.jpg',
       'https://m.media-amazon.com/images/I/81abc.jpg',
       'https://images-na.ssl-images-amazon.com/images/I/51abc.jpg',
       'https://ecx.images-amazon.com/images/I/51abc.jpg',
@@ -247,6 +250,11 @@ describe('saveCoverFromUrl', () => {
       'https://evilimages-amazon.com/x.jpg',
       'https://m.media-amazon.com.evil.test/x.jpg',
       'https://www.goodreads.com/book/show/1',
+      'https://www.barnesandnoble.com/w/locked-in/1',
+      'https://shopify.com/x.jpg',
+      'https://cdn.shopify.com.evil.test/x.jpg',
+      'https://images-bn.com/x.jpg',
+      'https://www.abebooks.com/x.jpg',
       'https://s.gr-assets.com/x.jpg',
       'http://m.media-amazon.com/images/I/81abc.jpg',
     ]

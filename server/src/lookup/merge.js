@@ -6,6 +6,8 @@
 const GOOGLE = 'google'
 const OPEN_LIBRARY = 'open_library'
 const OPEN_LIBRARY_WORK = 'open_library_work'
+const BARNES_NOBLE = 'barnes_noble'
+const AMAZON = 'amazon'
 
 export function pick(record, fields) {
   if (!record || typeof record !== 'object') return null
@@ -131,7 +133,8 @@ export function googleThumbnail(imageLinks) {
   return url.href
 }
 
-export function merge(isbn, google, openLibrary) {
+// `covers` is probeIsbnCovers()'s answer: the Barnes & Noble and Amazon cover URLs that exist for the ISBN.
+export function merge(isbn, google, openLibrary, covers = {}) {
   const volume = (google.status === 'ok' && google.volume) || {}
   const { doc = {}, searchEdition = null, edition = null, work = null } = openLibrary.status === 'ok' ? openLibrary : {}
   const fields = {}
@@ -171,6 +174,8 @@ export function merge(isbn, google, openLibrary) {
     ]),
     format: choose('format', [[mapFormat(edition?.physical_format), OPEN_LIBRARY]]),
     cover_url: choose('cover_url', [
+      [covers.barnes_noble, BARNES_NOBLE],
+      [covers.amazon, AMAZON],
       [coverUrl(firstCover(edition?.covers) ?? coverId(searchEdition?.cover_i)), OPEN_LIBRARY],
       [googleThumbnail(volume.imageLinks), GOOGLE],
       [coverUrl(coverId(doc.cover_i) ?? firstCover(work?.covers)), OPEN_LIBRARY_WORK],
@@ -181,10 +186,10 @@ export function merge(isbn, google, openLibrary) {
 }
 
 // sources.anthropic says whether the page may ask Claude: only when no catalogue answered and a key is set.
-export function answer(isbn, google, openLibrary, { claude = false } = {}) {
+export function answer(isbn, google, openLibrary, { claude = false, covers } = {}) {
   const statuses = [google.status, openLibrary.status]
   if (statuses.includes('ok')) {
-    const body = merge(isbn, google, openLibrary)
+    const body = merge(isbn, google, openLibrary, covers?.status === 'ok' ? covers : {})
     return { status: 200, body: { ...body, sources: { ...body.sources, anthropic: 'disabled' } } }
   }
   const sources = { google: google.status, open_library: openLibrary.status, anthropic: claude ? 'available' : 'disabled' }

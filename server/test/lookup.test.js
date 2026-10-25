@@ -23,12 +23,12 @@ const isSearch = (url) => url.startsWith(SEARCH)
 const isGoogle = (url) => url.startsWith('https://www.googleapis.com/') || url.startsWith('https://books.google.com/')
 const paths = (calls) => calls.map(({ url }) => (isGoogle(url) ? 'google' : new URL(url).pathname))
 
-function setup({ answer, googleKey = null, contact = null, timeoutMs } = {}) {
+function setup({ answer, probe, googleKey = null, contact = null, timeoutMs } = {}) {
   const clock = instantClock(1_000_000)
   const logs = []
-  const { fetch, calls } = fixtureFetch({ answer, now: clock.now })
+  const { fetch, calls, probes } = fixtureFetch({ answer, probe, now: clock.now })
   const lookup = createLookup({ fetch, googleKey, contact, now: clock.now, sleep: clock.sleep, timeoutMs, log: (line) => logs.push(line) })
-  return { lookup, calls, logs, clock }
+  return { lookup, calls, probes, logs, clock }
 }
 
 describe('lookup with Open Library only', () => {
@@ -371,6 +371,70 @@ describe('Google Books by volume id (Dynamic Links)', () => {
     const { lookup, calls } = setup({ googleKey: KEY, answer: (url) => (url.includes('/volumes?q=') ? json({ error: 'quota' }, 429) : undefined) })
     assert.equal((await lookup(UNINDEXED)).body.sources.google, 'failed')
     assert.ok(!calls.some(({ url }) => isLinks(url)))
+  })
+})
+
+describe('cover probes', () => {
+  const BN = (isbn) => `https://cdn.shopify.com/s/files/1/0674/5433/7265/files/${isbn}_p0.jpg`
+  const AMAZON = 'https://images-na.ssl-images-amazon.com/images/P/0553212583.01.LZZZZZZZ.jpg'
+  const head = (status, type, length) => new Response(null, { status, headers: { ...(type && { 'content-type': type }), ...(length !== undefined && { 'content-length': String(length) }) } })
+  const answers = (bn, amazon) => (url) => (url.startsWith('https://cdn.shopify.com/') ? bn() : amazon())
+
+  it("sends one HEAD request each to Barnes & Noble and Amazon and takes Barnes & Noble's cover first", async () => {
+    const { lookup, probes } = setup({ probe: answers(() => head(200, 'image/jpeg', 110898), () => head(200, 'image/jpeg', 18480)) })
+    const { status, body } = await lookup(WUTHERING)
+    assert.equal(status, 200)
+    assert.equal(body.cover_url, BN(WUTHERING))
+    assert.equal(body.sources.fields.cover_url, 'barnes_noble')
+    assert.deepEqual(probes.map(({ url }) => url).sort(), [BN(WUTHERING), AMAZON].sort())
+    for (const { init } of probes) {
+      assert.equal(init.redirect, 'manual')
+      assert.ok(init.signal instanceof AbortSignal)
+      assert.match(init.headers['User-Agent'], /^Hemlock\//)
+    }
+  })
+
+  it('counts only a 200 image as a hit, and an Amazon image only above 1000 bytes', async () => {
+    const cases = [
+      [() => head(404), () => head(200, 'image/jpeg', 18480), AMAZON, 'amazon'],
+      [() => head(502), () => head(200, 'image/gif', 43), null, null],
+      [() => head(200, 'text/html', 5000), () => head(200, 'image/jpeg', 1000), null, null],
+      [() => head(301, 'image/jpeg'), () => head(200, 'image/jpeg', 1001), AMAZON, 'amazon'],
+    ]
+    for (const [bn, amazon, url, source] of cases) {
+      // Open Library's own covers are dropped so that the probes decide.
+      const { lookup } = setup({
+        probe: answers(bn, amazon),
+        answer: (url) => (isSearch(url) ? json({ numFound: 1, docs: [{ key: '/works/OL1W', title: 'T', author_name: ['A'], editions: { numFound: 0, docs: [] } }] }) : undefined),
+      })
+      const { body } = await lookup(WUTHERING)
+      assert.deepEqual([body.cover_url, body.sources.fields.cover_url ?? null], [url, source], String(source))
+    }
+  })
+
+  it('never fails the lookup for a probe that errs or does not answer in time, and asks again next time', async () => {
+    let hang = true
+    const { lookup, probes } = setup({
+      timeoutMs: 20,
+      probe: (url, init) => (hang && url.startsWith('https://cdn.shopify.com/')
+        ? new Promise((resolve, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason)))
+        : Promise.reject(new TypeError('fetch failed'))),
+    })
+    const first = await lookup(WUTHERING)
+    assert.equal(first.status, 200)
+    assert.equal(first.body.cover_url, 'https://covers.openlibrary.org/b/id/14839277-L.jpg')
+    hang = false
+    await lookup(WUTHERING)
+    assert.equal(probes.length, 4)
+  })
+
+  it('keeps a complete probe answer as long as a source answer, and asks only Barnes & Noble for a 979 ISBN', async () => {
+    const { lookup, probes } = setup()
+    await lookup(WUTHERING)
+    await lookup(WUTHERING)
+    assert.equal(probes.length, 2)
+    await lookup(ROSALIND)
+    assert.deepEqual(probes.slice(2).map(({ url }) => url), [BN(ROSALIND)])
   })
 })
 

@@ -93,7 +93,7 @@ function published(value) {
 // Refused here, before any request, unless it is on the download allow-list.
 function coverUrl(value) {
   const url = typeof value === 'string' && value.length <= MAX_URL ? allowedCoverUrl(value) : null
-  if (!url) throw invalid('cover_from_url must be an https URL from Open Library, archive.org, Google Books, Amazon or Goodreads')
+  if (!url) throw invalid('cover_from_url must be an https URL from Open Library, archive.org, Google Books, Barnes & Noble, Amazon, AbeBooks or Goodreads')
   return url.href
 }
 

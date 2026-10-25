@@ -18,6 +18,8 @@ A newcomer starts with [Development setup](dev-setup.md) to run the app,
   and the ways to get the page onto a television.
 - [Migrations](migrations.md): numbered SQL files, how they are applied, and
   the rules for writing one.
+- [Lookup](lookup.md): ISBN lookup from Open Library and Google Books, cover
+  downloads and barcode scanning with the phone camera.
 - [Security](security.md): bind address, error bodies, upload bounds,
   generated cover names, downloads and SQL.
 - [Style](style.md): comments, license headers, wiki pages, commits, Ant

@@ -50,10 +50,11 @@ there is no compiler step and no `sqlite3` command-line tool to install.
 | `client/` | The React and Ant Design client, built by Vite (`client/vite.config.js`, `client/index.html`, `client/src/`). |
 | `client/src/api/` | The only modules that call `fetch`, one per resource. |
 | `client/src/lib/isbn.js` | ISBN-10/13 validation and conversion; identical to `server/src/lib/isbn.js`. |
-| `server/src/` | The Express server: `index.js` starts it, `app.js` builds it, `config.js` reads the environment, `db.js` opens the database, `migrate.js` applies migrations, `covers.js` writes and deletes cover files, `routes/` holds one module per resource. |
+| `server/src/` | The Express server: `index.js` starts it, `app.js` builds it, `config.js` reads the environment, `db.js` opens the database, `migrate.js` applies migrations, `covers.js` writes, downloads and deletes cover files, `routes/` holds one module per resource. |
+| `server/src/lookup/` | The Open Library and Google Books clients and the merge of their answers ([Lookup](lookup.md)). |
 | `server/migrations/` | The numbered SQL migrations ([Migrations](migrations.md)). |
 | `server/seed/` | The dev library: `seed.sql` and `covers/`. |
-| `server/scripts/` | The `db:migrate`, `db:new` and `db:reset` commands. |
+| `server/scripts/` | The `db:migrate`, `db:new`, `db:reset` and `lookup:record` commands. |
 | `data/` | The dev data directory (gitignored): `hemlock.db` and `covers/`. |
 
 ## Commands
@@ -70,6 +71,7 @@ All run from the root of the checkout.
 | `npm run db:migrate` | Applies pending migrations to `DATA_DIR/hemlock.db` and prints the schema version. |
 | `npm run db:new <name>` | Writes the next empty migration file ([Migrations](migrations.md)). |
 | `npm run db:reset` | Rebuilds the dev library from `server/seed/` (below). |
+| `npm run lookup:record -- <isbn>` | Asks Open Library for an ISBN, over the network, and writes its answers as test fixtures ([Lookup § Tests](lookup.md#tests)). |
 
 ## Configuration
 
@@ -82,7 +84,10 @@ there are no `.env` files.
 | `PORT` | `5000` | The server's port. Vite proxies to `http://127.0.0.1:$PORT`. |
 | `HOST` | `127.0.0.1` | The server's bind address; an empty value also means `127.0.0.1`. |
 | `NODE_ENV` | unset | `production` on the box ([Deployment](deployment.md)). |
+| `GOOGLE_BOOKS_API_KEY` | unset | A Google Books API key. Unset means lookups ask Open Library only ([Lookup § Google Books](lookup.md#google-books)). A secret. |
+| `LOOKUP_CONTACT` | unset | An email address for Open Library's `User-Agent`, which raises its limit from 1 to 3 requests a second. The server refuses to start when it is not an email address. |
 | `VITE_PORT` | `5173` | The Vite dev server's port. |
+| `HTTPS` | unset | `1` serves Vite over https on every interface, for testing on a phone (below). |
 
 Set them as a prefix on the command, which both processes of `npm run dev`
 inherit:
@@ -102,6 +107,41 @@ A busy port is an error, never a silent move:
 - The server prints `Cannot listen on 127.0.0.1:<port>` and exits 1. Under
   `npm run dev`, `node --watch` then waits for a file change instead of
   exiting; stop it with Ctrl-C and pick another `PORT`.
+
+## Testing on a phone
+
+A phone opens the camera only on a secure origin
+([Lookup § Secure origin](lookup.md#secure-origin)), and the dev server
+normally answers only `localhost`. With `HTTPS=1`, Vite serves https with a
+self-signed certificate (`@vitejs/plugin-basic-ssl`) on every interface, so a
+phone on the same network can reach it. Express stays on `127.0.0.1` behind
+Vite's proxy.
+
+1. On the dev machine, from the root of the checkout:
+
+   ```bash
+   HTTPS=1 npm run dev
+   ```
+
+   A worktree adds its own ports, for example
+   `HTTPS=1 PORT=5102 VITE_PORT=5202 npm run dev`. Arguments after
+   `npm run dev --` reach `concurrently`, not Vite, so `--host` does not work
+   here; `HTTPS=1` is what opens the other interfaces.
+2. Vite prints a `Network: https://<address>:<VITE_PORT>/` line for each
+   interface. Pick the one on the Wi-Fi network (`ip -4 addr` names them).
+3. On the phone, on the same Wi-Fi, open
+   `https://<address>:<VITE_PORT>/scan-test`.
+4. Accept the certificate warning. Safari: "Show Details", then "visit this
+   website", then "Visit Website". Chrome: "Advanced", then "Proceed to
+   <address> (unsafe)". Firefox: "Advanced…", then "Accept the Risk and
+   Continue". The certificate lasts 30 days; a new one brings the warning
+   back.
+5. Tap "Scan barcode", allow the camera, and hold the barcode on the back of a
+   book inside the frame. The page shows the ISBN and its lookup answer.
+
+If the phone cannot connect, the dev machine's firewall must allow TCP on
+`VITE_PORT` from the local network. Stop the server with Ctrl-C after testing:
+while it runs, anyone on the network can reach the dev library.
 
 ## The dev data directory
 
@@ -135,6 +175,8 @@ creates an empty database with the current schema.
   `test` block of `client/vite.config.js`, so `?react` SVG imports resolve as
   in the app.
 - One workspace: `npm test -w server` or `npm test -w client`.
+- No test touches the network: the lookup and cover download tests answer
+  from recorded fixtures ([Lookup § Tests](lookup.md#tests)).
 
 jsdom does no layout: a layout or overflow problem passes these suites and
 shows only in a real browser.

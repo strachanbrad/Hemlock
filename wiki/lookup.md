@@ -219,9 +219,10 @@ Claude searches.
 
 ### Finding a better cover
 
-A cover from a lookup can be small (Google's is often 300 px wide, Open
-Library's about 300), so a book's page has a button that asks Claude for
-the largest cover of that edition on the web. It is never automatic: each
+A cover from a lookup can be small (Open Library's largest is about 300 px
+wide, and for some books Google holds 300 px or only its 128 px thumbnail),
+so a book's page has a button that asks Claude for the largest cover of
+that edition on the web. It is never automatic: each
 press is one search, a few cents, and nothing is cached.
 
 ```
@@ -348,10 +349,13 @@ Normalisation:
 - A Google thumbnail is used only from `books.google.com`, on https, with
   `edge=curl` (a painted page curl) removed and `fife=w1600` added. The
   thumbnail URL's `zoom=1` alone gives a 128 px wide image; with `fife`
-  Google answers the largest image it holds up to 1600 px wide (300 px for
-  many books) and, for a volume without a cover, the same placeholder PNG
-  as without it. The by-id `imageLinks` sizes are not used: they need the
-  key and carry tokenized URLs.
+  Google answers the largest cover it holds up to 1600 px wide (1600 or
+  300 px for most books), and for a volume without a cover the same
+  placeholder PNG as without it. For a volume Google holds page scans of,
+  `fife` answers the scanned front page instead, often a title page, as a
+  PNG; the download then falls back to the thumbnail
+  ([Cover downloads](#cover-downloads)). The by-id `imageLinks` sizes are
+  not used: they need the key and carry tokenized URLs.
 
 ## Cover downloads
 
@@ -375,6 +379,10 @@ commit and points the row at the file in a second statement
   10 MB counted while streaming.
 - The type comes from the magic bytes (`imageType()`), never from the URL or
   the `Content-Type`: an HTML error page behind a `.jpg` URL is refused.
+- A `books.google.com` URL with `fife` that answers a PNG other than the
+  placeholder has answered a scanned page, not the cover: the same URL
+  without `fife` is downloaded instead, the cover's thumbnail, within the
+  same 10 seconds (`googleThumbnailFor()`). Google's covers are JPEGs.
 - Google answers a volume without a cover with a 1269-byte "image not
   available" PNG rather than a 404; that exact image (SHA-256
   `e3f8c414…eca12`) is refused, before it is decoded.

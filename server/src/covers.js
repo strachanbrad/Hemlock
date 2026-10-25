@@ -100,8 +100,7 @@ async function readCapped(body) {
 const discard = (response) => response.body?.cancel().catch(() => {})
 
 // Redirects are followed by hand so that every hop is checked against the allow-list.
-async function download(start, { fetch, timeoutMs, userAgent }) {
-  const signal = AbortSignal.timeout(timeoutMs)
+async function download(start, { fetch, signal, userAgent }) {
   let url = allowedCoverUrl(start)
   if (!url) throw new DownloadError('not an https URL on an allowed host')
   for (let hop = 0; ; hop++) {
@@ -145,6 +144,17 @@ async function writeCover(buffer, filename) {
   return filename
 }
 
+const isPlaceholder = (buffer) => crypto.createHash('sha256').update(buffer).digest('hex') === GOOGLE_PLACEHOLDER_SHA256
+
+// With fife, Google answers for a volume it holds page scans of with the scanned front page, a PNG, in
+// place of the cover; the same URL without fife gives the cover's thumbnail.
+function googleThumbnailFor(url, buffer) {
+  const parsed = new URL(url)
+  if (parsed.hostname !== 'books.google.com' || !parsed.searchParams.has('fife') || imageType(buffer) !== 'png' || isPlaceholder(buffer)) return null
+  parsed.searchParams.delete('fife')
+  return parsed.href
+}
+
 function hostOf(url) {
   try {
     return new URL(url).host
@@ -159,9 +169,12 @@ export async function saveCoverFromUrl(url, base, { fetch = globalThis.fetch, ti
   if (typeof base !== 'string' || !COVER_STEM.test(base)) throw new TypeError(`A cover needs 'e<edition id>' or 'b<book id>', not ${JSON.stringify(base)}`)
 
   try {
-    const buffer = await download(url, { fetch, timeoutMs, userAgent })
+    const options = { fetch, signal: AbortSignal.timeout(timeoutMs), userAgent }
+    let buffer = await download(url, options)
+    const thumbnail = googleThumbnailFor(url, buffer)
+    if (thumbnail) buffer = await download(thumbnail, options)
     if (!imageType(buffer)) throw new DownloadError('not a JPEG, PNG or WebP image')
-    if (crypto.createHash('sha256').update(buffer).digest('hex') === GOOGLE_PLACEHOLDER_SHA256) throw new DownloadError("Google's image-not-available placeholder")
+    if (isPlaceholder(buffer)) throw new DownloadError("Google's image-not-available placeholder")
     const cover = await prepareCover(buffer)
     return await writeCover(cover.buffer, `${base}-${crypto.randomBytes(4).toString('hex')}.${cover.ext}`)
   } catch (err) {

@@ -13,6 +13,7 @@ import { JPEG, PNG, WEBP, dataDir, image as picture, loadApp } from './support/s
 
 const OL_COVER = 'https://covers.openlibrary.org/b/id/14839277-L.jpg'
 const GOOGLE_COVER = 'https://books.google.com/books/content?id=g1&printsec=frontcover&img=1&zoom=1&source=gbs_api'
+const GOOGLE_SIZED = `${GOOGLE_COVER}&fife=w1600`
 const PLACEHOLDER = fs.readFileSync(path.join(fixturesDir, 'google/placeholder.png'))
 const jpeg = Buffer.concat([JPEG, Buffer.alloc(4096, 7)])
 
@@ -83,6 +84,53 @@ describe('saveCoverFromUrl', () => {
     assert.deepEqual(logs, [])
     const { width, height } = await sharp(path.join(covers.coversDir, result)).metadata()
     assert.deepEqual({ width, height }, { width: 1067, height: 1600 })
+  })
+
+  describe("Google's sized cover", () => {
+    const sized = (page, thumbnail) => (url) => (new URL(url).searchParams.has('fife') ? image(page, 'image/png') : image(thumbnail))
+
+    it('falls back to the thumbnail when the sized request answers a scanned page, a PNG', async () => {
+      const page = await picture({ width: 300, height: 463 }).png({ palette: true }).toBuffer()
+      const thumbnail = await picture({ width: 128, height: 196 }).jpeg().toBuffer()
+      const { result, calls, logs } = await save(GOOGLE_SIZED, sized(page, thumbnail))
+      assert.deepEqual(calls.map(({ url }) => url), [GOOGLE_SIZED, GOOGLE_COVER])
+      assert.ok(fs.readFileSync(path.join(covers.coversDir, result)).equals(thumbnail))
+      assert.deepEqual(logs, [])
+    })
+
+    it('keeps a JPEG answer, and a PNG from another host or without fife, asking once', async () => {
+      const large = await picture({ width: 1000, height: 1500 }).jpeg().toBuffer()
+      const google = await save(GOOGLE_SIZED, () => image(large))
+      assert.equal(google.calls.length, 1)
+      assert.ok(fs.readFileSync(path.join(covers.coversDir, google.result)).equals(large))
+      for (const url of ['https://archive.org/x.png?fife=w1600', GOOGLE_COVER]) {
+        const png = await save(url, () => image(PNG, 'image/png'))
+        assert.equal(png.calls.length, 1, url)
+        assert.match(png.result, /^e7-/, url)
+      }
+    })
+
+    it("refuses Google's placeholder without asking again", async () => {
+      const { result, calls, logs } = await save(GOOGLE_SIZED, sized(PLACEHOLDER, JPEG))
+      assert.equal(result, null)
+      assert.equal(calls.length, 1)
+      assert.deepEqual(logs, ["Cover not saved from books.google.com: Google's image-not-available placeholder"])
+    })
+
+    it('bounds both requests by one timeout', async () => {
+      const page = await picture({ width: 300, height: 463 }).png().toBuffer()
+      const slow = (url, init) => new Promise((resolve, reject) => {
+        const timer = setTimeout(() => resolve(new URL(url).searchParams.has('fife') ? image(page, 'image/png') : image(JPEG)), 40)
+        init.signal.addEventListener('abort', () => {
+          clearTimeout(timer)
+          reject(init.signal.reason)
+        })
+      })
+      const { result, calls, logs } = await save(GOOGLE_SIZED, slow, { timeoutMs: 60 })
+      assert.equal(result, null)
+      assert.equal(calls.length, 2)
+      assert.deepEqual(logs, ['Cover not saved from books.google.com: no answer in 60 ms'])
+    })
   })
 
   const refusals = [

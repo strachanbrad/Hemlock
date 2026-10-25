@@ -189,3 +189,73 @@ export function poolPath({ side, width, height: depth }, height) {
   return path(['M', x(-1), height + 1, 'L', x(width), height + 1, 'C', x(width * 0.95), height - depth * 0.2, x(width * 0.8), height - depth * 0.75,
     x(width * 0.55), height - depth * 0.85, 'S', x(width * 0.15), height - depth, x(-1), height - depth * 1.05, 'Z'])
 }
+
+// ── markup ────────────────────────────────────────────────
+// The SVG inside each effect's outer svg, with the classes display.css styles and the timing as custom
+// properties. CoverEffects renders it on the page; roku/scripts/images.js draws its finished frame for the TV.
+
+const style = (vars) => Object.entries(vars).map(([name, value]) => `${name}:${value}`).join(';')
+
+export function bloodMarkup(id, gore, height) {
+  const blood = bloodOf(gore, seedOf(id), height)
+  if (!blood) return null
+  const drips = blood.drips.map((drip) => ({ drip, shape: dripGeometry(drip) }))
+  const timing = (drip) => ({ '--delay': `${drip.delay}s`, '--duration': `${drip.duration}s` })
+  const fall = (drip, shape) => style({ ...timing(drip), '--from': `${-shape.run}px` })
+  const shapes = [
+    ...blood.bands.map((band) => `<path class="display-blood-band" d="${bandPath(band)}"/>`),
+    ...drips.map(({ drip, shape }) => `<path class="display-blood-trail" d="${shape.trail}" style="${style(timing(drip))}"/>`),
+    ...drips.map(({ drip, shape }) => `<path class="display-blood-bulb" d="${shape.bulb}" style="${fall(drip, shape)}"/>`),
+    ...blood.pools.map((pool) => `<path class="display-blood-pool" d="${poolPath(pool, height)}" style="${style({ '--delay': `${pool.delay}s`, '--from': `${pool.height * 1.2}px` })}"/>`),
+  ].join('')
+  const shine = [
+    ...drips.filter(({ shape }) => shape.streak).map(({ drip, shape }) =>
+      `<path class="display-blood-trail" d="${shape.streak}" stroke-width="${shape.streakWidth}" style="${style(timing(drip))}"/>`),
+    ...drips.filter(({ drip }) => !drip.pooled).map(({ drip, shape }) =>
+      `<path class="display-blood-bulb display-blood-glint" d="${shape.glint}" stroke-width="${shape.glintWidth}" style="${fall(drip, shape)}"/>`),
+  ].join('')
+  return {
+    level: blood.level,
+    markup: `<svg width="${FACE_WIDTH}" height="${height}"><g class="display-blood-rim">${shapes}</g><g class="display-blood-body">${shapes}</g><g class="display-blood-shine">${shine}</g></svg>`,
+  }
+}
+
+// In effect units: the chilli's box in the face's bottom right corner.
+export const CHILLI_BOX = { width: 11, height: 17.6, margin: 2.5 }
+
+// The fill rises by moving its clip window up while the gradient inside moves down by as much, so the gradient
+// stays still and the level only uncovers it. `ids` prefixes the gradient and clip ids, unique on the page.
+export function chilliMarkup(spice, height, ids) {
+  const level = ratingLevel(spice)
+  if (level === 0) return null
+  const line = chilliLine(level)
+  const drop = CHILLI.tip - line
+  const { width, height: boxHeight, margin } = CHILLI_BOX
+  const levelLine = level < 5
+    ? `<line class="display-chilli-rise display-chilli-level" x1="0" y1="${line}" x2="40" y2="${line}" style="--from:${drop}px"/>`
+    : ''
+  return {
+    level,
+    markup: `<svg x="${FACE_WIDTH - margin - width}" y="${height - margin - boxHeight}" width="${width}" height="${boxHeight}" viewBox="0 0 40 64">`
+      + '<defs>'
+      + `<linearGradient id="${ids}-heat" gradientUnits="userSpaceOnUse" x1="0" y1="${CHILLI.tip}" x2="0" y2="${CHILLI.top}">`
+      + '<stop offset="0" class="display-chilli-amber"/><stop offset="0.45" class="display-chilli-orange"/><stop offset="1" class="display-chilli-red"/>'
+      + '</linearGradient>'
+      + `<clipPath id="${ids}-pod"><path d="${CHILLI.pod}"/></clipPath>`
+      + `<clipPath id="${ids}-fill"><rect x="0" y="${line}" width="40" height="${64 - line}"/></clipPath>`
+      + '</defs>'
+      + `<g class="display-chilli-halo"><path d="${CHILLI.pod}"/><path d="${CHILLI.calyx}"/><path d="${CHILLI.stem}"/></g>`
+      + `<g clip-path="url(#${ids}-pod)">`
+      + '<rect class="display-chilli-wash" x="0" y="0" width="40" height="64"/>'
+      + `<g class="display-chilli-rise" clip-path="url(#${ids}-fill)" style="--from:${drop}px">`
+      + `<rect class="display-chilli-rise" x="0" y="0" width="40" height="64" fill="url(#${ids}-heat)" style="--from:${-drop}px"/>`
+      + '</g>'
+      + levelLine
+      + '</g>'
+      + `<path class="display-chilli-shine" d="${CHILLI.shine}"/>`
+      + `<path class="display-chilli-pod" d="${CHILLI.pod}"/>`
+      + `<path class="display-chilli-stem" d="${CHILLI.calyx}"/>`
+      + `<path class="display-chilli-stem" d="${CHILLI.stem}"/>`
+      + '</svg>',
+  }
+}

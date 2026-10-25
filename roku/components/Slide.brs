@@ -19,6 +19,11 @@ sub init()
     m.fade = m.top.FindNode("fade")
     m.fadeTo = m.top.FindNode("fadeTo")
     m.uri = invalid
+    m.frame = m.top.FindNode("frame")
+    m.blood = m.top.FindNode("blood")
+    m.chilli = m.top.FindNode("chilli")
+    m.effectsFade = m.top.FindNode("effectsFade")
+    m.face = invalid
 
     probe = m.top.FindNode("probe")
     probe.text = "A"
@@ -45,8 +50,14 @@ sub onBook()
     if m.uri = invalid or uri <> m.uri
         m.uri = uri
         m.poster.uri = uri
-        m.cloth.visible = uri = ""
+        showCloth(uri = "")
+        m.face = invalid
+        if uri = "" then m.face = boxFace()
+        m.blood.opacity = 0
+        m.chilli.opacity = 0
+        if m.top.current and m.face <> invalid then fadeEffects()
     end if
+    showEffects()
     m.clothTitle.text = title
     layoutCloth()
     layout()
@@ -55,10 +66,69 @@ end sub
 sub onCoverStatus()
     status = m.poster.loadStatus
     if status = "failed"
-        m.cloth.visible = true
+        showCloth(true)
+        m.face = boxFace()
     else if status = "ready"
-        m.cloth.visible = false
+        showCloth(false)
+        m.face = imageFace(m.poster.bitmapWidth, m.poster.bitmapHeight)
+    else
+        return
     end if
+    showEffects()
+    if m.top.current then fadeEffects()
+end sub
+
+sub showCloth(shown as Boolean)
+    m.cloth.visible = shown
+    m.frame.visible = shown
+end sub
+
+function boxFace() as Object
+    return { x: 0, y: 0, width: 605, height: m.boxHeight }
+end function
+
+' The image is scaled to fit the box and centred in it.
+function imageFace(width as Float, height as Float) as Object
+    if width <= 0 or height <= 0 then return boxFace()
+    scale = 605 / width
+    if m.boxHeight / height < scale then scale = m.boxHeight / height
+    return { x: (605 - width * scale) / 2, y: (m.boxHeight - height * scale) / 2, width: width * scale, height: height * scale }
+end function
+
+' roku:build renders blood-<gore>.png at the box's size, stretched here to the face, and chilli-<spice>.png from
+' the face's bottom right corner (96 by 136 at full width), scaled with the face's width.
+sub showEffects()
+    book = m.top.book
+    if m.face = invalid or book = invalid
+        m.blood.visible = false
+        m.chilli.visible = false
+        return
+    end if
+    face = m.face
+    gore = ratingOf(book.gore_rating)
+    spice = ratingOf(book.spice_rating)
+    m.blood.visible = gore > 0
+    if gore > 0
+        m.blood.uri = "pkg:/images/blood-" + gore.ToStr() + ".png"
+        m.blood.translation = [face.x, face.y]
+        m.blood.width = face.width
+        m.blood.height = face.height
+    end if
+    m.chilli.visible = spice > 0
+    if spice > 0
+        scale = face.width / 605
+        m.chilli.uri = "pkg:/images/chilli-" + spice.ToStr() + ".png"
+        m.chilli.width = 96 * scale
+        m.chilli.height = 136 * scale
+        m.chilli.translation = [face.x + face.width - 96 * scale, face.y + face.height - 136 * scale]
+    end if
+end sub
+
+sub fadeEffects()
+    m.effectsFade.control = "stop"
+    m.blood.opacity = 0
+    m.chilli.opacity = 0
+    m.effectsFade.control = "start"
 end sub
 
 sub layoutCloth()
@@ -109,6 +179,7 @@ sub onCurrent()
     m.fade.control = "stop"
     m.fadeTo.keyValue = [m.body.opacity, target]
     m.fade.control = "start"
+    if m.top.current and m.face <> invalid then fadeEffects()
     if not m.top.current then m.ratings.highlight = ""
 end sub
 

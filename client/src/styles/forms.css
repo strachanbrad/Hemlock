@@ -1,0 +1,38 @@
+/*
+ * Copyright (c) 2023 Hemlock
+ * SPDX-License-Identifier: GPL-3.0-only
+ */
+
+.add-book {
+  max-width: 1040px;
+}
+
+.add-book-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 992px) {
+  .add-book-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 40px;
+  }
+}
+
+/* A phone lists the formats one under another, each a full-width row to tap. */
+.add-book .ant-radio-group-vertical .ant-radio-wrapper {
+  min-height: 32px;
+  align-items: center;
+}
+
+.add-book-conflict {
+  margin-bottom: 16px;
+}
+
+.conflict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}

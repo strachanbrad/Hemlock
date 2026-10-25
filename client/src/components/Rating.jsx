@@ -3,36 +3,43 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 
-import { useState } from 'react'
+const STEPS = [1, 2, 3, 4, 5]
 
-const MAX_RATING = 5
-
-const Rating = ({ initialRating, isInteractive, filledSVG, unfilledSVG, height, color, onRatingChange = () => {} }) => {
-  const [rating, setRating] = useState(initialRating)
-
-  const handleClick = (newRating) => {
-    if (isInteractive) {
-      if (newRating === 1 && rating === 1) {
-        setRating(0)
-        onRatingChange(0)
-      } else {
-        setRating(newRating)
-        onRatingChange(newRating)
-      }
-    }
+// Controlled. Without onChange it is read-only. Choosing 1 again clears the rating to 0.
+const Rating = ({ value = 0, onChange, filledIcon: Filled, unfilledIcon: Unfilled, label, size = 'medium' }) => {
+  const className = `rating rating-${size}`
+  if (!onChange) {
+    return (
+      <span className={className} role="img" aria-label={`${label}: ${value} of 5`}>
+        {STEPS.map((step) => {
+          const Icon = step <= value ? Filled : Unfilled
+          return <span key={step} className="rating-icon"><Icon aria-hidden="true" /></span>
+        })}
+      </span>
+    )
   }
 
   return (
-    <div style={{ display: 'flex' }}>
-      {Array.from({ length: MAX_RATING }).map((_, index) => {
-        const Element = index < rating ? filledSVG : unfilledSVG
+    <span className={className} role="group" aria-label={label}>
+      {STEPS.map((step) => {
+        const Icon = step <= value ? Filled : Unfilled
         return (
-          <div key={`${index}-${rating}`} onClick={() => handleClick(index + 1)} style={{ cursor: isInteractive ? 'pointer' : 'default' }}>
-            <Element style={{ height: `${height}px`, width: 'auto', fill: color }} />
-          </div>
+          <button
+            key={step}
+            type="button"
+            className="rating-icon rating-button"
+            aria-label={`${label} ${step} of 5`}
+            aria-pressed={step <= value}
+            onClick={(event) => {
+              event.stopPropagation()
+              onChange(step === 1 && value === 1 ? 0 : step)
+            }}
+          >
+            <Icon aria-hidden="true" />
+          </button>
         )
       })}
-    </div>
+    </span>
   )
 }
 

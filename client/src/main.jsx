@@ -10,8 +10,6 @@ import { App as AntApp, ConfigProvider } from 'antd'
 import './styles/index.css'
 import config from './config/config.json'
 import App from './App.jsx'
-import { AlertModalProvider } from './components/AlertModalContext.jsx'
-import { BookDetailProvider } from './components/BookDetailContext.jsx'
 
 const { theme } = config.website
 
@@ -45,11 +43,7 @@ createRoot(document.getElementById('root')).render(
     <ConfigProvider direction="ltr" theme={defaultTheme}>
       <AntApp>
         <BrowserRouter>
-          <AlertModalProvider>
-            <BookDetailProvider>
-              <App />
-            </BookDetailProvider>
-          </AlertModalProvider>
+          <App />
         </BrowserRouter>
       </AntApp>
     </ConfigProvider>

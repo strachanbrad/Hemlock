@@ -3,94 +3,77 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 
-import { lazy, Suspense, useState } from 'react'
-import { Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router'
-import { Layout, Menu, Breadcrumb, Modal, Button } from 'antd'
-import {
-  UserOutlined,
-  GlobalOutlined,
-  BookOutlined,
-  PlusOutlined,
-  BellOutlined,
-  DollarOutlined,
-  PictureOutlined,
-} from '@ant-design/icons'
+import { lazy, Suspense } from 'react'
+import { Layout, Menu } from 'antd'
+import { BookOutlined, DesktopOutlined, PlusOutlined, ShoppingOutlined, UserOutlined } from '@ant-design/icons'
+import { Link, Navigate, Outlet, Route, Routes, useLocation } from 'react-router'
+import AddBook from './pages/AddBook/AddBook.jsx'
 import Authors from './pages/Authors/Authors.jsx'
-import Books from './pages/Books/Books.jsx'
-import BuyList from './pages/BuyList/BuyList.jsx'
-import AddBooks from './pages/AddBooks/AddBooks.jsx'
+import Library from './pages/Library/Library.jsx'
 import ScanTest from './pages/ScanTest/ScanTest.jsx'
-import BookDetailModal from './components/BookDetailModal.jsx'
 import config from './config/config.json'
+import { useIsPhone } from './lib/viewport.js'
+import './styles/shell.css'
 
 const { Header, Content, Sider } = Layout
 
 const Display = lazy(() => import('./pages/Display/Display.jsx'))
 
-const menuItems = [
-  { key: '/authors', icon: <UserOutlined />, label: 'Authors' },
-  { key: '/books', icon: <BookOutlined />, label: 'Books' },
-  { key: '/ebooks', icon: <GlobalOutlined />, label: 'Ebooks' },
-  { key: '/buy', icon: <DollarOutlined />, label: 'Buy List' },
-  { key: '/add', icon: <PlusOutlined />, label: 'Add Books' },
-  { key: '/display', icon: <PictureOutlined />, label: <a href="/display" target="_blank" rel="noopener">Display</a> },
+const NAV = [
+  { key: 'library', to: '/library', label: 'Library', icon: <BookOutlined /> },
+  { key: 'buy', to: '/library?wishlist=1', label: 'Buy list', icon: <ShoppingOutlined /> },
+  { key: 'add', to: '/add', label: 'Add book', short: 'Add', icon: <PlusOutlined /> },
+  { key: 'authors', to: '/authors', label: 'Authors', icon: <UserOutlined /> },
 ]
 
+const MENU_ITEMS = [
+  ...NAV.map(({ key, to, label, icon }) => ({ key, icon, label: <Link to={to}>{label}</Link> })),
+  { key: 'display', icon: <DesktopOutlined />, label: <a href="/display" target="_blank" rel="noopener">Display</a> },
+]
+
+function currentKey({ pathname, search }) {
+  if (pathname.startsWith('/library')) return new URLSearchParams(search).get('wishlist') === '1' ? 'buy' : 'library'
+  return NAV.find((item) => pathname.startsWith(item.to))?.key
+}
+
 const Shell = () => {
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const navigate = useNavigate()
-  const { pathname } = useLocation()
-  const selectedKey = `/${pathname.split('/')[1]}`
+  const isPhone = useIsPhone()
+  const location = useLocation()
+  const current = currentKey(location)
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center' }}>
-          <img src={config.logo} alt="logo" style={{ width: 'auto', height: '48px' }} />
-          <h1 style={{ marginLeft: '25px', fontWeight: 'bold' }}>{config.website.title}</h1>
-        </div>
-        <Button icon={<BellOutlined />} type="link" onClick={() => setIsModalOpen(true)} />
+    <Layout className={isPhone ? 'shell shell-phone' : 'shell shell-desktop'}>
+      <Header className="shell-header">
+        <Link to="/library" className="shell-brand">
+          <img src={config.logo} alt="" className="shell-logo" />
+          <h1 className="shell-title">{config.website.title}</h1>
+        </Link>
       </Header>
-      <Layout>
-        <Sider width={200}>
-          <Menu
-            mode="inline"
-            selectedKeys={[selectedKey]}
-            onClick={({ key }) => key !== '/display' && navigate(key)}
-            style={{ height: '100%', borderRight: 0 }}
-            items={menuItems}
-          />
-        </Sider>
-        <Layout style={{ padding: '0 24px 24px', height: '100%' }}>
-          <Breadcrumb
-            style={{ margin: '16px 0' }}
-            items={[
-              { title: config.website.title },
-              { title: menuItems.find((item) => item.key === selectedKey)?.label },
-            ]}
-          />
-          <Content
-            style={{
-              background: '#fff',
-              padding: 24,
-              margin: 0,
-              minHeight: 280,
-            }}
-          >
-            <Outlet />
-          </Content>
+      {isPhone ? (
+        <>
+          <Content className="shell-content"><Outlet /></Content>
+          <nav className="tab-bar" aria-label="Main">
+            {NAV.map((item) => (
+              <Link
+                key={item.key}
+                to={item.to}
+                className={item.key === current ? 'tab-bar-item tab-bar-item-active' : 'tab-bar-item'}
+                aria-current={item.key === current ? 'page' : undefined}
+              >
+                {item.icon}
+                <span>{item.short ?? item.label}</span>
+              </Link>
+            ))}
+          </nav>
+        </>
+      ) : (
+        <Layout>
+          <Sider width={200} className="shell-sider">
+            <Menu mode="inline" selectedKeys={current ? [current] : []} items={MENU_ITEMS} className="shell-menu" />
+          </Sider>
+          <Content className="shell-content"><Outlet /></Content>
         </Layout>
-      </Layout>
-
-      <Modal
-        title="Carousel Placeholder"
-        open={isModalOpen}
-        onOk={() => setIsModalOpen(false)}
-        onCancel={() => setIsModalOpen(false)}
-      >
-        <p>Carousel Component Placeholder</p>
-      </Modal>
-      <BookDetailModal width={'90vw'} centered />
+      )}
     </Layout>
   )
 }
@@ -98,13 +81,11 @@ const Shell = () => {
 const App = () => (
   <Routes>
     <Route path="/" element={<Shell />}>
-      <Route index element={<Navigate to="/authors" replace />} />
+      <Route index element={<Navigate to="/library" replace />} />
+      <Route path="library/:id?" element={<Library />} />
+      <Route path="add" element={<AddBook />} />
       <Route path="authors" element={<Authors />} />
-      <Route path="books" element={<Books key="Books" bookType="Books" />} />
-      <Route path="ebooks" element={<Books key="EBooks" bookType="EBooks" />} />
-      <Route path="buy" element={<BuyList />} />
-      <Route path="add" element={<AddBooks />} />
-      <Route path="*" element={<Navigate to="/authors" replace />} />
+      <Route path="*" element={<Navigate to="/library" replace />} />
     </Route>
     <Route path="/display" element={<Suspense fallback={null}><Display /></Suspense>} />
     <Route path="/scan-test" element={<ScanTest />} />

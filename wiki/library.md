@@ -22,9 +22,11 @@ What the rows mean:
 - **Owned** means the book has at least one edition. A book with none is
   only on the wishlist.
 - **`wishlist`** means a physical copy is wanted; the Wishlist is every book
-  with it set. Adding a hardcover or paperback edition clears it; adding an
-  ebook edition does not. A book created with a physical edition never has
-  it set.
+  with it set. Adding a hardcover or paperback edition clears it, and so does
+  changing an ebook edition to one of them (`PATCH /api/editions/:id`, in the
+  same transaction); adding an ebook edition does not, and neither does
+  changing a hardcover to a paperback or back. A book created with a physical
+  edition never has it set.
 - **A title is unique per author** (`books_author_title`), so a second format
   of a book is an edition of it, not a second book.
 - **`isbn`** is always ISBN-13 or NULL (store-only ebooks have none), and is
@@ -32,7 +34,8 @@ What the rows mean:
   without an ISBN (`editions_book_format_without_isbn`), so a double tap
   cannot add the same ebook twice; two paperbacks with different ISBNs are
   allowed.
-- **`published`** is `YYYY`, `YYYY-MM` or `YYYY-MM-DD`.
+- **`published`** is `YYYY`, `YYYY-MM` or `YYYY-MM-DD`, and a real date:
+  `2023-02-31` answers 400.
 - **Names and titles** are stored trimmed with inner whitespace collapsed.
   Comparisons ignore case for ASCII letters only (`NOCASE`): `Brontë` and
   `BRONTË` are different names.
@@ -70,10 +73,15 @@ a cover in one transaction:
 4. A `cover_from_url` is downloaded only after the commit, since a
    transaction cannot wait for the network: `attachDownloadedCovers()` calls
    `saveCoverFromUrl()` ([Lookup § Cover downloads](lookup.md#cover-downloads))
-   and, when it succeeds, a second transaction points the row at the new
-   file and the cover it replaces is deleted. A failed download changes
-   nothing, so a new record has no cover; a row deleted while its cover
-   downloaded leaves the file unreferenced, and it is removed.
+   and, when it succeeds, a second statement points the row at the new file
+   and the cover it replaces is deleted. A failed download changes nothing,
+   so a new record has no cover. The download carries the row's `cover` and
+   `created_at` as its transaction committed them (`coverDownload()`), and
+   the file is attached only while the row still holds both. A row deleted
+   during the download, given another cover meanwhile (an upload), or
+   replaced by a new row under the same id (SQLite gives the highest id out
+   again once it is deleted) keeps what it has; the downloaded file is
+   removed and nothing else is deleted.
 
 A crash between a write and the commit can leave an unreferenced file, which
 is harmless.
@@ -117,7 +125,9 @@ A book in a response:
 ```
 
 `read` and `wishlist` are JSON booleans; `cover_url` is null when there is no
-cover. A write to an edition answers with its whole book, so a page replaces
+cover. `created_at` is UTC (SQLite's `datetime('now')`, with no zone marker);
+the table's Added column shows it as a date in the browser's time zone
+(`localDate()` in `client/src/lib/dates.js`). A write to an edition answers with its whole book, so a page replaces
 the book by `id` without another request.
 
 ### Bodies
@@ -199,7 +209,8 @@ beside it on Library, Wishlist and Authors.
 `/library` (`pages/Library/Library.jsx`) keeps its filters in the address:
 the Wishlist is `/library?wishlist=1`, physical books `?format=physical`,
 ebooks `?format=ebook`, one author's books `?author_id=<id>`. The search
-waits 250 ms after the last keystroke.
+waits 250 ms after the last keystroke, and what is typed while the list
+updates stays in the box (`SearchBox.jsx`).
 
 - **Desktop:** a toolbar of search and Format, Owned (Owned or Wishlist
   only), Wishlist (On the wishlist) and Read selects, and a table that
@@ -219,9 +230,14 @@ waits 250 ms after the last keystroke.
   empty Wishlist "Nothing on the wishlist"; any other empty result "No books
   match" with Clear filters (`components/ShelfEmpty.jsx`).
 
-A wishlist, rating or read change shows at once, is saved with `PATCH`, reverts with an
-error message if the save fails, and of overlapping saves to one book only
-the newest answer is applied (`useLibrary.js`, `client/src/lib/latest.js`).
+A wishlist, rating or read change shows at once and is saved with `PATCH`
+(`useLibrary.js`, `client/src/lib/fieldSaves.js`). Each field of a book
+settles on its own, so overlapping saves of the stars and the read toggle
+never undo each other: while a field's newest save is pending it shows that
+save's value; once that save settles it shows what the server stored, the
+value of the newest save that succeeded, or the value from before the
+overlapping saves when none did. A failed newest save reverts its field with
+an error message.
 
 ### Cover flow view
 
@@ -297,7 +313,8 @@ phone); Back closes it.
 The edition form (`EditionForm.jsx`): format, ISBN with Look up and Scan
 (below), cover, and Publisher and Published behind "More". A lookup fills
 publisher, date, the format (physical only when marking a purchase) and the
-cover. A chosen cover file is scaled in the browser to at most 1200px on its
+cover, replaces what an earlier lookup filled the way the add page does
+(below), and adds the same credit line under the form. A chosen cover file is scaled in the browser to at most 1200px on its
 long side (`client/src/lib/resizeImage.js`) before it is sent.
 
 ### Add a book
@@ -324,7 +341,9 @@ and its cover on the book. The author field (`AuthorSelect.jsx`) lists the
 authors and, when the typed name matches none of them without regard to
 case, offers Add "<name>", which sends `author_name`. When the title or the
 ISBN is already in the library, the page offers Open the existing book and,
-for a title, Add this as an edition.
+for a title, Add this as an edition. The notice sits above the buttons, so
+the page scrolls it into view (on a phone the buttons are in the sticky
+bar, far below the top) and shows the conflict as a warning message too.
 
 **Scan and look up.** The ISBN field (`components/IsbnField.jsx`, also in
 the edition form) is checked with `client/src/lib/isbn.js` and has two
@@ -340,8 +359,12 @@ The answer fills the form (`client/src/lib/prefill.js`): title; author,
 matched to an existing author without regard to case, else offered as a new
 one (co-authors joined with " & "); synopsis; publisher and date; and the
 format hint when no format is chosen yet. A scan never preselects Ebook: the
-person is holding a printed book. A lookup that finds nothing says so and
-leaves the form for typing.
+person is holding a printed book. Each lookup first resets every field the
+previous lookup filled that the person has not changed since, and drops its
+cover, so the form never mixes two books (`untouchedFields()` in
+`prefill.js`). A lookup that finds nothing, or fails, for another ISBN says
+so and leaves the form for typing; one for the ISBN already filled in changes
+nothing.
 
 The cover preview shows what the book will be saved with: a chosen file, else
 the lookup's cover, else a cloth cover with the typed title. The lookup's

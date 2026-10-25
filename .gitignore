@@ -9,7 +9,7 @@ coverage/
 # The dev data directory (DATA_DIR): database and covers
 /data/
 
-# SQLite files outside data/ (a stray server/hemlock.db from the old layout, WAL side files)
+# SQLite files outside data/, with their WAL side files
 *.db
 *.db-wal
 *.db-shm

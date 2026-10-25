@@ -25,7 +25,6 @@ export const CoverPicker = ({ value, onChange, label = 'Choose a cover', listTyp
   </Upload>
 )
 
-// Picks a file and hands it straight to onFile, which saves it.
 export const ChangeCoverButton = ({ onFile, busy, label = 'Change cover', size = 'small', type }) => (
   <Upload
     accept={COVER_TYPES}

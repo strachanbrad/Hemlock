@@ -5,7 +5,7 @@
 
 import { Router } from 'express'
 import { readBody } from '../body.js'
-import { attachDownloadedCovers, checkCoverSources, withCoverFiles } from '../coverFiles.js'
+import { attachDownloadedCovers, checkCoverSources, coverDownload, withCoverFiles } from '../coverFiles.js'
 import { createLibrary, pick } from '../library.js'
 import { PHYSICAL, editionPayload, pathId } from '../validate.js'
 
@@ -28,7 +28,7 @@ export default function editionRoutes(db, saveCover) {
       if (PHYSICAL.has(input.format)) library.updateBook(id, { wishlist: 0 })
       return newId
     })
-    if (input.cover_from_url) await attachDownloadedCovers(db, [{ table: 'editions', id: editionId, url: input.cover_from_url }], saveCover)
+    if (input.cover_from_url) await attachDownloadedCovers(db, [coverDownload(db, 'editions', editionId, input.cover_from_url)], saveCover)
     res.status(201).json(library.getBook(id))
   })
 
@@ -48,9 +48,11 @@ export default function editionRoutes(db, saveCover) {
         values.cover = req.cover ? files.write(req.cover, `e${id}`) : null
       }
       library.updateEdition(id, values)
+      // Only an ebook turning physical: a wishlist set by hand on a physical book stays.
+      if (edition.format === 'ebook' && PHYSICAL.has(values.format)) library.updateBook(edition.book_id, { wishlist: 0 })
       return edition.book_id
     })
-    if (input.cover_from_url) await attachDownloadedCovers(db, [{ table: 'editions', id, url: input.cover_from_url }], saveCover)
+    if (input.cover_from_url) await attachDownloadedCovers(db, [coverDownload(db, 'editions', id, input.cover_from_url)], saveCover)
     res.json(library.getBook(bookId))
   })
 

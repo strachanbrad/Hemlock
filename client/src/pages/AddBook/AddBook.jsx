@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Alert, App, Button, Form, Input, Radio, Segmented, Switch } from 'antd'
 import { Link, useNavigate } from 'react-router'
 import { listAuthors } from '../../api/authors.js'
@@ -18,7 +18,7 @@ import IsbnField from '../../components/IsbnField.jsx'
 import Rating from '../../components/Rating.jsx'
 import ToggleIcon from '../../components/ToggleIcon.jsx'
 import { BookClosed, BookmarkFilled, BookOpen } from '../../images/index.js'
-import { bookFromLookup, creditLine } from '../../lib/prefill.js'
+import { bookFromLookup, creditLine, untouchedFields } from '../../lib/prefill.js'
 import { resizeCover } from '../../lib/resizeImage.js'
 import { useIsPhone } from '../../lib/viewport.js'
 import { isbnRule, publishedRule } from '../Library/EditionForm.jsx'
@@ -78,25 +78,43 @@ const AddBook = () => {
   const [found, setFound] = useState(null)
   const [lookupCover, setLookupCover] = useState(null)
   const [more, setMore] = useState(false)
+  const filled = useRef({ isbn: null, values: {}, ticket: 0 })
+  const conflictRef = useRef(null)
   const wished = ownership === WISHLIST
 
-  const prefill = async (record, { scanned }) => {
+  useEffect(() => {
+    if (conflict) conflictRef.current?.scrollIntoView({ block: 'center' })
+  }, [conflict])
+
+  // Each lookup resets what the previous one filled and the person left unchanged, so two books
+  // never mix; a failed or empty lookup of the ISBN already filled in changes nothing.
+  const prefill = async (record, { scanned, isbn }) => {
+    const previous = filled.current
+    if (!record && isbn === previous.isbn) return
+    const ticket = previous.ticket + 1
+    const leftovers = untouchedFields(previous.values, form.getFieldsValue(Object.keys(previous.values)))
+    if (leftovers.length > 0) form.resetFields(leftovers)
+    filled.current = { isbn: null, values: {}, ticket }
+    setFound(record)
+    setLookupCover(record?.cover_url ?? null)
+    setConflict(null)
+    if (!record) return
+
     let authors = []
     try {
       authors = await listAuthors()
     } catch {
       // Without the list the lookup's author is offered as a new name; the save still matches it.
     }
+    if (filled.current.ticket !== ticket) return
     const values = bookFromLookup(record, authors, {
       scanned,
       allowed: ['hardcover', 'paperback', 'ebook'],
       currentFormat: form.getFieldValue('format'),
     })
     form.setFieldsValue(values)
+    filled.current = { isbn: record.isbn, values, ticket }
     if (values.publisher || values.published) setMore(true)
-    setFound(record)
-    setLookupCover(record.cover_url)
-    setConflict(null)
   }
 
   const submit = async (values) => {
@@ -117,6 +135,7 @@ const AddBook = () => {
         if (err.status !== 409 || !err.body?.conflict?.book_id) throw err
         const { book_id: bookId, edition_id: editionId } = err.body.conflict
         setConflict({ message: err.message, bookId, edition: editionId ? null : edition, file })
+        message.warning(err.message)
       }
     } catch (err) {
       message.error(err.message)
@@ -139,6 +158,7 @@ const AddBook = () => {
 
   const reset = () => {
     form.resetFields()
+    filled.current = { isbn: null, values: {}, ticket: filled.current.ticket + 1 }
     setConflict(null)
     setFound(null)
     setLookupCover(null)
@@ -158,7 +178,7 @@ const AddBook = () => {
             rules={[isbnRule]}
             extra={wished ? 'Only used for the lookup: a book on the wishlist keeps no ISBN.' : undefined}
           >
-            <IsbnField onFound={prefill} size="large" prominent placeholder="ISBN-10 or ISBN-13" />
+            <IsbnField onLookup={prefill} size="large" prominent placeholder="ISBN-10 or ISBN-13" />
           </Form.Item>
         </section>
 
@@ -238,18 +258,19 @@ const AddBook = () => {
         </section>
 
         {conflict && (
-          <Alert
-            className="add-book-conflict"
-            type="warning"
-            showIcon
-            title={conflict.message}
-            description={(
-              <div className="conflict-actions">
-                <Link to={`/library/${conflict.bookId}`}>Open the existing book</Link>
-                {conflict.edition && <Button size="small" onClick={addAsEdition}>Add this as an edition</Button>}
-              </div>
-            )}
-          />
+          <div ref={conflictRef} className="add-book-conflict">
+            <Alert
+              type="warning"
+              showIcon
+              title={conflict.message}
+              description={(
+                <div className="conflict-actions">
+                  <Link to={`/library/${conflict.bookId}`}>Open the existing book</Link>
+                  {conflict.edition && <Button size="small" onClick={addAsEdition}>Add this as an edition</Button>}
+                </div>
+              )}
+            />
+          </div>
         )}
         <div className="add-actions">
           <Button htmlType="button" type="text" onClick={reset}>Reset</Button>

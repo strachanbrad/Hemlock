@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { App } from 'antd'
 import { getBook, listBooks, updateBook } from '../../api/books.js'
-import { createLatest } from '../../lib/latest.js'
+import { createFieldSaves } from '../../lib/fieldSaves.js'
 
 // The list for one filter query and the open book. Writes replace a book by id from
 // the response; a rating or read change shows at once and reverts if the save fails.
@@ -14,7 +14,7 @@ export function useLibrary(query, openId) {
   const { message } = App.useApp()
   const [list, setList] = useState({ query: null, books: [], error: null })
   const [detail, setDetail] = useState({ id: null, book: null, error: null })
-  const [latest] = useState(createLatest)
+  const [saves] = useState(createFieldSaves)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -48,19 +48,19 @@ export function useLibrary(query, openId) {
   }, [])
 
   const save = useCallback(async (book, fields) => {
-    const isLatest = latest.start(book.id)
-    const before = Object.fromEntries(Object.keys(fields).map((key) => [key, book[key]]))
+    const settle = saves.start(book, fields)
     apply({ id: book.id, ...fields })
+    let saved = null
+    let error = null
     try {
-      const saved = await updateBook(book.id, fields)
-      if (isLatest()) apply(saved)
+      saved = await updateBook(book.id, fields)
     } catch (err) {
-      if (isLatest()) {
-        apply({ id: book.id, ...before })
-        message.error(`Not saved: ${err.message}`)
-      }
+      error = err
     }
-  }, [apply, latest, message])
+    const { show, failed } = settle(saved)
+    if (Object.keys(show).length > 0) apply({ id: book.id, ...show })
+    if (failed) message.error(`Not saved: ${error.message}`)
+  }, [apply, message, saves])
 
   const placeholder = list.books.find((book) => String(book.id) === openId) ?? null
   const fetched = detail.id === openId ? detail : null

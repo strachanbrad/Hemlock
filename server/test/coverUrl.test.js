@@ -8,7 +8,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { after, before, beforeEach, describe, it } from 'node:test'
 import { JPEG, PNG, loadApp, startServer } from './support/server.js'
-import { client, coverFiles, emptyLibrary, placeCover } from './support/http.js'
+import { client, coverFiles, emptyLibrary, multipart, placeCover } from './support/http.js'
 
 const OL_COVER = 'https://covers.openlibrary.org/b/id/14839277-L.jpg'
 const jpeg = Buffer.concat([JPEG, Buffer.alloc(2048, 7)])
@@ -116,17 +116,79 @@ describe('cover_from_url', () => {
   })
 })
 
+// Holds every upstream answer until release(); reached resolves once the first request is in.
+function holdUpstream() {
+  let release
+  let reached
+  const released = new Promise((resolve) => (release = resolve))
+  const inFlight = new Promise((resolve) => (reached = resolve))
+  upstream = async () => {
+    reached()
+    await released
+    return new Response(jpeg, { headers: { 'content-type': 'image/jpeg' } })
+  }
+  return { inFlight, release }
+}
+
+describe('a cover download that finishes late', () => {
+  it('leaves a book that reused the id with its own cover and file', async () => {
+    const hold = holdUpstream()
+    const first = api.post('/api/books', { title: 'Shirley', author_id: 1, edition: { format: 'paperback', cover_from_url: OL_COVER } })
+    await hold.inFlight
+    const [{ id: editionId }] = app.db.prepare('SELECT id FROM editions').all()
+    assert.equal((await api.del('/api/books/2')).status, 204)
+    const second = await api.post('/api/books', multipart({ title: 'Villette', author_id: 1, edition: { format: 'paperback' } }, PNG))
+    const own = second.body.editions[0]
+    assert.deepEqual([second.body.id, own.id], [2, editionId], 'SQLite gives out the deleted ids again')
+
+    hold.release()
+    await first
+    assert.equal(app.db.prepare('SELECT cover FROM editions WHERE id = ?').pluck().get(editionId), path.basename(own.cover_url))
+    assert.deepEqual(coverFiles(coversDir), [path.basename(own.cover_url)])
+  })
+
+  it('keeps a cover uploaded while the download ran', async () => {
+    app.db.exec("INSERT INTO editions (id, book_id, format) VALUES (5, 1, 'paperback')")
+    const hold = holdUpstream()
+    const first = api.patch('/api/editions/5', { cover_from_url: OL_COVER })
+    await hold.inFlight
+    const upload = await api.patch('/api/editions/5', multipart({}, PNG))
+    const uploaded = path.basename(upload.body.editions[0].cover_url)
+
+    hold.release()
+    assert.equal((await first).body.editions[0].cover_url, `/covers/${uploaded}`)
+    assert.deepEqual(coverFiles(coversDir), [uploaded])
+  })
+})
+
 describe('attachDownloadedCovers', () => {
-  it('removes the downloaded file when its row was deleted during the download', async () => {
-    const { attachDownloadedCovers } = await import('../src/coverFiles.js')
-    app.db.exec("INSERT INTO editions (id, book_id, format) VALUES (9, 1, 'paperback')")
+  // Records the row as it stands, then downloads after during() has changed it.
+  async function attach(table, id, during) {
+    const { attachDownloadedCovers, coverDownload } = await import('../src/coverFiles.js')
     let saved
-    await attachDownloadedCovers(app.db, [{ table: 'editions', id: 9, url: OL_COVER }], async (url, base) => {
-      app.db.exec('DELETE FROM editions WHERE id = 9')
+    await attachDownloadedCovers(app.db, [coverDownload(app.db, table, id, OL_COVER)], async (url, base) => {
+      during()
       saved = await covers.saveCoverFromUrl(url, base, { fetch: async () => upstream(), log: () => {} })
       return saved
     })
+    return saved
+  }
+
+  it('removes the downloaded file when its row was deleted during the download', async () => {
+    app.db.exec("INSERT INTO editions (id, book_id, format) VALUES (9, 1, 'paperback')")
+    const saved = await attach('editions', 9, () => app.db.exec('DELETE FROM editions WHERE id = 9'))
     assert.match(saved, /^e9-/)
+    assert.deepEqual(coverFiles(coversDir), [])
+  })
+
+  it('tells a row that reused the id by its created_at when neither row has a cover', async () => {
+    app.db.exec("INSERT INTO editions (id, book_id, format, created_at) VALUES (1, 1, 'paperback', '2026-01-01 00:00:00')")
+    const saved = await attach('editions', 1, () => {
+      app.db.exec('DELETE FROM editions WHERE id = 1')
+      assert.equal(app.db.prepare("INSERT INTO editions (book_id, format) VALUES (1, 'hardcover')").run().lastInsertRowid, 1)
+    })
+    assert.match(saved, /^e1-/)
+    assert.equal(app.db.prepare('SELECT cover FROM editions WHERE id = 1').pluck().get(), null)
     assert.deepEqual(coverFiles(coversDir), [])
   })
 })

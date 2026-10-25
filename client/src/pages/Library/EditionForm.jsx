@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { App, Button, Form, Input, Radio } from 'antd'
 import { CoverPicker } from '../../components/CoverPicker.jsx'
 import { SectionHeading } from '../../components/Headings.jsx'
@@ -11,7 +11,7 @@ import { FORMAT_LABELS } from '../../components/FormatTags.jsx'
 import IsbnField from '../../components/IsbnField.jsx'
 import LookupCover from '../../components/LookupCover.jsx'
 import { toIsbn13 } from '../../lib/isbn.js'
-import { editionFromLookup } from '../../lib/prefill.js'
+import { creditLine, editionFromLookup, untouchedFields } from '../../lib/prefill.js'
 import { resizeCover } from '../../lib/resizeImage.js'
 import '../../styles/forms.css'
 
@@ -27,22 +27,32 @@ const formatOptions = (formats) => formats.map((format) => ({ value: format, lab
 
 const TITLES = { add: 'Add an edition', purchase: 'Mark as purchased', edit: 'Edit the edition' }
 
-// mode is add, purchase (physical formats only) or edit; onSubmit(payload, file) saves, resolves to
-// the book and may throw an ApiError.
 const EditionForm = ({ mode, edition, onSubmit, onCancel }) => {
   const { message } = App.useApp()
   const [form] = Form.useForm()
   const cover = Form.useWatch('cover', form)
   const [more, setMore] = useState(Boolean(edition?.publisher || edition?.published))
   const [lookupCover, setLookupCover] = useState(null)
+  const [found, setFound] = useState(null)
+  const filled = useRef({ isbn: null, values: {} })
   const [saving, setSaving] = useState(false)
   const formats = mode === 'purchase' ? ['hardcover', 'paperback'] : ['hardcover', 'paperback', 'ebook']
 
-  const prefill = (record, { scanned }) => {
+  // Each lookup resets what the previous one filled and the person left unchanged, so two
+  // editions never mix; a failed or empty lookup of the ISBN already filled in changes nothing.
+  const prefill = (record, { scanned, isbn }) => {
+    const previous = filled.current
+    if (!record && isbn === previous.isbn) return
+    const leftovers = untouchedFields(previous.values, form.getFieldsValue(Object.keys(previous.values)))
+    if (leftovers.length > 0) form.resetFields(leftovers)
+    filled.current = { isbn: null, values: {} }
+    setFound(record)
+    setLookupCover(record?.cover_url ?? null)
+    if (!record) return
     const values = editionFromLookup(record, { scanned, allowed: formats, currentFormat: form.getFieldValue('format') })
     form.setFieldsValue(values)
+    filled.current = { isbn: record.isbn, values }
     if (values.publisher || values.published) setMore(true)
-    setLookupCover(record.cover_url)
   }
 
   const submit = async (values) => {
@@ -95,7 +105,7 @@ const EditionForm = ({ mode, edition, onSubmit, onCancel }) => {
         <Radio.Group options={formatOptions(formats)} optionType="button" buttonStyle="solid" />
       </Form.Item>
       <Form.Item name="isbn" label="ISBN" rules={[isbnRule]} extra={mode === 'purchase' ? 'ISBN-10 or ISBN-13; scan the barcode or type it' : 'ISBN-10 or ISBN-13; leave empty for a store-only ebook'}>
-        <IsbnField onFound={prefill} />
+        <IsbnField onLookup={prefill} />
       </Form.Item>
       <Form.Item name="cover" label={mode === 'edit' && edition?.cover_url ? 'Replace the cover' : 'Cover'}>
         <CoverPicker />
@@ -113,6 +123,7 @@ const EditionForm = ({ mode, edition, onSubmit, onCancel }) => {
         <Button onClick={onCancel}>Cancel</Button>
         <Button type="primary" htmlType="submit" loading={saving}>Save</Button>
       </div>
+      {found && <p className="credit secondary">{creditLine(found)}</p>}
     </Form>
   )
 }

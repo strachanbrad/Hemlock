@@ -49,7 +49,21 @@ wait_healthy() {
 
 server=""
 saved=""
+# What npm ci and the build replace under the checkout; each waits as <path>.deploy-prev until both succeed.
+built=(node_modules client/node_modules server/node_modules client/dist)
+restore=0
+put_back() {
+  local dir
+  for dir in "${built[@]}"; do
+    rm -rf -- "${repo:?}/$dir"
+    if [[ -e $repo/$dir.deploy-prev ]]; then mv -- "$repo/$dir.deploy-prev" "$repo/$dir"; fi
+  done
+}
 cleanup() {
+  if (( restore )); then
+    put_back || true
+    printf 'deploy: %s\n' "the install or build failed; the previous node_modules and client/dist are back in place" >&2
+  fi
   if [[ -n $server ]]; then kill "$server" 2>/dev/null || true; wait "$server" 2>/dev/null || true; fi
   if [[ -n $saved ]]; then rm -f -- "$saved" || true; fi
 }
@@ -85,10 +99,19 @@ run install -d -m 0700 "${own[@]}" "$DATA/backups"
 
 say "Build $(git -C "$repo" log -1 --format='%h %s' 2>/dev/null || echo '(not a git checkout)')"
 cd -- "$repo"
+# npm ci empties every node_modules before it fetches, and Vite empties client/dist. Both unlink
+# files and write new ones, never into an existing inode, so a hardlink copy keeps the old tree whole.
+run rm -rf -- "${built[@]/%/.deploy-prev}"
+for dir in "${built[@]}"; do
+  [[ ! -d $dir ]] || run cp -al -- "$dir" "$dir.deploy-prev"
+done
+[[ $DRY_RUN == 1 ]] || restore=1
 # NODE_ENV=production in the caller's environment would make npm ci skip Vite. No dependency
 # needs an install script; better-sqlite3's inferred node-gyp rebuild would compile as root.
 run npm ci --include=dev --ignore-scripts --no-audit --no-fund
 run npm run build
+restore=0
+run rm -rf -- "${built[@]/%/.deploy-prev}"
 run chmod -R go+rX "$repo"
 
 say "Backup"
@@ -97,13 +120,6 @@ if [[ -f $DATA/hemlock.db ]]; then
   # As hemlock: a backup that dies leaves -wal and -shm behind, and root-owned ones lock the service out.
   as_hemlock sqlite3 "$DATA/hemlock.db" ".backup '$DATA/backups/hemlock-$stamp.db'"
   as_hemlock cp -al "$DATA/covers" "$DATA/backups/covers-$stamp"
-  mapfile -t old < <(find "$DATA/backups" -maxdepth 1 -name 'hemlock-*.db' -printf '%f\n' |
-    sort | head -n -"$KEEP")
-  for f in "${old[@]}"; do
-    s=${f#hemlock-}
-    s=${s%.db}
-    run rm -rf -- "$DATA/backups/$f" "$DATA/backups/covers-$s"
-  done
 else
   echo "no database yet"
 fi
@@ -111,10 +127,15 @@ fi
 say "Service"
 run install -D -m 0644 deploy/hemlock.service "$UNIT"
 log=""
+not_serving() {
+  if [[ -z $log ]]; then journalctl -u hemlock -n 40 --no-pager || true; else tail -n 40 -- "$log" || true; fi
+  die "$1; nginx is unchanged"
+}
 if (( SYSTEM )); then
   run systemctl daemon-reload
   run systemctl enable --quiet hemlock
-  run systemctl restart hemlock
+  # Type=exec: a service that dies before it runs node (226/NAMESPACE) fails the restart itself.
+  run systemctl restart hemlock || not_serving "hemlock did not start"
 else
   run systemctl --root="$PREFIX" enable --quiet hemlock
   # In place of the restart, the built server runs with the unit's environment, pointed into PREFIX.
@@ -129,8 +150,7 @@ else
   fi
 fi
 if [[ $DRY_RUN != 1 ]] && ! wait_healthy "http://127.0.0.1:$PORT/api/health"; then
-  if [[ -z $log ]]; then journalctl -u hemlock -n 40 --no-pager || true; else tail -n 40 -- "$log" || true; fi
-  die "hemlock is not answering on 127.0.0.1:$PORT; nginx is unchanged"
+  not_serving "hemlock is not answering on 127.0.0.1:$PORT"
 fi
 
 say "nginx"
@@ -167,5 +187,17 @@ if (( SYSTEM )); then
   if [[ $DRY_RUN != 1 ]]; then
     wait_healthy "http://127.0.0.1/api/health" || die "nginx on port 80 does not reach hemlock"
   fi
+fi
+
+# Only a deploy that answers prunes, so reruns of a failing one never push out an older backup.
+say "Old backups"
+if [[ -d $DATA/backups ]]; then
+  mapfile -t old < <(find "$DATA/backups" -maxdepth 1 -name 'hemlock-*.db' -printf '%f\n' |
+    sort | head -n -"$KEEP")
+  for f in "${old[@]}"; do
+    s=${f#hemlock-}
+    s=${s%.db}
+    run rm -rf -- "$DATA/backups/$f" "$DATA/backups/covers-$s"
+  done
 fi
 say "Done"

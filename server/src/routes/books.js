@@ -5,7 +5,7 @@
 
 import { Router } from 'express'
 import { readBody } from '../body.js'
-import { attachDownloadedCovers, checkCoverSources, withCoverFiles } from '../coverFiles.js'
+import { attachDownloadedCovers, checkCoverSources, coverDownload, withCoverFiles } from '../coverFiles.js'
 import { createLibrary, pick } from '../library.js'
 import { PHYSICAL, bookPayload, listFilters, pathId } from '../validate.js'
 
@@ -34,11 +34,11 @@ export default function bookRoutes(db, saveCover) {
       const values = { ...pick(input, BOOK_VALUES), author_id: author.id }
       if (input.edition && PHYSICAL.has(input.edition.format)) values.wishlist = 0
       const bookId = library.insertBook(values)
-      if (input.cover_from_url) downloads.push({ table: 'books', id: bookId, url: input.cover_from_url })
+      if (input.cover_from_url) downloads.push(coverDownload(db, 'books', bookId, input.cover_from_url))
       if (input.edition) {
         const editionId = library.insertEdition(bookId, input.edition)
         if (req.cover) library.updateEdition(editionId, { cover: files.write(req.cover, `e${editionId}`) })
-        if (input.edition.cover_from_url) downloads.push({ table: 'editions', id: editionId, url: input.edition.cover_from_url })
+        if (input.edition.cover_from_url) downloads.push(coverDownload(db, 'editions', editionId, input.edition.cover_from_url))
       } else if (req.cover) {
         library.updateBook(bookId, { cover: files.write(req.cover, `b${bookId}`) })
       }
@@ -68,7 +68,7 @@ export default function bookRoutes(db, saveCover) {
       }
       library.updateBook(id, values)
     })
-    if (input.cover_from_url) await attachDownloadedCovers(db, [{ table: 'books', id, url: input.cover_from_url }], saveCover)
+    if (input.cover_from_url) await attachDownloadedCovers(db, [coverDownload(db, 'books', id, input.cover_from_url)], saveCover)
     res.json(library.getBook(id))
   })
 

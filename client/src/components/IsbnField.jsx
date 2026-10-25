@@ -24,13 +24,13 @@ function Notice({ state }) {
   return null
 }
 
-// Controlled by Form (value, onChange). onFound(record, { scanned }) receives each lookup answer.
-const IsbnField = ({ id, value, onChange, onFound, size, prominent = false, placeholder }) => {
+// Controlled by Form (value, onChange). onLookup(record, { scanned, isbn }) receives the newest
+// lookup's outcome; record is null when no source knows the ISBN or the lookup failed.
+const IsbnField = ({ id, value, onChange, onLookup, size, prominent = false, placeholder }) => {
   const [scanning, setScanning] = useState(false)
   const [state, setState] = useState({ phase: 'idle' })
   const latest = useRef(0)
 
-  // Only the newest lookup's answer is shown and applied.
   const lookup = async (raw, scanned) => {
     const isbn = toIsbn13(raw ?? '')
     if (!isbn) {
@@ -39,18 +39,17 @@ const IsbnField = ({ id, value, onChange, onFound, size, prominent = false, plac
     }
     const ticket = ++latest.current
     setState({ phase: 'loading', isbn })
+    let record = null
+    let failure = null
     try {
-      const record = await lookupIsbn(isbn)
-      if (ticket !== latest.current) return
-      if (record) {
-        setState({ phase: 'found', isbn, record })
-        onFound(record, { scanned })
-      } else {
-        setState({ phase: 'missing', isbn })
-      }
+      record = await lookupIsbn(isbn)
     } catch (err) {
-      if (ticket === latest.current) setState({ phase: 'error', message: err.message })
+      failure = err
     }
+    if (ticket !== latest.current) return
+    if (failure) setState({ phase: 'error', message: failure.message })
+    else setState(record ? { phase: 'found', isbn, record } : { phase: 'missing', isbn })
+    onLookup(record, { scanned, isbn })
   }
 
   return (

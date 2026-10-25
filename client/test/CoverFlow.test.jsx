@@ -85,6 +85,13 @@ describe('CoverFlow', () => {
     expect(centreTitle()).toBe('Mansfield Park')
   })
 
+  it('keeps the first centred book through a re-sort before any move', () => {
+    const { update } = mount(BOOKS)
+    update([BOOKS[1], BOOKS[2], BOOKS[0]])
+    expect(centreTitle()).toBe('Emma')
+    expect(document.querySelector('.coverflow-position').textContent).toBe('3 of 3')
+  })
+
   it('mounts only the covers near the centre', () => {
     mount(Array.from({ length: 2000 }, (_, i) => book(i + 1, `Book ${i + 1}`)))
     fireEvent.keyDown(stage(), { key: 'End' })

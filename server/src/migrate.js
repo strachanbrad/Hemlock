@@ -34,8 +34,15 @@ export function migrate(db, dir = migrationsDir) {
   )`)
   const applied = new Set(db.prepare('SELECT version FROM schema_migrations').pluck().all())
   const record = db.prepare('INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)')
+  const files = migrationFiles(dir)
 
-  for (const { version, name, file } of migrationFiles(dir)) {
+  const recorded = schemaVersion(db)
+  const latest = files.at(-1)?.version ?? 0
+  if (recorded > latest) {
+    throw new Error(`Database is at schema ${recorded}, newer than this checkout's migrations (${latest}); restore a backup (wiki/deployment.md#restore)`)
+  }
+
+  for (const { version, name, file } of files) {
     if (applied.has(version)) continue
     const sql = fs.readFileSync(file, 'utf8')
     if (/^\s*PRAGMA\b/im.test(sql)) throw new Error(`Migration ${name} contains a PRAGMA`)

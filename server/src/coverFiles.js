@@ -69,21 +69,29 @@ export function withCoverFiles(db, fn) {
 
 const COVER_PREFIX = { books: 'b', editions: 'e' }
 
+function coverPrefix(table) {
+  const prefix = COVER_PREFIX[table]
+  if (!prefix) throw new TypeError(`No covers in ${table}`)
+  return prefix
+}
+
+// Records the row as its transaction leaves it, so it is called inside that transaction or
+// before the first await after the commit. `table` is 'books' or 'editions', from code.
+export function coverDownload(db, table, id, url) {
+  coverPrefix(table)
+  const { cover, created_at } = db.prepare(`SELECT cover, created_at FROM ${table} WHERE id = ?`).get(id)
+  return { table, id, url, cover, created_at }
+}
+
 // Runs after the row's transaction commits, since a transaction cannot wait for a download.
-// A failed download leaves the row as it was; a row deleted meanwhile leaves the new file
-// unreferenced, so it is removed. `table` is 'books' or 'editions', from code.
+// The file lands only on a row still holding the recorded cover and created_at, so a row
+// deleted, given another cover, or replaced under a reused id meanwhile keeps its own.
 export async function attachDownloadedCovers(db, downloads, saveCover) {
-  for (const { table, id, url } of downloads) {
-    const prefix = COVER_PREFIX[table]
-    if (!prefix) throw new TypeError(`No covers in ${table}`)
-    const filename = await saveCover(url, `${prefix}${id}`)
+  for (const { table, id, url, cover, created_at } of downloads) {
+    const filename = await saveCover(url, `${coverPrefix(table)}${id}`)
     if (!filename) continue
-    const stale = db.transaction(() => {
-      const row = db.prepare(`SELECT cover FROM ${table} WHERE id = ?`).get(id)
-      if (!row) return filename
-      db.prepare(`UPDATE ${table} SET cover = ? WHERE id = ?`).run(filename, id)
-      return row.cover
-    })()
+    const { changes } = db.prepare(`UPDATE ${table} SET cover = ? WHERE id = ? AND cover IS ? AND created_at = ?`).run(filename, id, cover, created_at)
+    const stale = changes === 1 ? cover : filename
     if (stale) removeCover(stale)
   }
 }

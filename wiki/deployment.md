@@ -115,6 +115,17 @@ sudo git -C /opt/hemlock pull --ff-only && sudo /opt/hemlock/deploy/deploy.sh
 `deploy.sh` deploys exactly what is checked out and never fetches code itself.
 A rerun repeats every step: one more backup, the same files, a restart.
 
+A tab opened before a redeploy still runs the old build, whose lazy chunks
+(the barcode scanner, the display page) the new build no longer has: Vite
+empties `client/dist`, and nginx answers 404 for a missing asset. When such a
+tab asks for one, it reloads itself once. `reloadOnStaleChunk()`
+(`client/src/lib/staleChunks.js`, called from `client/src/main.jsx`) listens
+for Vite's `vite:preloadError` and, when the tab has not reloaded for this
+reason in the last minute, reloads it, which loads the new build and loses
+any unsaved input on the page. The reload is remembered in session storage;
+a second failure within the minute, or one in a tab without session storage,
+surfaces as an error.
+
 ### What deploy.sh does
 
 1. Refuses to run as anyone but root or from anywhere but `/opt/hemlock`, then
@@ -123,13 +134,20 @@ A rerun repeats every step: one more backup, the same files, a restart.
    service.
 2. Creates the `hemlock` system user when it is missing, and creates
    `/var/lib/hemlock`, `covers/` and `backups/` or resets their owner and mode.
-3. Builds while the running version keeps serving: `npm ci --include=dev
-   --ignore-scripts`, `npm run build`, then `chmod -R go+rX /opt/hemlock`, so a
-   strict umask on the caller's side never hides files from the service or
-   nginx. No dependency's install script runs as root: better-sqlite3 loads
-   the prebuilt binary it ships, and its inferred `node-gyp rebuild` would
-   need a compiler the box does not have. While Vite rewrites `client/dist`,
-   nginx answers 404 for the client's pages.
+3. Builds while the running version keeps serving. First it keeps the tree
+   the running version uses: each of `node_modules`, `client/node_modules`,
+   `server/node_modules` and `client/dist` that exists is copied as hardlinks
+   (`cp -al`) to `<path>.deploy-prev`, after any copy an interrupted run left
+   is removed. Then `npm ci --include=dev --ignore-scripts` and `npm run
+   build`; when both succeed the copies are removed, and `chmod -R go+rX
+   /opt/hemlock` runs, so a strict umask on the caller's side never hides
+   files from the service or nginx. The hardlink copies stay whole because
+   `npm ci` (which empties every `node_modules` before it fetches anything)
+   and Vite (which empties `client/dist`) remove files and write new ones,
+   never into an existing file. No dependency's install script runs as root:
+   better-sqlite3 loads the prebuilt binary it ships, and its inferred
+   `node-gyp rebuild` would need a compiler the box does not have. While Vite
+   rewrites `client/dist`, nginx answers 404 for the client's pages.
 4. Backs up the database and the covers ([Backups](#backups)).
 5. Installs the unit, enables and restarts it, and polls
    `http://127.0.0.1:5000/api/health` for 30 seconds until it answers 2xx.
@@ -138,15 +156,27 @@ A rerun repeats every step: one more backup, the same files, a restart.
    it is Debian's stock link (it also claims the default server on port 80),
    runs `nginx -t`, reloads or starts nginx, and polls `/api/health` again
    through nginx on port 80.
-7. Prints the health answer, `200 {"ok":true,"version":…,"schema":…}`.
+7. Prints the health answer, `200 {"ok":true,"version":…,"schema":…}`, then
+   deletes all but the newest 10 backup pairs ([Backups](#backups)).
 
 ### When a deploy fails
 
-- A failed check, build or backup stops the script before the restart, and the
+- A failed check or backup stops the script before the restart, and the
   running version keeps serving.
-- A failed health poll prints the last 40 lines of the journal and stops before
-  nginx is touched. systemd keeps restarting the new version
-  (`Restart=on-failure`); fix the cause and rerun, or roll back.
+- A failed `npm ci` or build puts the kept `node_modules` and `client/dist`
+  back, prints `the install or build failed; the previous node_modules and
+  client/dist are back in place`, and stops before the backup and the
+  restart. The running version keeps serving with the dependencies it
+  started with. The checkout is already at the new commit, though, so a
+  restart before the next good deploy (a reboot, a crash) runs the new code
+  against the old dependencies: fix the cause and rerun, or roll back.
+- A failed restart or health poll prints the last 40 lines of the journal and
+  stops before nginx is touched, with `hemlock did not start; nginx is
+  unchanged` (the restart itself failed, as with `226/NAMESPACE`) or
+  `hemlock is not answering on 127.0.0.1:5000; nginx is unchanged`. systemd
+  keeps restarting the new version (`Restart=on-failure`); fix the cause and
+  rerun, or roll back.
+- A failed deploy deletes no backup ([Backups](#backups)).
 - When `nginx -t` rejects the configuration, the script puts back the previous
   site file, its link and Debian's default link, and exits; the running nginx
   keeps its old configuration. The usual cause is another site that also
@@ -158,7 +188,9 @@ recent commits, and each deploy prints the commit it builds):
 1. `sudo git -C /opt/hemlock reset --hard <commit>`
 2. When the failed version applied a migration, restore the backup that its
    deploy took before the restart ([Restore](#restore)); migrations have no
-   down step.
+   down step. Without the restore, the older server refuses to start on the
+   newer schema ([Migrations](migrations.md#what-migrate-does)), and the
+   deploy stops at its health poll.
 3. `sudo /opt/hemlock/deploy/deploy.sh`
 
 ## Secrets
@@ -200,13 +232,18 @@ restart, into `/var/lib/hemlock/backups/`:
   copy of `hemlock.db` is not a backup: in WAL mode the latest commits are in
   `hemlock.db-wal` until a checkpoint.
 - `covers-<stamp>/`: a hardlink snapshot of `covers/` (`cp -al`), which costs
-  no space for the images. It stays a true snapshot because
-  `server/src/covers.js` never writes into an existing cover file; it writes a
-  temporary file and renames it.
+  no space for the images. It stays a true snapshot because neither cover
+  writer writes into an existing file: `writeCover()` in
+  `server/src/coverFiles.js` creates an upload with the `wx` flag, and
+  `saveCoverFromUrl()` in `server/src/covers.js` writes a temporary file and
+  renames it.
 
-`<stamp>` is the UTC time as `YYYYMMDDTHHMMSSZ`, so the names sort by age. The
-deploy keeps the newest 10 pairs and deletes the rest; other names in the
-directory (`manual-*`, `pre-restore-*`, `old/`) are never deleted.
+`<stamp>` is the UTC time as `YYYYMMDDTHHMMSSZ`, so the names sort by age.
+Once the new version answers its health checks, the deploy keeps the newest
+10 pairs and deletes the rest. A deploy that fails deletes none, so each rerun
+of a failing deploy adds a backup and never pushes out the one taken before
+the failing version first started. Other names in the directory
+(`manual-*`, `pre-restore-*`, `old/`) are never deleted.
 
 A backup at any other time, on the box:
 
@@ -301,7 +338,7 @@ The owner's reverse proxy sits in front of nginx and needs:
   listens on 443, and nginx's redirects are relative (`absolute_redirect off`),
   so they keep the browser's `https`.
 - **The upstream.** Port 80 on the box. The site is nginx's default server, so
-  any `Host` header reaches it.
+  any `Host` header reaches it ([narrowing it](#answering-only-hemlocks-names-optional)).
 - **The body limit.** At least 12 MB a request. A cover upload is up to 10 MB
   plus the multipart framing, and a lower limit at the proxy answers 413
   before nginx sees the upload.
@@ -311,6 +348,86 @@ The owner's reverse proxy sits in front of nginx and needs:
   That page loads the client (`/`, `/assets/`) and then reads `/api/display`
   and `/covers/`; with authentication at the proxy, these paths reach the TV
   without it (by the TV's LAN address, for one).
+
+### Answering only Hemlock's names (optional)
+
+The shipped site answers any `Host`. A page on another domain that a
+household browser opens can point its own name at the box's LAN address (DNS
+rebinding) and then call `/api/` as Hemlock's own pages do, reading or
+deleting the library. Many home routers refuse such DNS answers, and Chromium
+asks before a public page reaches a private address; Firefox does neither.
+Naming the hosts nginx serves Hemlock for, and closing every other
+connection, stops it. This is defence in depth, not access control: the
+reverse proxy, and port 80 on the box being reachable from the LAN only,
+remain the boundary.
+
+`server_name` keeps:
+
+- the `Host` the proxy sends: most proxies pass the browser's own through,
+  so it is the public name (`hemlock.example.com`); a proxy that rewrites
+  it sends the box's address;
+- the LAN address the TV opens `/display` by (`192.168.1.20`, say);
+- `127.0.0.1` and `localhost`: `deploy.sh` polls `http://127.0.0.1/api/health`
+  through nginx, and without them every deploy stops with `nginx on port 80
+  does not reach hemlock`, after the new server has started.
+
+`deploy.sh` installs `deploy/nginx/hemlock.conf` from the checkout over
+`/etc/nginx/sites-available/hemlock` on every deploy, so an edit to the
+installed file lasts only until the next deploy. The names go into the
+checkout's copy, and the catch-all into a file of its own that no deploy
+touches. On the box:
+
+1. Edit the checkout's site (`sudoedit /opt/hemlock/deploy/nginx/hemlock.conf`)
+   so that its first three lines inside `server {` read, with the real names:
+
+   ```nginx
+       listen 80;
+       listen [::]:80;
+       server_name hemlock.example.com 192.168.1.20 127.0.0.1 localhost;
+   ```
+
+2. Write the catch-all (`sudoedit /etc/nginx/conf.d/hemlock-default.conf`);
+   `444` closes the connection without an answer:
+
+   ```nginx
+   server {
+       listen 80 default_server;
+       listen [::]:80 default_server;
+       server_name _;
+       return 444;
+   }
+   ```
+
+3. Install the site and reload nginx:
+
+   ```bash
+   sudo install -m 0644 /opt/hemlock/deploy/nginx/hemlock.conf /etc/nginx/sites-available/hemlock
+   sudo nginx -t && sudo systemctl reload nginx
+   ```
+
+4. Check it:
+
+   ```bash
+   curl -s http://127.0.0.1/api/health
+   curl -s -H 'Host: elsewhere.example' http://127.0.0.1/api/health; echo "curl exit $?"
+   ```
+
+   The first answers `{"ok":true,…}`; the second prints only `curl exit 52`
+   (an empty reply).
+
+The edit is a local change to a tracked file in the checkout:
+
+- `git pull --ff-only` keeps it unless the update also changes
+  `deploy/nginx/hemlock.conf`; the pull then stops with `Your local changes
+  to the following files would be overwritten by merge`. Run
+  `sudo git -C /opt/hemlock stash`, the pull, and
+  `sudo git -C /opt/hemlock stash pop`, then deploy.
+- `git reset --hard`, the first step of a rollback, discards it.
+- A lost edit does not reopen the box silently: the site then claims
+  `default_server` beside `hemlock-default.conf`, `nginx -t` fails on the
+  duplicate default server, and `deploy.sh` puts the previous site back and
+  stops ([When a deploy fails](#when-a-deploy-fails)). Make the edit again
+  and rerun `deploy.sh`.
 
 ## Retiring the old pm2 install
 

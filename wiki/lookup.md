@@ -171,7 +171,8 @@ that ISBN; to copy each field as the listing shows it: the authors as
 printed, in order, without roles, the date as `YYYY`, `YYYY-MM` or
 `YYYY-MM-DD`, the format from the binding, the publisher's description
 rather than its own summary, trimmed to about 1,500 characters, and the
-cover only as an image URL that appears on the listing; and to report
+cover only as an image URL of the listing's main cover image, at the
+largest size the listing offers; and to report
 `found: false` when no listing matches, never guessing from a similar
 title.
 
@@ -189,6 +190,12 @@ said (`verdict()`):
   must pass `allowedCoverUrl()` ([Security § Downloads](security.md#downloads)),
   which adds Amazon's and Goodreads' image hosts for these covers. Either
   becomes null otherwise.
+- An Amazon image URL (`m.media-amazon.com`, `images-na.ssl-images-amazon.com`
+  or any subdomain of `images-amazon.com`) loses its size modifier, the
+  `._<modifiers>_` part before the extension: `…/I/81abcXYZL._SY466_.jpg`
+  becomes `…/I/81abcXYZL.jpg`, for which the CDN serves the original image,
+  usually 1000 px or more on its long side (`largestCover()`). Other hosts'
+  URLs are kept as sent.
 
 **Cost.** Claude Opus 5.5 costs $4 per million input tokens and $20 per
 million output tokens, and each web search adds its own charge; a lookup
@@ -275,8 +282,14 @@ Normalisation:
 - An Open Library cover is `https://covers.openlibrary.org/b/id/<id>-L.jpg`,
   built from a cover id, never from the ISBN: covers by id are not rate
   limited, covers by ISBN are (100 per 5 minutes). Ids of zero or below are
-  ignored. A Google thumbnail is used only from `books.google.com`, on https,
-  with `edge=curl` (a painted page curl) removed.
+  ignored. `-L` is the largest size Open Library serves.
+- A Google thumbnail is used only from `books.google.com`, on https, with
+  `edge=curl` (a painted page curl) removed and `fife=w1600` added. The
+  thumbnail URL's `zoom=1` alone gives a 128 px wide image; with `fife`
+  Google answers the largest image it holds up to 1600 px wide (300 px for
+  many books) and, for a volume without a cover, the same placeholder PNG
+  as without it. The by-id `imageLinks` sizes are not used: they need the
+  key and carry tokenized URLs.
 
 ## Cover downloads
 
@@ -302,7 +315,12 @@ commit and points the row at the file in a second statement
   the `Content-Type`: an HTML error page behind a `.jpg` URL is refused.
 - Google answers a volume without a cover with a 1269-byte "image not
   available" PNG rather than a 404; that exact image (SHA-256
-  `e3f8c414…eca12`) is refused.
+  `e3f8c414…eca12`) is refused, before it is decoded.
+- The image is then stored as an upload is: `prepareCover()` decodes it and
+  keeps a JPEG of at most 1600 px on its long side
+  ([Library § Cover files](library.md#cover-files)), so a large Amazon
+  original arrives at 1600 px and a 300 px Google image unchanged. An image
+  that does not decode is a failed download.
 - The file is written to a temp name inside `DATA_DIR/covers/` and renamed
   into place ([Security § Cover file names](security.md#cover-file-names)).
 

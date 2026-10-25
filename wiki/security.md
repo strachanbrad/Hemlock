@@ -44,6 +44,17 @@ A client wrapper never assumes an error body is JSON: nginx answers 413 and
 - The type comes from the file's magic bytes (`imageType()` in
   `server/src/covers.js`: JPEG, PNG or WebP), never from the client's file
   name or MIME type. Anything else answers 400.
+- The file is decoded before anything is stored (`prepareCover()` in
+  `server/src/covers.js`, sharp on libvips), bounded to 50 megapixels
+  (`limitInputPixels`): a larger image, a decompression bomb included, is
+  refused from its header before its pixels are decoded. A file that does
+  not decode (truncated, corrupt) answers 400 "The cover could not be read
+  as an image"; a failure inside the decoder is the same 400, never a
+  crash.
+- The stored cover is re-encoded without metadata, so a phone photo's EXIF,
+  its location included, never reaches `DATA_DIR/covers/`. The one file kept
+  byte for byte is a JPEG within 1600 px that carries no EXIF, XMP or IPTC
+  ([Library § Cover files](library.md#cover-files)).
 - The upload is written inside the database transaction it belongs to
   (`withCoverFiles()` in `server/src/coverFiles.js`): if the transaction
   throws, the file is removed, so a refused write leaves neither a row nor a
@@ -52,9 +63,9 @@ A client wrapper never assumes an error body is JSON: nginx answers 413 and
 ## Cover file names
 
 - The server generates every cover file name; a name from a request never
-  reaches the file system. A cover is `e<edition id>-<8 hex>.<ext>` or, for
-  a book's own cover, `b<book id>-<8 hex>.<ext>`, with the extension from the
-  magic bytes. The random part gives a replaced cover a new URL.
+  reaches the file system. A cover is `e<edition id>-<8 hex>.jpg` or, for
+  a book's own cover, `b<book id>-<8 hex>.jpg`: every stored cover is a
+  JPEG. The random part gives a replaced cover a new URL.
 - `writeCover()` (`server/src/coverFiles.js`) writes an upload under that
   name with the `wx` flag, so it never replaces an existing file. A
   downloaded cover (`saveCoverFromUrl()`) goes to a temporary name inside
@@ -63,7 +74,8 @@ A client wrapper never assumes an error body is JSON: nginx answers 413 and
   fails with `EXDEV`.
 - `deleteCover()` refuses any name that does not match the server's own
   pattern (`COVER_NAME` in `server/src/covers.js`,
-  `^[eb][1-9]\d*-[0-9a-f]{8}\.(jpg|png|webp)$`) and ignores a file that is
+  `^[eb][1-9]\d*-[0-9a-f]{8}\.(jpg|png|webp)$`; `png` and `webp` for the
+  files stored before every cover became a JPEG) and ignores a file that is
   already gone.
 
 ## Downloads
@@ -92,8 +104,9 @@ a cover only:
 - within 10 seconds for the whole download, and up to 10 MB, checked against
   `Content-Length` and counted again while streaming (archive.org sends no
   `Content-Length`);
-- keeping it only when its magic bytes say JPEG, PNG or WebP, and never
-  Google's "image not available" placeholder.
+- keeping it only when its magic bytes say JPEG, PNG or WebP, it is not
+  Google's "image not available" placeholder, and it decodes within the
+  upload's limits (above), re-encoded the same way.
 
 A refused or failed download leaves no file and is logged in one line;
 the book or edition is saved without the cover.

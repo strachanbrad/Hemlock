@@ -146,7 +146,11 @@ surfaces as an error.
    and Vite (which empties `client/dist`) remove files and write new ones,
    never into an existing file. No dependency's install script runs as root:
    better-sqlite3 loads the prebuilt binary it ships, and its inferred
-   `node-gyp rebuild` would need a compiler the box does not have. While Vite
+   `node-gyp rebuild` would need a compiler the box does not have. sharp,
+   which resizes covers, has no install script: `npm ci` installs its
+   prebuilt build for the box's platform from the lockfile's optional
+   dependencies (`@img/sharp-linux-x64` and `@img/sharp-libvips-linux-x64`,
+   for x86_64 with glibc), so nothing is installed by hand. While Vite
    rewrites `client/dist`, nginx answers 404 for the client's pages.
 4. Backs up the database, the covers and `secrets.key` ([Backups](#backups)).
 5. Installs the unit, enables and restarts it, and polls

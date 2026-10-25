@@ -6,6 +6,7 @@
 import express from 'express'
 import { createSessions } from './auth.js'
 import { config, userAgent } from './config.js'
+import { createCoverFinder } from './coverFinder.js'
 import { coversDir, saveCoverFromUrl } from './covers.js'
 import { errorHandler } from './errors.js'
 import { createEvents } from './events.js'
@@ -24,7 +25,7 @@ import { createSettings } from './settings.js'
 const WRITES = new Set(['POST', 'PATCH', 'PUT', 'DELETE'])
 
 // Every consumer reads its key, contact and model from `settings` at request time.
-export function createApp({ db, settings = createSettings(db), lookup, identify, probes, saveCover, events = createEvents(), secure = config.production, now = Date.now }) {
+export function createApp({ db, settings = createSettings(db), lookup, identify, probes, saveCover, findCover, events = createEvents(), secure = config.production, now = Date.now }) {
   const setting = (name) => () => settings.get(name)
   const agent = () => userAgent(config.version, settings.get('lookup_contact'))
   lookup ??= createLookup({ googleKey: setting('google_books_api_key'), contact: setting('lookup_contact'), anthropicKey: setting('anthropic_api_key') })
@@ -34,6 +35,7 @@ export function createApp({ db, settings = createSettings(db), lookup, identify,
     anthropic: (key) => createAnthropic({ apiKey: key, model: settings.get('anthropic_model') ?? DEFAULT_MODEL }).probe(),
   }
   saveCover ??= (url, base) => saveCoverFromUrl(url, base, { userAgent: agent() })
+  findCover ??= createCoverFinder({ db, apiKey: setting('anthropic_api_key'), model: setting('anthropic_model'), saveCover })
 
   const app = express()
   app.disable('x-powered-by')
@@ -58,7 +60,7 @@ export function createApp({ db, settings = createSettings(db), lookup, identify,
     lookupRoutes(lookup, identify),
     authorRoutes(db),
     displayRoutes(db),
-    bookRoutes(db, saveCover),
+    bookRoutes(db, saveCover, findCover),
     editionRoutes(db, saveCover),
   )
   app.use('/covers', express.static(coversDir, { index: false }))

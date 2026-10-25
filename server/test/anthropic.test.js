@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { describe, it } from 'node:test'
-import { MAX_REQUESTS, NUDGE, createAnthropic, question, verdict } from '../src/lookup/anthropic.js'
+import { COVER_TOOLS, MAX_REQUESTS, NUDGE, coverQuestion, coverVerdict, createAnthropic, question, verdict } from '../src/lookup/anthropic.js'
 
 const ISBN = '9781969253096'
 const KEY = 'sk-ant-test-SECRET-0123456789abcdef'
@@ -176,6 +176,54 @@ describe('createAnthropic identify', () => {
       seen.push(await claude.identify(ISBN), logs)
     }
     assert.ok(!JSON.stringify(seen).includes(KEY))
+  })
+})
+
+describe('createAnthropic findCover', () => {
+  const SUBJECT = { isbn: ISBN }
+
+  it('sends the cover search with its own tool and takes the report_cover call, without the size modifier', async () => {
+    const { claude, requests } = replay('report-cover')
+    assert.deepEqual(await claude.findCover(SUBJECT), { status: 'ok', cover_url: 'https://m.media-amazon.com/images/I/71PoisonGardenL.jpg', source_url: 'https://www.amazon.com/dp/1969253096' })
+    const [{ body }] = requests
+    assert.deepEqual(body.tools, COVER_TOOLS)
+    assert.equal(body.tools[1].strict, undefined)
+    assert.deepEqual(body.messages, [{ role: 'user', content: coverQuestion(SUBJECT) }])
+    assert.deepEqual([body.max_tokens, body.output_config, body.tool_choice], [8000, { effort: 'medium' }, { type: 'auto' }])
+  })
+
+  it('nudges with report_cover, and fails with its own words on a refusal or a second turn without the call', async () => {
+    const nudged = replay('end-turn', 'report-cover')
+    assert.equal((await nudged.claude.findCover(SUBJECT)).status, 'ok')
+    assert.deepEqual(nudged.requests[1].body.messages.at(-1), { role: 'user', content: 'Call report_cover now with what you found, or with found false.' })
+    const refused = replay('refusal')
+    assert.deepEqual(await refused.claude.findCover(SUBJECT), { status: 'failed', message: 'Claude declined to look for the cover' })
+    const silent = replay('end-turn', 'end-turn')
+    assert.deepEqual(await silent.claude.findCover(SUBJECT), { status: 'failed', message: 'Claude stopped (end_turn) without reporting a cover' })
+    assert.deepEqual(silent.logs, [`Claude cover search for ISBN ${ISBN} failed: Claude stopped (end_turn) without reporting a cover`])
+  })
+
+  it('asks a book without an ISBN by its title and author and takes any listing Claude accepts', async () => {
+    const subject = { title: 'Ledger of the Dead', author: 'Iris Vane' }
+    assert.equal(coverQuestion(subject), 'Find the largest cover image of “Ledger of the Dead” by Iris Vane, which has no ISBN in the catalogue, and report it with report_cover.')
+    assert.equal(coverVerdict(subject, { found: true, cover_url: 'https://i.gr-assets.com/images/S/1.jpg', source_url: null, isbn_on_listing: null }).status, 'ok')
+  })
+})
+
+describe('coverVerdict', () => {
+  const report = (input) => coverVerdict({ isbn: ISBN }, { found: true, cover_url: 'https://m.media-amazon.com/images/I/1.jpg', source_url: 'https://www.amazon.com/dp/1', isbn_on_listing: ISBN, ...input })
+
+  it('accepts the ISBN-13 or its ISBN-10 and nothing else', () => {
+    assert.equal(report({ isbn_on_listing: 'ISBN-10: 1-969253-09-6' }).status, 'ok')
+    for (const isbn_on_listing of ['9781969253102', null, '']) assert.deepEqual(report({ isbn_on_listing }), { status: 'not_found' }, String(isbn_on_listing))
+  })
+
+  it('counts a cover off the allow-list as not found and drops a source that is not https', () => {
+    for (const cover_url of ['https://www.amazon.com/images/cover.jpg', 'http://m.media-amazon.com/images/I/1.jpg', null, 7, `https://m.media-amazon.com/${'x'.repeat(2100)}.jpg`]) {
+      assert.deepEqual(report({ cover_url }), { status: 'not_found' }, String(cover_url).slice(0, 60))
+    }
+    assert.equal(report({ source_url: 'http://www.amazon.com/dp/1' }).source_url, null)
+    assert.deepEqual(report({ found: 'true' }), { status: 'not_found' })
   })
 })
 

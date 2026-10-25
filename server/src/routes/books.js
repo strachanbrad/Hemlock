@@ -11,7 +11,7 @@ import { PHYSICAL, bookPayload, listFilters, pathId } from '../validate.js'
 
 const BOOK_VALUES = ['title', 'synopsis', 'star_rating', 'spice_rating', 'gore_rating', 'read', 'wishlist']
 
-export default function bookRoutes(db, saveCover) {
+export default function bookRoutes(db, saveCover, findCover) {
   const router = Router()
   const library = createLibrary(db)
 
@@ -70,6 +70,11 @@ export default function bookRoutes(db, saveCover) {
     })
     if (input.cover_from_url) await attachDownloadedCovers(db, [coverDownload(db, 'books', id, input.cover_from_url)], saveCover)
     res.json(library.getBook(id))
+  })
+
+  router.post('/books/:id/cover/find', async (req, res) => {
+    const { status, body } = await findCover(pathId(req.params.id, 'Book'))
+    res.status(status).json(body)
   })
 
   router.delete('/books/:id', (req, res) => {

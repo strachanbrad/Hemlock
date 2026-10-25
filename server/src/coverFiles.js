@@ -27,7 +27,7 @@ export function writeCover(cover, base) {
   return filename
 }
 
-function removeCover(filename) {
+export function removeCover(filename) {
   try {
     deleteCover(filename)
   } catch (err) {

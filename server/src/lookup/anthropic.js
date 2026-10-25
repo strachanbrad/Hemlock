@@ -13,7 +13,8 @@ export const DEFAULT_MODEL = 'claude-opus-5-5'
 export const MAX_REQUESTS = 3
 const MAX_TOKENS = 8000
 const MAX_URL = 2048
-export const NUDGE = 'Call report_book now with what you found, or with found false.'
+const nudge = (tool) => `Call ${tool} now with what you found, or with found false.`
+export const NUDGE = nudge('report_book')
 
 const SYSTEM = `You identify one book edition from its ISBN for a household's library catalogue. The book catalogues do not know this ISBN, so you search the web for it.
 
@@ -59,11 +60,50 @@ const REPORT_BOOK = {
   },
 }
 
-export const TOOLS = [{ type: 'web_search_20260209', name: 'web_search', max_uses: 5 }, REPORT_BOOK]
+const WEB_SEARCH = { type: 'web_search_20260209', name: 'web_search', max_uses: 5 }
+export const TOOLS = [WEB_SEARCH, REPORT_BOOK]
+
+const isbnText = (isbn) => {
+  const isbn10 = isbn13To10(isbn)
+  return `ISBN-13 ${isbn}${isbn10 ? ` (ISBN-10 ${isbn10})` : ''}`
+}
 
 export function question(isbn) {
-  const isbn10 = isbn13To10(isbn)
-  return `Identify the book with ISBN-13 ${isbn}${isbn10 ? ` (ISBN-10 ${isbn10})` : ''} and report it with report_book.`
+  return `Identify the book with ${isbnText(isbn)} and report it with report_book.`
+}
+
+const COVER_SYSTEM = `You find the cover image of one book edition for a household's library catalogue, at the largest size the web offers.
+
+1. Search for the edition: its ISBN-13 and, when it has one, its ISBN-10, each as a quoted string; when no ISBN is given, its exact title and author.
+2. Look for a listing of this exact edition on Amazon, Goodreads, the publisher's page, Bookshop.org or Barnes & Noble.
+3. When an ISBN is given, accept a listing only when it shows that ISBN-13 or its ISBN-10, and report that ISBN, as the listing prints it, in isbn_on_listing. When no ISBN is given, accept a listing only when it shows the exact title and author, and report isbn_on_listing null.
+4. Report in cover_url the direct URL of the largest cover image the listing offers: the page's og:image or its main product image. Give an Amazon image without its size modifier (https://m.media-amazon.com/images/I/81abcXYZL.jpg, not https://m.media-amazon.com/images/I/81abcXYZL._SY466_.jpg). Report the listing's address in source_url.
+5. When no listing of this exact edition shows a cover, report found false with every other field null. Never report the cover of another edition, format or printing, however similar.
+
+Finish by calling report_cover exactly once. Never write the answer as text.`
+
+const REPORT_COVER = {
+  name: 'report_cover',
+  description: 'Report the largest cover image of this edition. Call it exactly once, as the last step: with the image URL from a listing of this exact edition, or with found false and every other field null when no listing shows one.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      found: { type: 'boolean', description: 'True only when a listing of this exact edition shows its cover.' },
+      cover_url: nullable({ type: 'string' }, 'The direct URL of the largest cover image the listing offers.'),
+      source_url: nullable({ type: 'string' }, 'The address of the listing.'),
+      isbn_on_listing: nullable({ type: 'string' }, 'The ISBN exactly as the listing prints it; null when no ISBN was given.'),
+    },
+    required: ['found', 'cover_url', 'source_url', 'isbn_on_listing'],
+    additionalProperties: false,
+  },
+}
+
+export const COVER_TOOLS = [WEB_SEARCH, REPORT_COVER]
+
+// `subject` is { isbn } (an ISBN-13) or { title, author } for a book without one.
+export function coverQuestion(subject) {
+  const edition = subject.isbn ? `the book with ${isbnText(subject.isbn)}` : `“${subject.title}” by ${subject.author}, which has no ISBN in the catalogue,`
+  return `Find the largest cover image of ${edition} and report it with report_cover.`
 }
 
 const bound = (text, max) => (text && text.length > max ? [...text].slice(0, max).join('').trimEnd() : text)
@@ -77,6 +117,13 @@ function httpsUrl(value) {
 
 const NOT_FOUND = Object.freeze({ status: 'not_found' })
 
+function showsIsbn(isbn, input, log, label) {
+  const shown = normalizeIsbn(typeof input.isbn_on_listing === 'string' ? input.isbn_on_listing : '')
+  if (shown === isbn || shown === isbn13To10(isbn)) return true
+  log(`${label}: the listing shows ISBN ${JSON.stringify(shown.slice(0, 20))}; not accepted`)
+  return false
+}
+
 const AMAZON_IMAGES = (host) => host === 'm.media-amazon.com' || host === 'images-na.ssl-images-amazon.com' || host.endsWith('.images-amazon.com')
 
 // An Amazon image URL names its size in the file name (81abcXYZL._SY466_.jpg); without it the CDN
@@ -89,12 +136,7 @@ export function largestCover(url) {
 // The model's answer is untrusted: only a listing that shows this ISBN counts, and every field is
 // bounded and checked here whatever the schema promised.
 export function verdict(isbn, input, log = () => {}) {
-  if (input?.found !== true) return NOT_FOUND
-  const shown = normalizeIsbn(typeof input.isbn_on_listing === 'string' ? input.isbn_on_listing : '')
-  if (shown !== isbn && shown !== isbn13To10(isbn)) {
-    log(`Claude lookup of ${isbn}: the listing shows ISBN ${JSON.stringify(shown.slice(0, 20))}; not accepted`)
-    return NOT_FOUND
-  }
+  if (input?.found !== true || !showsIsbn(isbn, input, log, `Claude lookup of ${isbn}`)) return NOT_FOUND
   const synopsis = typeof input.synopsis === 'string' ? bound(normalizeText(input.synopsis), 4000) || null : null
   const published = typeof input.published === 'string' && isPublished(input.published.trim()) ? input.published.trim() : null
   const cover = typeof input.cover_url === 'string' && input.cover_url.length <= MAX_URL ? allowedCoverUrl(input.cover_url) : null
@@ -114,8 +156,26 @@ export function verdict(isbn, input, log = () => {}) {
   }
 }
 
-// Resolves identify(isbn13) to { status: 'ok', record } | { status: 'not_found' } |
-// { status: 'failed', message }, and probe() to { ok, detail | error }; neither rejects for an upstream problem.
+const coverLabel = (subject) => `Claude cover search for ${subject.isbn ? `ISBN ${subject.isbn}` : JSON.stringify(bound(subject.title, 80))}`
+
+// As verdict(): a cover off the allow-list counts as not found, since it could never be downloaded.
+export function coverVerdict(subject, input, log = () => {}) {
+  if (input?.found !== true) return NOT_FOUND
+  if (subject.isbn && !showsIsbn(subject.isbn, input, log, coverLabel(subject))) return NOT_FOUND
+  const cover = typeof input.cover_url === 'string' && input.cover_url.length <= MAX_URL ? allowedCoverUrl(input.cover_url) : null
+  if (!cover) {
+    log(`${coverLabel(subject)}: the cover is not on an allowed image host; not accepted`)
+    return NOT_FOUND
+  }
+  return { status: 'ok', cover_url: largestCover(cover).href, source_url: httpsUrl(input.source_url) }
+}
+
+const IDENTIFY = { system: SYSTEM, tools: TOOLS, tool: 'report_book', declined: 'Claude declined to look the book up', reported: 'a book' }
+const FIND_COVER = { system: COVER_SYSTEM, tools: COVER_TOOLS, tool: 'report_cover', declined: 'Claude declined to look for the cover', reported: 'a cover' }
+
+// Resolves identify(isbn13) to { status: 'ok', record } | { status: 'not_found' } | { status: 'failed', message },
+// findCover(subject) to { status: 'ok', cover_url, source_url } or the same two, and probe() to { ok, detail | error };
+// none rejects for an upstream problem.
 export function createAnthropic({ apiKey, model = DEFAULT_MODEL, fetch = globalThis.fetch, timeoutMs = 90000, log = console.warn }) {
   const client = new Anthropic({ apiKey, fetch, timeout: timeoutMs, maxRetries: 0, logLevel: 'off' })
   const redact = (text) => (apiKey ? String(text).split(apiKey).join('[redacted]') : String(text))
@@ -123,13 +183,13 @@ export function createAnthropic({ apiKey, model = DEFAULT_MODEL, fetch = globalT
     if (err instanceof Anthropic.APIError && err.status) return redact(`Anthropic answered HTTP ${err.status}: ${err.error?.error?.message ?? err.message}`)
     return redact(`Anthropic did not answer: ${err.message}`)
   }
-  const failed = (isbn, message) => {
-    log(`Claude lookup of ${isbn} failed: ${message}`)
-    return { status: 'failed', message }
-  }
-
-  async function identify(isbn) {
-    const messages = [{ role: 'user', content: question(isbn) }]
+  // Searches until Claude calls the task's report tool: resolves to { input } or to a failure, logged with `label`.
+  async function converse(task, prompt, label) {
+    const failed = (message) => {
+      log(`${label} failed: ${message}`)
+      return { status: 'failed', message }
+    }
+    const messages = [{ role: 'user', content: prompt }]
     let nudged = false
     for (let sent = 0; sent < MAX_REQUESTS; sent++) {
       let response
@@ -137,34 +197,44 @@ export function createAnthropic({ apiKey, model = DEFAULT_MODEL, fetch = globalT
         response = await client.messages.create({
           model,
           max_tokens: MAX_TOKENS,
-          system: SYSTEM,
-          tools: TOOLS,
+          system: task.system,
+          tools: task.tools,
           tool_choice: { type: 'auto' },
           output_config: { effort: 'medium' },
           messages,
         })
       } catch (err) {
-        return failed(isbn, describe(err))
+        return failed(describe(err))
       }
       const { stop_reason: stop, content } = response
-      // A turn cut off by max_tokens or a refusal can hold a partial report_book input.
-      if (stop === 'max_tokens') return failed(isbn, 'Claude ran out of room before it answered')
-      if (stop === 'refusal') return failed(isbn, 'Claude declined to look the book up')
-      const call = content.find((block) => block.type === 'tool_use' && block.name === 'report_book')
-      if (call) return verdict(isbn, call.input, log)
+      // A turn cut off by max_tokens or a refusal can hold a partial report input.
+      if (stop === 'max_tokens') return failed('Claude ran out of room before it answered')
+      if (stop === 'refusal') return failed(task.declined)
+      const call = content.find((block) => block.type === 'tool_use' && block.name === task.tool)
+      if (call) return { input: call.input }
       // A paused server-side search resumes from the assistant turn alone; added user text would break it.
       if (stop === 'pause_turn') {
         messages.push({ role: 'assistant', content })
         continue
       }
       if (stop === 'end_turn' && !nudged) {
-        messages.push({ role: 'assistant', content }, { role: 'user', content: NUDGE })
+        messages.push({ role: 'assistant', content }, { role: 'user', content: nudge(task.tool) })
         nudged = true
         continue
       }
-      return failed(isbn, `Claude stopped (${stop}) without reporting a book`)
+      return failed(`Claude stopped (${stop}) without reporting ${task.reported}`)
     }
-    return failed(isbn, `Claude did not answer within ${MAX_REQUESTS} requests`)
+    return failed(`Claude did not answer within ${MAX_REQUESTS} requests`)
+  }
+
+  async function identify(isbn) {
+    const answer = await converse(IDENTIFY, question(isbn), `Claude lookup of ${isbn}`)
+    return answer.status === 'failed' ? answer : verdict(isbn, answer.input, log)
+  }
+
+  async function findCover(subject) {
+    const answer = await converse(FIND_COVER, coverQuestion(subject), coverLabel(subject))
+    return answer.status === 'failed' ? answer : coverVerdict(subject, answer.input, log)
   }
 
   async function probe() {
@@ -182,5 +252,5 @@ export function createAnthropic({ apiKey, model = DEFAULT_MODEL, fetch = globalT
     }
   }
 
-  return { identify, probe }
+  return { identify, findCover, probe }
 }

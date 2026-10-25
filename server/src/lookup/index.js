@@ -19,7 +19,7 @@ const realSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 // A key, contact or model is a value or a getter; a getter is read at each lookup, so a setting
 // saved on the admin page applies without a restart.
-const reader = (value) => (typeof value === 'function' ? () => value() ?? null : () => value ?? null)
+export const reader = (value) => (typeof value === 'function' ? () => value() ?? null : () => value ?? null)
 
 function createCache(now) {
   const entries = new Map()
@@ -38,7 +38,7 @@ function createCache(now) {
 }
 
 // Concurrent calls with one key share one request.
-function shared(run) {
+export function shared(run) {
   const pending = new Map()
   return (key) => {
     if (!pending.has(key)) pending.set(key, run(key).finally(() => pending.delete(key)))

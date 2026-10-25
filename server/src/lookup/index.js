@@ -25,7 +25,8 @@ export function createLookup({ fetch = globalThis.fetch, googleKey = null, conta
   const cache = new Map()
   const pending = new Map()
 
-  // Only an 'ok' answer is kept: a book missing today may be catalogued tomorrow, and a failure is retried.
+  // Only a complete 'ok' answer is kept: a book missing today may be catalogued tomorrow, and a
+  // failure or a partial answer (a follow-up request failed) is asked again.
   const cached = (source, ask) => async (isbn) => {
     const key = `${source}:${isbn}`
     const hit = cache.get(key)
@@ -35,7 +36,7 @@ export function createLookup({ fetch = globalThis.fetch, googleKey = null, conta
       log(`${source} lookup of ${isbn} failed: ${err.message}`)
       return { status: 'failed' }
     })
-    if (result.status === 'ok') {
+    if (result.status === 'ok' && !result.partial) {
       cache.set(key, { at: now(), result })
       if (cache.size > CACHE_ENTRIES) cache.delete(cache.keys().next().value)
     }

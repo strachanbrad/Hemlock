@@ -65,14 +65,14 @@ export function createOpenLibrary({ fetch, userAgent, interval, now, sleep, time
     if (edition.status === 'failed') return { status: 'failed' }
 
     // The work adds only its description: its title and cover are already in the search answer.
-    let work = { body: null }
-    if (!normalizeDescription(edition.body?.description)) {
-      work = await record(match.doc.key, WORK_KEY, WORK_FIELDS)
-      if (work.status === 'failed') return { status: 'failed' }
-    }
+    // A failed work request costs only that, so the answer stands, marked partial.
+    let work = { status: 'ok', body: null }
+    if (!normalizeDescription(edition.body?.description)) work = await record(match.doc.key, WORK_KEY, WORK_FIELDS)
+    const partial = work.status === 'failed'
 
     return {
       status: 'ok',
+      partial,
       doc: pick(match.doc, DOC_FIELDS),
       searchEdition: match.edition ? pick(match.edition, SEARCH_EDITION_FIELDS) : null,
       edition: edition.body,

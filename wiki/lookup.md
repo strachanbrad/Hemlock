@@ -33,7 +33,9 @@ GET /api/lookup/:isbn
   `failed` or `disabled`. `sources.fields` names the source of every field
   the answer has: `google`, `open_library`, or `open_library_work` when the
   value comes from the work record rather than this edition (the same book,
-  possibly another edition's cover or text).
+  possibly another edition's cover or text). `sources.fields.synopsis` is
+  `failed` when the synopsis is null because Open Library's work request
+  failed and no other source had one; the rest of the answer stands.
 - The status is 200 when any source is `ok`, even if the other failed; 502
   when none is `ok` and at least one `failed`; 404 otherwise.
 - A field no source has is `null`; `authors` is then `[]`.
@@ -57,7 +59,9 @@ Asked on every lookup, in at most three requests and never a redirect:
 2. `/books/<edition key>.json` gives `physical_format`, `description`,
    `publishers`, `publish_date` and `covers`.
 3. `/works/<work key>.json` gives the work's `description`. It is skipped
-   when the edition already has one.
+   when the edition already has one. When it fails, the source is still
+   `ok` with what the search and the edition gave, and the answer is
+   partial. A failed search or edition request fails the source.
 
 A key from an answer becomes a request only when it has the shape
 `/books/OL…M` or `/works/OL…W`. A merged record (`/type/redirect`) counts as
@@ -94,8 +98,9 @@ line ever contains a Google request URL.
   sending anything.
 - **Cache.** A source's `ok` answer is kept in memory for 24 hours (at most
   500 entries), so scanning, saving and reopening a book costs one lookup. A
-  miss or a failure is not kept. Concurrent lookups of one ISBN share their
-  requests. A server restart empties the cache.
+  miss, a failure, or a partial Open Library answer (its work request
+  failed) is not kept, so the next lookup asks again. Concurrent lookups of
+  one ISBN share their requests. A server restart empties the cache.
 - **Credit.** A page that shows lookup data carries the line "Book data from
   Open Library", extended with "and Google Books" when `sources.google` is
   not `disabled`.

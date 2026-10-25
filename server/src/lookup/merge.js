@@ -174,6 +174,7 @@ export function merge(isbn, google, openLibrary) {
       [coverUrl(coverId(doc.cover_i) ?? firstCover(work?.covers)), OPEN_LIBRARY_WORK],
     ]),
   }
+  if (record.synopsis === null && openLibrary.partial) fields.synopsis = 'failed'
   return { ...record, sources: { google: google.status, open_library: openLibrary.status, fields } }
 }
 

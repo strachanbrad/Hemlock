@@ -164,6 +164,19 @@ describe('lookup failures', () => {
     assert.deepEqual(paths(calls), ['/search.json', '/books/OL7820421M.json', '/books/OL7820421M.json'])
   })
 
+  it('answers without the synopsis, marked failed, when only the work request fails', async () => {
+    const { lookup, calls } = setup({ answer: (url) => (url.includes('/works/') ? json({}, 500) : undefined) })
+    const { status, body } = await lookup(ROSALIND)
+    assert.equal(status, 200)
+    assert.deepEqual(paths(calls), ['/search.json', '/books/OL52466785M.json', '/works/OL38557616W.json', '/works/OL38557616W.json'])
+    assert.equal(body.title, 'Breaking Rosalind')
+    assert.deepEqual(body.authors, ['Gigi Styx'])
+    assert.equal(body.cover_url, 'https://covers.openlibrary.org/b/id/15139497-L.jpg')
+    assert.equal(body.synopsis, null)
+    assert.equal(body.sources.open_library, 'ok')
+    assert.equal(body.sources.fields.synopsis, 'failed')
+  })
+
   it('does not retry a 4xx', async () => {
     const { lookup, calls } = setup({ answer: (url) => (isSearch(url) ? json({}, 400) : undefined) })
     assert.equal((await lookup(WUTHERING)).status, 502)
@@ -258,6 +271,15 @@ describe('lookup with Google Books', () => {
     assert.ok(!logs.join('').includes(KEY))
   })
 
+  it('takes the synopsis from Google when the Open Library work request fails', async () => {
+    const search = readFixture(`openlibrary/search-${WUTHERING}.json`)
+    search.docs[0].editions.docs[0].isbn = ['9780141439556']
+    const { lookup } = setup({ googleKey: KEY, answer: (url) => (isSearch(url) ? json(search) : url.includes('/works/') ? json({}, 500) : undefined) })
+    const { body } = await lookup(WUTHERING)
+    assert.equal(body.sources.fields.synopsis, 'google')
+    assert.match(body.synopsis, /^Emily Brontë's only novel/)
+  })
+
   it('answers 502 when Google fails and Open Library knows nothing', async () => {
     const { lookup } = setup({
       googleKey: KEY,
@@ -294,6 +316,17 @@ describe('lookup cache', () => {
     assert.equal((await lookup(WUTHERING)).status, 404)
     mode = 'found'
     assert.equal((await lookup(WUTHERING)).status, 200)
+  })
+
+  it('does not keep an answer whose work request failed', async () => {
+    let failWork = true
+    const { lookup, calls } = setup({ answer: (url) => (failWork && url.includes('/works/') ? json({}, 500) : undefined) })
+    assert.equal((await lookup(ROSALIND)).body.synopsis, null)
+    failWork = false
+    const { body } = await lookup(ROSALIND)
+    assert.equal(calls.filter(({ url }) => isSearch(url)).length, 2)
+    assert.match(body.synopsis, /^\*\*I wove a deadly web/)
+    assert.equal(body.sources.fields.synopsis, 'open_library_work')
   })
 
   it('shares the requests of concurrent lookups of one ISBN', async () => {

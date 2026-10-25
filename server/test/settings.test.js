@@ -14,7 +14,7 @@ import { createSettings, decrypt, encrypt, secretKeyLoader } from '../src/settin
 import { tempDir } from './support/temp.js'
 
 const KEY = crypto.randomBytes(32)
-const GOOGLE = 'AIzaSyTest-SECRET-0123456789abcdefghijk'
+const GOOGLE = 'google-test-key-0123456789hijk'
 const dirs = []
 after(() => dirs.forEach((dir) => fs.rmSync(dir, { recursive: true, force: true })))
 

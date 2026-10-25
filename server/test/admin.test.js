@@ -17,7 +17,7 @@ const { hashPassword, verifyPassword } = await import('../src/auth.js')
 const { probeGoogle } = await import('../src/lookup/google.js')
 
 const PASSWORD = 'correct horse battery'
-const GOOGLE = 'AIzaSyTest-GOOGLE-SECRET-0123456789abcd'
+const GOOGLE = 'google-test-key-0123456789abcd'
 const CLAUDE = 'sk-ant-test-CLAUDE-SECRET-0123456789abcd'
 const KEY = crypto.randomBytes(32)
 const clock = { time: Date.parse('2026-10-25T12:00:00Z') }

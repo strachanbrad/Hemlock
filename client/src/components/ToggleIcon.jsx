@@ -4,10 +4,10 @@
  */
 
 // Controlled: value is a boolean and onChange receives the opposite one. Without onChange it is read-only.
-const ToggleIcon = ({ value = false, onChange, trueIcon: TrueIcon, falseIcon: FalseIcon, trueLabel, falseLabel, size = 'medium' }) => {
+const ToggleIcon = ({ value = false, onChange, trueIcon: TrueIcon, falseIcon: FalseIcon, trueLabel, falseLabel, size = 'medium', className: extra }) => {
   const Icon = value ? TrueIcon : FalseIcon
   const label = value ? trueLabel : falseLabel
-  const className = `toggle-icon toggle-icon-${size} ${value ? 'toggle-on' : 'toggle-off'}`
+  const className = `toggle-icon toggle-icon-${size} ${value ? 'toggle-on' : 'toggle-off'}${extra ? ` ${extra}` : ''}`
   if (!onChange) {
     return <span className={className} role="img" aria-label={label}><Icon aria-hidden="true" /></span>
   }

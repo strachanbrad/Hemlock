@@ -5,8 +5,8 @@
 
 export const FILTER_LABELS = {
   format: { physical: 'Physical', hardcover: 'Hardcover', paperback: 'Paperback', ebook: 'Ebook' },
-  owned: { 1: 'Owned', 0: 'Not owned' },
-  wishlist: { 1: 'Wishlist' },
+  owned: { 1: 'Owned', 0: 'Wishlist only' },
+  wishlist: { 1: 'On the wishlist' },
   read: { 1: 'Read', 0: 'Unread' },
 }
 
@@ -63,7 +63,7 @@ export function apiQuery(filters) {
 
 export const activeFilterCount = (filters) => API_KEYS.filter((key) => filters[key] !== null).length
 
-export const isBuyList = (filters) => filters.wishlist === '1'
+export const isWishlist = (filters) => filters.wishlist === '1'
 
 const byText = (a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })
 export const byTitle = (a, b) => byText(a.title, b.title) || a.id - b.id

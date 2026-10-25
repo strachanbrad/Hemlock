@@ -1,15 +1,31 @@
 {
-  "logo": "/logo.svg",
+  "logo": "/logo-cream.svg",
   "website": {
-    "title": "Hemlock",
+    "title": "The Hemlock",
     "theme": {
+      "ink": "#15121a",
+      "inkDeep": "#0f0d12",
+      "surface": "#1d1922",
+      "raised": "#262030",
+      "cream": "#efe6da",
+      "muted": "#b8a9a0",
+      "faint": "#9a8b90",
+      "ash": "#7f7079",
+      "border": "#74656f",
       "primary": "#89023e",
-      "bgBase": "#ffffff",
-      "textBase": "#2b1d22",
+      "primaryHover": "#a3164f",
+      "primaryActive": "#6e0231",
+      "brass": "#c9a86a",
+      "brassLight": "#dcc08a",
+      "sage": "#7f9b7a",
+      "moss": "#4f6b4a",
+      "rust": "#b5582c",
+      "rose": "#c98b8b",
+      "violet": "#8f6f9f",
+      "danger": "#de6f66",
+      "warning": "#d9a441",
       "sizeStep": 6,
-      "borderRadius": 4,
-      "secondary": "#fbe3e8",
-      "tertiary": "#ffd9da"
+      "borderRadius": 4
     }
   }
 }

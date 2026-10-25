@@ -9,10 +9,10 @@ import { PictureOutlined } from '@ant-design/icons'
 export const COVER_TYPES = 'image/jpeg,image/png,image/webp'
 
 // Holds the chosen file for a form (controlled by Form: value is a File or null); nothing uploads until the form saves.
-export const CoverPicker = ({ value, onChange, label = 'Choose a cover' }) => (
+export const CoverPicker = ({ value, onChange, label = 'Choose a cover', listType = 'picture' }) => (
   <Upload
     accept={COVER_TYPES}
-    listType="picture"
+    listType={listType}
     maxCount={1}
     fileList={value ? [{ uid: 'cover', name: value.name, status: 'done', originFileObj: value }] : []}
     beforeUpload={(file) => {
@@ -26,7 +26,7 @@ export const CoverPicker = ({ value, onChange, label = 'Choose a cover' }) => (
 )
 
 // Picks a file and hands it straight to onFile, which saves it.
-export const ChangeCoverButton = ({ onFile, busy, label = 'Change cover', size = 'small' }) => (
+export const ChangeCoverButton = ({ onFile, busy, label = 'Change cover', size = 'small', type }) => (
   <Upload
     accept={COVER_TYPES}
     showUploadList={false}
@@ -35,6 +35,6 @@ export const ChangeCoverButton = ({ onFile, busy, label = 'Change cover', size =
       return Upload.LIST_IGNORE
     }}
   >
-    <Button size={size} loading={busy}>{label}</Button>
+    <Button size={size} type={type} loading={busy}>{label}</Button>
   </Upload>
 )

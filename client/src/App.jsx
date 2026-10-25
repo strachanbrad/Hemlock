@@ -5,12 +5,14 @@
 
 import { lazy, Suspense } from 'react'
 import { Layout, Menu } from 'antd'
-import { BookOutlined, DesktopOutlined, PlusOutlined, ShoppingOutlined, UserOutlined } from '@ant-design/icons'
+import { BookOutlined, DesktopOutlined, PlusOutlined, UserOutlined } from '@ant-design/icons'
 import { Link, Navigate, Outlet, Route, Routes, useLocation } from 'react-router'
 import AddBook from './pages/AddBook/AddBook.jsx'
 import Authors from './pages/Authors/Authors.jsx'
 import Library from './pages/Library/Library.jsx'
 import config from './config/config.json'
+import { BookmarkOutline } from './images/index.js'
+import { Ribcage, Umbel } from './images/ornaments/index.js'
 import { useIsPhone } from './lib/viewport.js'
 import './styles/shell.css'
 
@@ -20,20 +22,36 @@ const Display = lazy(() => import('./pages/Display/Display.jsx'))
 
 const NAV = [
   { key: 'library', to: '/library', label: 'Library', icon: <BookOutlined /> },
-  { key: 'buy', to: '/library?wishlist=1', label: 'Buy list', icon: <ShoppingOutlined /> },
+  { key: 'wishlist', to: '/library?wishlist=1', label: 'Wishlist', icon: <span className="anticon"><BookmarkOutline aria-hidden="true" /></span> },
   { key: 'add', to: '/add', label: 'Add book', short: 'Add', icon: <PlusOutlined /> },
   { key: 'authors', to: '/authors', label: 'Authors', icon: <UserOutlined /> },
 ]
 
+const navLabel = (label) => (
+  <>
+    <span>{label}</span>
+    <Umbel className="nav-umbel" aria-hidden="true" />
+  </>
+)
+
 const MENU_ITEMS = [
-  ...NAV.map(({ key, to, label, icon }) => ({ key, icon, label: <Link to={to}>{label}</Link> })),
+  ...NAV.map(({ key, to, label, icon }) => ({ key, icon, label: <Link to={to}>{navLabel(label)}</Link> })),
   { key: 'display', icon: <DesktopOutlined />, label: <a href="/display" target="_blank" rel="noopener">Display</a> },
 ]
 
 function currentKey({ pathname, search }) {
-  if (pathname.startsWith('/library')) return new URLSearchParams(search).get('wishlist') === '1' ? 'buy' : 'library'
+  if (pathname.startsWith('/library')) return new URLSearchParams(search).get('wishlist') === '1' ? 'wishlist' : 'library'
   return NAV.find((item) => pathname.startsWith(item.to))?.key
 }
+
+const Wordmark = () => (
+  <Link to="/library" className="shell-brand">
+    <img src={config.logo} alt="" className="shell-logo" />
+    <h1 className="shell-title">
+      <span className="shell-title-article">The</span> Hemlock
+    </h1>
+  </Link>
+)
 
 const Shell = () => {
   const isPhone = useIsPhone()
@@ -43,10 +61,7 @@ const Shell = () => {
   return (
     <Layout className={isPhone ? 'shell shell-phone' : 'shell shell-desktop'}>
       <Header className="shell-header">
-        <Link to="/library" className="shell-brand">
-          <img src={config.logo} alt="" className="shell-logo" />
-          <h1 className="shell-title">{config.website.title}</h1>
-        </Link>
+        <Wordmark />
       </Header>
       {isPhone ? (
         <>
@@ -70,7 +85,10 @@ const Shell = () => {
           <Sider width={200} className="shell-sider">
             <Menu mode="inline" selectedKeys={current ? [current] : []} items={MENU_ITEMS} className="shell-menu" />
           </Sider>
-          <Content className="shell-content"><Outlet /></Content>
+          <Content className="shell-content">
+            <Ribcage className="shell-watermark" aria-hidden="true" />
+            <Outlet />
+          </Content>
         </Layout>
       )}
     </Layout>

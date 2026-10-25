@@ -26,7 +26,7 @@ const EditionList = ({ book, onReplace, onEdit }) => {
     }
   }
 
-  if (book.editions.length === 0) return <p className="secondary">Not owned yet: no editions.</p>
+  if (book.editions.length === 0) return <p className="secondary reading">On the wishlist: no editions yet.</p>
 
   return (
     <ul className="edition-list">
@@ -42,10 +42,11 @@ const EditionList = ({ book, onReplace, onEdit }) => {
           </div>
           <div className="edition-actions">
             <ChangeCoverButton
+              type="text"
               busy={busy === edition.id}
               onFile={async (file) => run(edition.id, async () => updateEdition(edition.id, {}, await resizeCover(file)))}
             />
-            <Button size="small" onClick={() => onEdit(edition)}>Edit</Button>
+            <Button size="small" type="text" onClick={() => onEdit(edition)}>Edit</Button>
             <Popconfirm
               title="Delete this edition?"
               description={edition.cover_url ? 'Its cover is deleted with it.' : undefined}
@@ -53,7 +54,7 @@ const EditionList = ({ book, onReplace, onEdit }) => {
               okType="danger"
               onConfirm={() => run(edition.id, () => deleteEdition(edition.id))}
             >
-              <Button size="small" danger>Delete</Button>
+              <Button size="small" type="text" danger>Delete</Button>
             </Popconfirm>
           </div>
         </li>

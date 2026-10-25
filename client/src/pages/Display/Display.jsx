@@ -4,8 +4,9 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { theme } from 'antd'
 import { fetchDisplayBooks } from '../../api/display.js'
+import config from '../../config/config.json'
+import { Umbel } from '../../images/ornaments/index.js'
 import { applyBooks, createShow, currentIndex, readOptions, step, togglePause } from './slideshow.js'
 import './display.css'
 
@@ -71,7 +72,10 @@ function Slide({ book, current, ratings }) {
     <section className={current ? 'display-slide is-current' : 'display-slide'} aria-hidden={current ? undefined : true}>
       <div className={missing ? 'display-cover is-missing' : 'display-cover'}>
         {book.cover_url && <img src={book.cover_url} alt="" onError={() => setFailedUrl(book.cover_url)} />}
-        <div className="display-cover-fallback">{book.title}</div>
+        <div className="display-cover-fallback">
+          <span className="display-cover-title">{book.title}</span>
+          <Umbel className="display-cover-umbel" aria-hidden="true" />
+        </div>
       </div>
       <div className="display-text">
         <h1 className="display-title">{book.title}</h1>
@@ -84,7 +88,6 @@ function Slide({ book, current, ratings }) {
 }
 
 export default function Display() {
-  const { token } = theme.useToken()
   const [options] = useState(() => readOptions(window.location.search))
   const [show] = useState(() => createShow(options.seconds * 1000, Date.now()))
   const [view, setView] = useState({ books: [], index: -1, paused: false, previous: null })
@@ -236,13 +239,17 @@ export default function Display() {
     : status === 'ready' && view.books.length === 0 ? 'No books to show.' : null
 
   return (
-    <div className={idle ? 'display is-idle' : 'display'} style={{ '--display-accent': token.colorPrimary }}>
+    <div className={idle ? 'display is-idle' : 'display'}>
       <div className="display-stage">
         {slidesOf(view).map(({ book }) => (
           <Slide key={book.id} book={book} current={book.id === currentId} ratings={options.ratings} />
         ))}
         {message && <p className="display-message">{message}</p>}
         {view.paused && <p className="display-paused">Paused</p>}
+        <p className="display-caption">
+          <Umbel className="display-caption-umbel" aria-hidden="true" />
+          {config.website.title}
+        </p>
       </div>
       {canFullscreen && (
         <button

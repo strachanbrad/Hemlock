@@ -8,11 +8,14 @@ import { Alert, App, Button, Input, Popconfirm, Table, Tooltip } from 'antd'
 import { DeleteOutlined, EditOutlined, SearchOutlined } from '@ant-design/icons'
 import { Link } from 'react-router'
 import { deleteAuthor, listAuthors, renameAuthor } from '../../api/authors.js'
+import { PageHeading } from '../../components/Headings.jsx'
+import ShelfEmpty from '../../components/ShelfEmpty.jsx'
 import { collapse } from '../../lib/authors.js'
 import { useIsPhone } from '../../lib/viewport.js'
 import '../../styles/authors.css'
 
 const byName = (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) || a.id - b.id
+const countOf = (n) => (n === 1 ? '1 author' : `${n} authors`)
 const libraryOf = (author) => ({ pathname: '/library', search: `?author_id=${author.id}` })
 
 const RenameField = ({ author, onSave, onCancel }) => {
@@ -118,6 +121,8 @@ const Authors = () => {
   let body
   if (state.error) {
     body = <Alert type="error" showIcon title="Could not load the authors" description={state.error} />
+  } else if (state.authors && shown.length === 0) {
+    body = <ShelfEmpty description={state.authors.length === 0 ? 'No authors yet' : 'No authors match'} />
   } else if (isPhone) {
     body = (
       <ul className="author-list">
@@ -125,12 +130,11 @@ const Authors = () => {
           <li key={author.id} className="author-row">
             <div className="author-row-main">
               {nameCell(author)}
-              {editingId !== author.id && <span className="secondary">{author.book_count === 1 ? '1 book' : `${author.book_count} books`}</span>}
+              {editingId !== author.id && <span className="secondary numeric">{author.book_count === 1 ? '1 book' : `${author.book_count} books`}</span>}
             </div>
             {editingId !== author.id && actions(author)}
           </li>
         ))}
-        {state.authors && shown.length === 0 && <li className="secondary">No authors match.</li>}
       </ul>
     )
   } else {
@@ -153,7 +157,7 @@ const Authors = () => {
 
   return (
     <section className="authors">
-      <h2 className="page-title">Authors</h2>
+      <PageHeading meta={state.authors ? countOf(state.authors.length) : null}>Authors</PageHeading>
       <Input
         className="authors-search"
         type="search"

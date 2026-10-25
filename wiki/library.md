@@ -311,7 +311,8 @@ phone); Back closes it.
 The edition form (`EditionForm.jsx`): format, ISBN with Look up and Scan
 (below), cover, and Publisher and Published behind "More". A lookup fills
 publisher, date, the format (physical only when marking a purchase) and the
-cover. A chosen cover file is scaled in the browser to at most 1200px on its
+cover, replaces what an earlier lookup filled the way the add page does
+(below), and adds the same credit line under the form. A chosen cover file is scaled in the browser to at most 1200px on its
 long side (`client/src/lib/resizeImage.js`) before it is sent.
 
 ### Add a book
@@ -338,7 +339,9 @@ and its cover on the book. The author field (`AuthorSelect.jsx`) lists the
 authors and, when the typed name matches none of them without regard to
 case, offers Add "<name>", which sends `author_name`. When the title or the
 ISBN is already in the library, the page offers Open the existing book and,
-for a title, Add this as an edition.
+for a title, Add this as an edition. The notice sits above the buttons, so
+the page scrolls it into view (on a phone the buttons are in the sticky
+bar, far below the top) and shows the conflict as a warning message too.
 
 **Scan and look up.** The ISBN field (`components/IsbnField.jsx`, also in
 the edition form) is checked with `client/src/lib/isbn.js` and has two
@@ -354,8 +357,12 @@ The answer fills the form (`client/src/lib/prefill.js`): title; author,
 matched to an existing author without regard to case, else offered as a new
 one (co-authors joined with " & "); synopsis; publisher and date; and the
 format hint when no format is chosen yet. A scan never preselects Ebook: the
-person is holding a printed book. A lookup that finds nothing says so and
-leaves the form for typing.
+person is holding a printed book. Each lookup first resets every field the
+previous lookup filled that the person has not changed since, and drops its
+cover, so the form never mixes two books (`untouchedFields()` in
+`prefill.js`). A lookup that finds nothing, or fails, for another ISBN says
+so and leaves the form for typing; one for the ISBN already filled in changes
+nothing.
 
 The cover preview shows what the book will be saved with: a chosen file, else
 the lookup's cover, else a cloth cover with the typed title. The lookup's

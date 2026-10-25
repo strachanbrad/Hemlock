@@ -40,6 +40,10 @@ export function bookFromLookup(record, authors, options) {
   ])
 }
 
+// The fields a lookup filled that still hold the values it put there.
+export const untouchedFields = (filled, current) =>
+  Object.keys(filled).filter((key) => JSON.stringify(current[key]) === JSON.stringify(filled[key]))
+
 // The courtesy line names Google Books once a lookup shows it is configured.
 export const creditLine = (record) => {
   const google = record?.sources?.google

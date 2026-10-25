@@ -36,7 +36,7 @@ describe('resetDatabase', () => {
     fs.writeFileSync(path.join(dataDir, 'covers', 'e999-00000000.jpg'), 'stale')
 
     const first = resetDatabase(dataDir)
-    assert.deepEqual(first, { schema: 1, authors: 13, books: 23, editions: 25, covers: 10 })
+    assert.deepEqual(first, { schema: 2, authors: 13, books: 23, editions: 25, covers: 10 })
     assert.equal(running.prepare("SELECT COUNT(*) FROM authors WHERE name = 'Left Over'").pluck().get(), 0)
     assert.equal(running.prepare('SELECT COUNT(*) FROM books').pluck().get(), 23)
     assert.ok(!fs.existsSync(path.join(dataDir, 'covers', 'e999-00000000.jpg')))

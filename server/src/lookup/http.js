@@ -18,12 +18,14 @@ function pauseAfter(response) {
 // Resolves to { status: 'ok', body } | { status: 'not_found' } | { status: 'failed' }; never rejects.
 // One retry on a network error, a timeout or a 5xx; none on a 4xx. A 403 or 429 pauses the source,
 // and while it is paused every request fails without being sent.
+// `headers` is an object, or a function read at each request.
 export function createJsonSource({ name, fetch, headers, schedule = (task) => task(), now, sleep, retryDelay = 0, timeoutMs = TIMEOUT_MS, log }) {
+  const headersNow = typeof headers === 'function' ? headers : () => headers
   let pausedUntil = -Infinity
 
   async function attempt(url) {
     try {
-      const response = await schedule(() => fetch(url, { headers, redirect: 'manual', signal: AbortSignal.timeout(timeoutMs) }))
+      const response = await schedule(() => fetch(url, { headers: headersNow(), redirect: 'manual', signal: AbortSignal.timeout(timeoutMs) }))
       if (!response.ok) {
         await response.body?.cancel().catch(() => {})
         return { response }

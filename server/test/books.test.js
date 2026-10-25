@@ -264,8 +264,8 @@ describe('POST /api/books', () => {
       [{ title: 'x', author_name: 'a'.repeat(201) }, 'author_name is longer than 200 characters'],
       [{ title: 'x', author_id: 1, synopsis: 's'.repeat(20001) }, 'synopsis is longer than 20000 characters'],
       [{ title: 'x', author_id: 0 }, 'author_id must be a positive whole number'],
-      [{ title: 'x', author_id: 1, edition: { format: 'paperback', cover_from_url: 'http://covers.openlibrary.org/b/id/1-L.jpg' } }, 'cover_from_url must be an https URL from Open Library, archive.org or Google Books'],
-      [{ title: 'x', author_id: 1, edition: { format: 'paperback', cover_from_url: longCoverUrl(2049) } }, 'cover_from_url must be an https URL from Open Library, archive.org or Google Books'],
+      [{ title: 'x', author_id: 1, edition: { format: 'paperback', cover_from_url: 'http://covers.openlibrary.org/b/id/1-L.jpg' } }, 'cover_from_url must be an https URL from Open Library, archive.org, Google Books, Amazon or Goodreads'],
+      [{ title: 'x', author_id: 1, edition: { format: 'paperback', cover_from_url: longCoverUrl(2049) } }, 'cover_from_url must be an https URL from Open Library, archive.org, Google Books, Amazon or Goodreads'],
       [{ title: 'x', author_id: 1, edition: { format: 'paperback', cover_url: '/covers/e1-0000000a.jpg' } }, 'Unknown field in the edition: cover_url'],
       [[], 'The book must be a JSON object'],
     ]

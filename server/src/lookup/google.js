@@ -25,7 +25,7 @@ export function createGoogle({ fetch, key, userAgent, now, sleep, timeoutMs, log
   const getJson = createJsonSource({
     name: 'Google Books',
     fetch,
-    headers: { 'User-Agent': userAgent, Accept: 'application/json' },
+    headers: () => ({ 'User-Agent': userAgent(), Accept: 'application/json' }),
     now,
     sleep,
     retryDelay: 500,
@@ -39,4 +39,25 @@ export function createGoogle({ fetch, key, userAgent, now, sleep, timeoutMs, log
     const item = exactVolume(Array.isArray(answer.body?.items) ? answer.body.items : [], isbn)
     return item ? { status: 'ok', volume: pick(item.volumeInfo, VOLUME_FIELDS) } : { status: 'not_found' }
   }
+}
+
+const PROBE_ISBN = '9780553212587'
+
+// One request with the key, for the admin page's Test button. Resolves to { ok: true, detail } or
+// { ok: false, error } with Google's own message; never rejects.
+export async function probeGoogle({ fetch = globalThis.fetch, key, userAgent, timeoutMs = 8000 }) {
+  let response
+  let body
+  try {
+    response = await fetch(volumesUrl(PROBE_ISBN, key), { headers: { 'User-Agent': userAgent, Accept: 'application/json' }, redirect: 'manual', signal: AbortSignal.timeout(timeoutMs) })
+    body = await response.json().catch(() => null)
+  } catch (err) {
+    return { ok: false, error: `Google Books did not answer: ${err.name === 'TimeoutError' ? `no answer in ${timeoutMs} ms` : err.message}` }
+  }
+  if (!response.ok) {
+    const message = typeof body?.error?.message === 'string' ? body.error.message : 'no message'
+    return { ok: false, error: `Google Books answered HTTP ${response.status}: ${message}` }
+  }
+  const count = Number.isInteger(body?.totalItems) ? body.totalItems : 0
+  return { ok: true, detail: `${count} ${count === 1 ? 'volume' : 'volumes'} for ISBN ${PROBE_ISBN}` }
 }

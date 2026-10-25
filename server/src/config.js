@@ -11,6 +11,9 @@ export const defaultDataDir = path.join(repoRoot, 'data')
 
 export const userAgent = (version, contact) => `Hemlock/${version} (github.com/strachanbrad/hemlock${contact ? `; ${contact}` : ''})`
 
+// The contact goes into a User-Agent header, which whitespace, parentheses or a semicolon would break.
+export const isContact = (value) => /^[^\s();@]+@[^\s();@]+$/.test(value)
+
 export function loadConfig(env = process.env) {
   const production = env.NODE_ENV === 'production'
   if (production && !env.DATA_DIR) throw new Error('DATA_DIR must be set when NODE_ENV=production')
@@ -18,9 +21,11 @@ export function loadConfig(env = process.env) {
   const port = env.PORT ? Number(env.PORT) : 5000
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error(`PORT is not a port number: ${env.PORT}`)
 
-  // The contact goes into a User-Agent header, which whitespace, parentheses or a semicolon would break.
   const lookupContact = env.LOOKUP_CONTACT?.trim() || null
-  if (lookupContact && !/^[^\s();@]+@[^\s();@]+$/.test(lookupContact)) throw new Error('LOOKUP_CONTACT is not an email address')
+  if (lookupContact && !isContact(lookupContact)) throw new Error('LOOKUP_CONTACT is not an email address')
+
+  const secretsKey = env.SECRETS_KEY?.trim() || null
+  if (secretsKey && !/^[0-9a-f]{64}$/i.test(secretsKey)) throw new Error('SECRETS_KEY is not 64 hexadecimal characters')
 
   const version = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8')).version
 
@@ -32,7 +37,9 @@ export function loadConfig(env = process.env) {
     host: env.HOST || '127.0.0.1',
     version,
     googleBooksApiKey: env.GOOGLE_BOOKS_API_KEY?.trim() || null,
+    anthropicApiKey: env.ANTHROPIC_API_KEY?.trim() || null,
     lookupContact,
+    secretsKey,
     userAgent: userAgent(version, lookupContact),
   })
 }

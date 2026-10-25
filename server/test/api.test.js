@@ -22,7 +22,7 @@ after(() => app.close())
 
 describe('GET /api/health', () => {
   it('answers ok with the app version and the highest applied migration', async () => {
-    assert.deepEqual(await api.get('/api/health'), { status: 200, body: { ok: true, version: rootVersion, schema: 1 } })
+    assert.deepEqual(await api.get('/api/health'), { status: 200, body: { ok: true, version: rootVersion, schema: 2 } })
   })
 })
 

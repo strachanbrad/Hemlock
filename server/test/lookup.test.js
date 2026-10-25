@@ -50,6 +50,7 @@ describe('lookup with Open Library only', () => {
         google: 'disabled',
         open_library: 'ok',
         fields: { title: 'open_library', authors: 'open_library', publisher: 'open_library', published: 'open_library', synopsis: 'open_library', format: 'open_library', cover_url: 'open_library' },
+        anthropic: 'disabled',
       },
     })
   })
@@ -124,7 +125,7 @@ describe('lookup with Open Library only', () => {
     const { lookup, calls } = setup({ answer: (url) => (isSearch(url) ? json({ numFound: 0, docs: [] }) : undefined) })
     const result = await lookup('9781501120688')
     assert.equal(result.status, 404)
-    assert.deepEqual(result.body, { error: 'No book source knows ISBN 9781501120688' })
+    assert.deepEqual(result.body, { error: 'No book source knows ISBN 9781501120688', sources: { google: 'disabled', open_library: 'not_found', anthropic: 'disabled' } })
     assert.equal(calls.length, 1)
   })
 })
@@ -153,7 +154,7 @@ describe('lookup failures', () => {
     })
     const result = await lookup(WUTHERING)
     assert.equal(result.status, 502)
-    assert.deepEqual(result.body, { error: 'No book source answered; try again later' })
+    assert.deepEqual(result.body, { error: 'No book source answered; try again later', sources: { google: 'disabled', open_library: 'failed', anthropic: 'disabled' } })
     assert.equal(calls.length, 2)
     assert.deepEqual(logs, ['Open Library /search.json: fetch failed'])
   })

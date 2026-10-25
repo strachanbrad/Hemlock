@@ -54,6 +54,14 @@ describe('cover_from_url', () => {
     assert.deepEqual(requests, [OL_COVER])
   })
 
+  it("downloads a cover from Amazon's image host, as a Claude lookup finds one", async () => {
+    const amazon = 'https://m.media-amazon.com/images/I/71PoisonGarden.jpg'
+    const { status, body } = await api.post('/api/books', { title: 'Shirley', author_id: 1, edition: { format: 'paperback', cover_from_url: amazon } })
+    assert.equal(status, 201)
+    assert.match(body.editions[0].cover_url, /^\/covers\/e\d+-[0-9a-f]{8}\.jpg$/)
+    assert.deepEqual(requests, [amazon])
+  })
+
   it('keeps the saved book and answers cover_url null when the download fails', async () => {
     upstream = () => new Response('<html>gone</html>', { status: 404, headers: { 'content-type': 'text/html' } })
     const { status, body } = await api.post('/api/books', { title: 'Shirley', author_id: 1, edition: { format: 'paperback', cover_from_url: OL_COVER } })
@@ -68,7 +76,7 @@ describe('cover_from_url', () => {
   it('refuses a URL off the allow-list without a request and stores nothing', async () => {
     for (const url of ['https://example.com/cover.jpg', 'https://covers.openlibrary.org.evil.test/x.jpg', 'http://covers.openlibrary.org/b/id/1-L.jpg', 'https://127.0.0.1/x.jpg']) {
       const { status, body } = await api.post('/api/books', { title: 'Shirley', author_id: 1, edition: { format: 'paperback', cover_from_url: url } })
-      assert.deepEqual({ status, body }, { status: 400, body: { error: 'cover_from_url must be an https URL from Open Library, archive.org or Google Books' } }, url)
+      assert.deepEqual({ status, body }, { status: 400, body: { error: 'cover_from_url must be an https URL from Open Library, archive.org, Google Books, Amazon or Goodreads' } }, url)
       assert.equal((await api.post('/api/books/1/editions', { format: 'hardcover', cover_from_url: url })).status, 400, url)
     }
     assert.deepEqual(requests, [])

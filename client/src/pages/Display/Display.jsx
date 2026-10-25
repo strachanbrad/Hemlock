@@ -7,6 +7,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { fetchDisplayBooks } from '../../api/display.js'
 import config from '../../config/config.json'
 import { Umbel } from '../../images/ornaments/index.js'
+import CoverEffects from './CoverEffects.jsx'
+import { BOX_HEIGHT, faceHeight } from './effects.js'
 import { applyBooks, createShow, currentIndex, readOptions, step, togglePause } from './slideshow.js'
 import './display.css'
 
@@ -63,19 +65,28 @@ function slidesOf({ books, index, previous }) {
   return [...slides.values()].sort((a, b) => a.position - b.position)
 }
 
-function Slide({ book, current, ratings }) {
+function Slide({ book, current, ratings, effects }) {
   const [failedUrl, setFailedUrl] = useState(null)
+  const [loaded, setLoaded] = useState(null)
   const missing = !book.cover_url || failedUrl === book.cover_url
+  const face = missing ? BOX_HEIGHT : loaded?.url === book.cover_url ? loaded.height : null
   const meta = metaLine(book, ratings)
+  const onLoad = (event) => {
+    const { naturalWidth, naturalHeight } = event.currentTarget
+    setLoaded({ url: book.cover_url, height: faceHeight(naturalWidth, naturalHeight) })
+  }
 
   return (
     <section className={current ? 'display-slide is-current' : 'display-slide'} aria-hidden={current ? undefined : true}>
       <div className={missing ? 'display-cover is-missing' : 'display-cover'}>
-        {book.cover_url && <img src={book.cover_url} alt="" onError={() => setFailedUrl(book.cover_url)} />}
+        {book.cover_url && <img src={book.cover_url} alt="" onLoad={onLoad} onError={() => setFailedUrl(book.cover_url)} />}
         <div className="display-cover-fallback">
           <span className="display-cover-title">{book.title}</span>
           <Umbel className="display-cover-umbel" aria-hidden="true" />
         </div>
+        {effects && face !== null && (
+          <CoverEffects id={book.id} gore={book.gore_rating} spice={book.spice_rating} height={face} />
+        )}
       </div>
       <div className="display-text">
         <h1 className="display-title">{book.title}</h1>
@@ -242,7 +253,7 @@ export default function Display() {
     <div className={idle ? 'display is-idle' : 'display'}>
       <div className="display-stage">
         {slidesOf(view).map(({ book }) => (
-          <Slide key={book.id} book={book} current={book.id === currentId} ratings={options.ratings} />
+          <Slide key={book.id} book={book} current={book.id === currentId} ratings={options.ratings} effects={options.effects} />
         ))}
         {message && <p className="display-message">{message}</p>}
         {view.paused && <p className="display-paused">Paused</p>}

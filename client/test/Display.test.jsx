@@ -134,6 +134,47 @@ describe('Display', () => {
     expect(meta).toContain('Gore 2/5')
   })
 
+  it('draws blood by gore and a chilli by spice on the cover, and neither with effects=off', async () => {
+    const [clean, heavy] = books('Clean', 'Heavy')
+    serve(() => ok([{ ...clean, gore_rating: 0, spice_rating: 0 }, { ...heavy, gore_rating: 5, spice_rating: 2 }]))
+    const { container, unmount } = await mount()
+    const current = (selector) => container.querySelector(`.display-slide.is-current ${selector}`)
+    expect(titleOf(container)).toBe('Clean')
+    expect(current('.display-blood')).toBeNull()
+    expect(current('.display-chilli')).toBeNull()
+
+    fireEvent.keyDown(window, { key: 'ArrowRight' })
+    expect(titleOf(container)).toBe('Heavy')
+    expect(current('.display-blood').dataset.level).toBe('5')
+    expect(current('.display-blood').getAttribute('viewBox')).toBe('0 0 100 150')
+    expect(container.querySelectorAll('.display-slide.is-current .display-blood-body .display-blood-pool')).toHaveLength(2)
+    expect(current('.display-chilli').dataset.level).toBe('2')
+    unmount()
+
+    window.history.replaceState(null, '', '/display?effects=off')
+    const off = await mount()
+    expect(off.container.querySelectorAll('.display-slide')).toHaveLength(2)
+    expect(off.container.querySelector('.display-blood, .display-chilli')).toBeNull()
+  })
+
+  it('fits the effects to the cover image once it loads, and to the cloth cover when it fails', async () => {
+    const [book] = books('Covered')
+    serve(() => ok([{ ...book, cover_url: '/covers/c.jpg', gore_rating: 3, spice_rating: 4 }]))
+    const { container } = await mount()
+    const img = container.querySelector('.display-cover img')
+    expect(container.querySelector('.display-blood, .display-chilli')).toBeNull()
+
+    Object.defineProperty(img, 'naturalWidth', { value: 300 })
+    Object.defineProperty(img, 'naturalHeight', { value: 500 })
+    fireEvent.load(img)
+    const viewBox = (selector) => container.querySelector(selector).getAttribute('viewBox').split(' ').map(Number)
+    expect(viewBox('.display-blood')[3]).toBeCloseTo(166.67, 2)
+    expect(viewBox('.display-chilli')[3]).toBeCloseTo(166.67, 2)
+
+    fireEvent.error(img)
+    expect(viewBox('.display-blood')).toEqual([0, 0, 100, 150])
+  })
+
   it('steps with the arrow keys and pauses with Space, Enter and MediaPlayPause', async () => {
     serve(() => ok(books('Alpha', 'Beta', 'Gamma')))
     const { container, queryByText } = await mount()

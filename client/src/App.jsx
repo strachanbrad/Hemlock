@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router'
 import { Layout, Menu, Breadcrumb, Modal, Button } from 'antd'
 import {
@@ -19,11 +19,12 @@ import Authors from './pages/Authors/Authors.jsx'
 import Books from './pages/Books/Books.jsx'
 import BuyList from './pages/BuyList/BuyList.jsx'
 import AddBooks from './pages/AddBooks/AddBooks.jsx'
-import BookCarousel from './pages/Carousel/BookCarousel.jsx'
 import BookDetailModal from './components/BookDetailModal.jsx'
 import config from './config/config.json'
 
 const { Header, Content, Sider } = Layout
+
+const Display = lazy(() => import('./pages/Display/Display.jsx'))
 
 const menuItems = [
   { key: '/authors', icon: <UserOutlined />, label: 'Authors' },
@@ -31,7 +32,7 @@ const menuItems = [
   { key: '/ebooks', icon: <GlobalOutlined />, label: 'Ebooks' },
   { key: '/buy', icon: <DollarOutlined />, label: 'Buy List' },
   { key: '/add', icon: <PlusOutlined />, label: 'Add Books' },
-  { key: '/carousel', icon: <PictureOutlined />, label: 'Carousel' },
+  { key: '/display', icon: <PictureOutlined />, label: <a href="/display" target="_blank" rel="noopener">Display</a> },
 ]
 
 const Shell = () => {
@@ -54,7 +55,7 @@ const Shell = () => {
           <Menu
             mode="inline"
             selectedKeys={[selectedKey]}
-            onClick={({ key }) => navigate(key)}
+            onClick={({ key }) => key !== '/display' && navigate(key)}
             style={{ height: '100%', borderRight: 0 }}
             items={menuItems}
           />
@@ -102,10 +103,9 @@ const App = () => (
       <Route path="ebooks" element={<Books key="EBooks" bookType="EBooks" />} />
       <Route path="buy" element={<BuyList />} />
       <Route path="add" element={<AddBooks />} />
-      <Route path="carousel" element={<BookCarousel />} />
       <Route path="*" element={<Navigate to="/authors" replace />} />
     </Route>
-    <Route path="/display" element={<BookCarousel />} />
+    <Route path="/display" element={<Suspense fallback={null}><Display /></Suspense>} />
   </Routes>
 )
 

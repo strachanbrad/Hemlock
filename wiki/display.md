@@ -88,7 +88,7 @@ The shell's **Display** menu item opens `/display` in a new tab.
   on `:root` in `client/src/styles/index.css` ([Theme](theme.md)): ink with a
   vignette, cream text, the title in Cormorant Garamond, the author in Lora
   italic and dusty rose, the synopsis in Lora.
-- "The Hemlock" sits small in brass in the stage's lower right corner, with
+- "Hemlock" sits small in brass in the stage's lower right corner, with
   an umbel.
 - Slides crossfade over one second; `prefers-reduced-motion` turns that off.
 

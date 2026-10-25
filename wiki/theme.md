@@ -9,7 +9,7 @@ on `:root` in `client/src/styles/index.css`.
 
 ## Identity
 
-The library is **The Hemlock**: the name in `config.json`
+The library is **Hemlock**: the name in `config.json`
 (`website.title`), the header's wordmark (the logo, then "The" in light
 italic and "Hemlock"), the document title, and the caption on the display
 page. The project and the repository stay "Hemlock".

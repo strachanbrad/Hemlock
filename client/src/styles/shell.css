@@ -48,12 +48,6 @@
   transition: color 0.2s ease;
 }
 
-.shell-title-article {
-  color: var(--muted);
-  font-style: italic;
-  font-weight: 400;
-}
-
 .shell-sider {
   border-inline-end: 1px solid var(--hairline-faint);
 }

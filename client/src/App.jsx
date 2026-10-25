@@ -50,7 +50,7 @@ const Wordmark = () => (
   <Link to="/library" className="shell-brand">
     <img src={config.logo} alt="" className="shell-logo" />
     <h1 className="shell-title">
-      <span className="shell-title-article">The</span> Hemlock
+      Hemlock
     </h1>
   </Link>
 )

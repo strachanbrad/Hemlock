@@ -1,0 +1,43 @@
+# Copyright (c) 2023 Hemlock
+# SPDX-License-Identifier: GPL-3.0-only
+
+[Unit]
+Description=Hemlock book catalogue
+After=network.target
+
+[Service]
+Type=exec
+User=hemlock
+Group=hemlock
+WorkingDirectory=/opt/hemlock
+Environment=NODE_ENV=production
+Environment=DATA_DIR=/var/lib/hemlock
+Environment=PORT=5000
+Environment=HOST=127.0.0.1
+# Secrets live in this root-only file: systemctl show prints Environment= values to any user.
+EnvironmentFile=-/etc/hemlock/hemlock.env
+ExecStart=/usr/bin/node server/src/index.js
+Restart=on-failure
+RestartSec=2
+
+# nginx (www-data) serves DATA_DIR/covers, so new files must stay world-readable.
+UMask=0022
+# Never MemoryDenyWriteExecute (V8's JIT needs writable code pages) or DynamicUser
+# (its 0700 /var/lib/private hides the covers from nginx).
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/hemlock
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=yes
+CapabilityBoundingSet=
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

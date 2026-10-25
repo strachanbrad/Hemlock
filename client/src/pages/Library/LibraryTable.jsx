@@ -8,6 +8,7 @@ import { Link } from 'react-router'
 import BookCover from '../../components/BookCover.jsx'
 import { BookRating, ReadToggle, WishlistToggle } from '../../components/BookRatings.jsx'
 import FormatTags from '../../components/FormatTags.jsx'
+import { localDate } from '../../lib/dates.js'
 import { byAuthor, byTitle } from './filters.js'
 
 const formatsText = (book) => book.editions.map((edition) => edition.format).join(' ') + (book.wishlist ? ' wishlist' : '')
@@ -56,7 +57,7 @@ const LibraryTable = ({ books, linkTo, onOpen, onSave, loading }) => {
       title: 'Added',
       className: 'col-added',
       sorter: (a, b) => a.created_at.localeCompare(b.created_at) || a.id - b.id,
-      render: (_, book) => book.created_at.slice(0, 10),
+      render: (_, book) => localDate(book.created_at),
     },
   ]
 

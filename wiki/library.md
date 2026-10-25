@@ -125,7 +125,9 @@ A book in a response:
 ```
 
 `read` and `wishlist` are JSON booleans; `cover_url` is null when there is no
-cover. A write to an edition answers with its whole book, so a page replaces
+cover. `created_at` is UTC (SQLite's `datetime('now')`, with no zone marker);
+the table's Added column shows it as a date in the browser's time zone
+(`localDate()` in `client/src/lib/dates.js`). A write to an edition answers with its whole book, so a page replaces
 the book by `id` without another request.
 
 ### Bodies

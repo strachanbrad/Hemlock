@@ -1,0 +1,48 @@
+/*
+ * Copyright (c) 2023 Hemlock
+ * SPDX-License-Identifier: GPL-3.0-only
+ */
+
+.barcode-scanner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  max-width: 480px;
+}
+
+.barcode-scanner__viewport {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #000;
+}
+
+.barcode-scanner__video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.barcode-scanner__aim {
+  position: absolute;
+  inset: 32% 8%;
+  border: 2px solid rgb(255 255 255 / 85%);
+  border-radius: 6px;
+  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 35%);
+}
+
+.barcode-scanner__hint {
+  margin: 0;
+}
+
+.barcode-scanner__manual {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}

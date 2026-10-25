@@ -19,6 +19,7 @@ import Authors from './pages/Authors/Authors.jsx'
 import Books from './pages/Books/Books.jsx'
 import BuyList from './pages/BuyList/BuyList.jsx'
 import AddBooks from './pages/AddBooks/AddBooks.jsx'
+import ScanTest from './pages/ScanTest/ScanTest.jsx'
 import BookDetailModal from './components/BookDetailModal.jsx'
 import config from './config/config.json'
 
@@ -106,6 +107,7 @@ const App = () => (
       <Route path="*" element={<Navigate to="/authors" replace />} />
     </Route>
     <Route path="/display" element={<Suspense fallback={null}><Display /></Suspense>} />
+    <Route path="/scan-test" element={<ScanTest />} />
   </Routes>
 )
 

@@ -1,4 +1,6 @@
--- populate.sql
+-- Copyright (c) 2023 Hemlock
+-- SPDX-License-Identifier: GPL-3.0-only
+
 INSERT INTO Authors (first_name, last_name) VALUES ('Nicholas', 'Sparks');
 INSERT INTO Authors (first_name, last_name) VALUES ('Jane', 'Austen');
 INSERT INTO Authors (first_name, last_name) VALUES ('Emily', 'Brontë');
@@ -33,4 +35,3 @@ INSERT INTO EBooks (isbn, star_rating, spice_rating, title, author_id, synopsis,
 INSERT INTO EBooks (isbn, star_rating, spice_rating, title, author_id, synopsis, read, gore_rating, media, buy) VALUES ('9780316000017', 3, 1, 'Sentimental Education', 8, 'Flaubert''s novel of romantic ambition, disillusionment, and social satire.', 0, 3, 'Ebook', 1);
 INSERT INTO EBooks (isbn, star_rating, spice_rating, title, author_id, synopsis, read, gore_rating, media, buy) VALUES ('9780316000018', 4, 1, 'One Hundred Years of Solitude', 9, 'Marquez''s masterpiece blending the real and the magical in the story of the Buendia family.', 1, 1, 'Ebook', 0);
 INSERT INTO EBooks (isbn, star_rating, spice_rating, title, author_id, synopsis, read, gore_rating, media, buy) VALUES ('9780316000019', 5, 1, 'Her Fearful Symmetry', 12, 'A novel by Audrey Niffenegger about love and identity set near Highgate Cemetery.', 0, 2, 'Ebook', 1);
-

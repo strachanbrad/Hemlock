@@ -17,6 +17,7 @@ export function readOptions(search) {
   return {
     seconds,
     ratings: params.get('ratings') === 'all',
+    effects: params.get('effects') !== 'off',
     filter: FILTERS.includes(filter) ? filter : null,
   }
 }

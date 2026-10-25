@@ -107,6 +107,7 @@
 .display-cover-fallback::before {
   content: '';
   position: absolute;
+  z-index: 1;
   top: calc(1 * var(--u));
   right: calc(1 * var(--u));
   bottom: calc(1 * var(--u));
@@ -135,6 +136,155 @@
 
 .display-cover.is-missing .display-cover-fallback {
   display: flex;
+}
+
+/* Each effect's viewBox has the image's proportions, so "meet" fits it to the face as object-fit: contain fits the image. */
+.display-blood,
+.display-chilli {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.display-blood {
+  --blood: color-mix(in srgb, color-mix(in srgb, var(--primary, #89023e) 55%, var(--rust, #b5582c)) 68%, var(--ink-deep, #0f0d12));
+  --blood-deep: color-mix(in srgb, var(--blood) 80%, var(--ink-deep, #0f0d12));
+  --blood-rim: color-mix(in srgb, var(--blood) 55%, var(--ink-deep, #0f0d12));
+  filter: drop-shadow(0 calc(0.04 * var(--u)) calc(0.06 * var(--u)) rgba(0, 0, 0, 0.45));
+}
+
+.display-blood-rim {
+  fill: var(--blood-rim);
+  stroke: var(--blood-rim);
+  stroke-width: 0.3;
+  stroke-linejoin: round;
+}
+
+.display-blood-body {
+  fill: var(--blood);
+}
+
+.display-blood-body .display-blood-bulb,
+.display-blood-body .display-blood-pool {
+  fill: var(--blood-deep);
+}
+
+.display-blood-shine {
+  fill: none;
+  stroke: color-mix(in srgb, var(--danger, #de6f66) 50%, var(--cream, #efe6da));
+  stroke-width: 0.3;
+  stroke-linecap: round;
+  stroke-opacity: 0.15;
+}
+
+.display-blood-glint {
+  stroke: var(--cream, #efe6da);
+  stroke-opacity: 0.3;
+}
+
+.display-blood-band,
+.display-blood-trail,
+.display-blood-bulb,
+.display-blood-pool,
+.display-chilli-rise {
+  transform-box: view-box;
+  transform-origin: 0 0;
+}
+
+.display-chilli {
+  z-index: 2;
+  filter: drop-shadow(0 calc(0.1 * var(--u)) calc(0.3 * var(--u)) rgba(0, 0, 0, 0.85));
+}
+
+.display-chilli-halo {
+  fill: none;
+  stroke: var(--ink-deep, #0f0d12);
+  stroke-width: 3;
+  stroke-linejoin: round;
+  stroke-opacity: 0.7;
+}
+
+.display-chilli-wash {
+  fill: var(--ink-deep, #0f0d12);
+  opacity: 0.45;
+}
+
+.display-chilli-amber {
+  stop-color: color-mix(in srgb, var(--brass-light, #dcc08a) 55%, var(--rust, #b5582c));
+}
+
+.display-chilli-orange {
+  stop-color: var(--rust, #b5582c);
+}
+
+.display-chilli-red {
+  stop-color: color-mix(in srgb, color-mix(in srgb, var(--primary, #89023e) 60%, var(--rust, #b5582c)) 75%, var(--ink-deep, #0f0d12));
+}
+
+.display-chilli-level {
+  stroke: var(--brass, #c9a86a);
+  stroke-width: 0.9;
+}
+
+.display-chilli-pod,
+.display-chilli-stem {
+  stroke: var(--brass, #c9a86a);
+  stroke-width: 0.9;
+  stroke-linejoin: round;
+}
+
+.display-chilli-pod {
+  fill: none;
+}
+
+.display-chilli-stem {
+  fill: var(--moss, #4f6b4a);
+}
+
+.display-chilli-shine {
+  fill: none;
+  stroke: var(--cream, #efe6da);
+  stroke-width: 1.1;
+  stroke-linecap: round;
+  opacity: 0.35;
+}
+
+/* The effects run each time a slide becomes current; a slide that is not current holds the final state. */
+@media (prefers-reduced-motion: no-preference) {
+  .display-slide.is-current .display-blood-band {
+    animation: display-grow 0.9s ease-out both;
+  }
+
+  .display-slide.is-current .display-blood-trail {
+    animation: display-grow var(--duration) cubic-bezier(0.25, 0.6, 0.35, 1) var(--delay) both;
+  }
+
+  .display-slide.is-current .display-blood-bulb {
+    animation: display-shift var(--duration) cubic-bezier(0.25, 0.6, 0.35, 1) var(--delay) both;
+  }
+
+  .display-slide.is-current .display-blood-pool {
+    animation: display-shift 1.6s ease-out var(--delay) both;
+  }
+
+  .display-slide.is-current .display-chilli-rise {
+    animation: display-shift 1.5s ease-in-out 0.3s both;
+  }
+}
+
+@keyframes display-grow {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+@keyframes display-shift {
+  from {
+    transform: translateY(var(--from));
+  }
 }
 
 .display-text {

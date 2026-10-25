@@ -60,7 +60,9 @@ tables ([Library § The model](library.md#the-model)):
 |---|---|
 | `client/src/pages/Display/Display.jsx` | The page, loaded lazily by the `/display` route in `client/src/App.jsx`. |
 | `client/src/pages/Display/slideshow.js` | The timing functions (`createShow`, `currentIndex`, `applyBooks`, `step`, `togglePause`) and `readOptions` for the address parameters. Pure: every function takes the time as an argument. |
-| `client/src/pages/Display/display.css` | The stage, the slide layout and the palette. |
+| `client/src/pages/Display/effects.js` | The geometry of the cover effects: `bloodOf(gore, seed, height)` lays out the blood for a level, `seedOf(id)` seeds it per book, `faceHeight` sizes the cover's face, the path builders draw it, and `CHILLI` holds the chilli's paths and level lines. Pure. |
+| `client/src/pages/Display/CoverEffects.jsx` | The blood and the chilli as inline SVG over the cover. |
+| `client/src/pages/Display/display.css` | The stage, the slide layout, the effects' colours and motion, and the palette. |
 | `client/src/api/display.js` | `fetchDisplayBooks(filter)`, the page's only request. |
 
 The shell's **Display** menu item opens `/display` in a new tab.
@@ -72,8 +74,10 @@ The shell's **Display** menu item opens `/display` in a new tab.
   When a book has no cover, or its image fails to load, the box shows a cloth
   cover with the title and a small umbel instead.
 - On the right: the title (at most 3 lines), the author, the format and the
-  stars, and the synopsis (at most 8 lines). Spice and gore show only with
-  `?ratings=all`.
+  stars, and the synopsis (at most 8 lines). Spice and gore show in this
+  line only with `?ratings=all`.
+- Gore and spice also show on the cover itself (see below), unless the
+  address says `?effects=off`.
 - The slide sits on a letterboxed 16:9 stage. Every size is in stage units
   (`--u`, a hundredth of the stage width), so 720p, 1080p and 4K look the same
   and nothing passes the edge of the screen. A portrait phone shows the same
@@ -88,6 +92,55 @@ The shell's **Display** menu item opens `/display` in a new tab.
   an umbel.
 - Slides crossfade over one second; `prefers-reduced-motion` turns that off.
 
+### Blood and the chilli
+
+Both effects draw on the cover's face: the image as it is shown, or the
+cloth cover. The image is scaled to fit its 2:3 box, so a cover of another
+shape leaves ink beside or above it; each effect is an `svg` filling the box
+whose `viewBox` has the image's proportions (`faceHeight`, from the image's
+natural size once it loads), and the default `preserveAspectRatio` fits it
+exactly as `object-fit: contain` fits the image. The effects appear once the
+face is known, so they never jump. In effect units the face is 100 wide.
+
+- **Blood by gore.** Drips start at the top edge and run down the left and
+  right edges, from a thin wavy band along the top of each corner. Each drip
+  is a trail that narrows as it runs and wanders a little, ending in a
+  teardrop that grows out of it; a soft darker rim, a faint crescent of light
+  on each teardrop and a short highlight at the top of the heavier runs make
+  it read as liquid. By level: 0 nothing; 1 two or three short drips at one
+  top corner; 2 short drips at both; 3 drips down both edges, the longest to
+  about a third of the height; 4 the longest to about two thirds, a heavier
+  run on each edge; 5 two heavy runs on each edge, the longest thinning,
+  drifting in from the edge and swelling once on its way into a small pool
+  at the bottom corner. The longest drip of a corner is the one nearest its
+  edge. On the cloth cover the brass frame draws over the blood, and the
+  chilli over the frame. Every drip, its teardrop included, stays within 12 units
+  (`EDGE`) of its side edge, so the centre of the cover is never covered. The
+  layout is seeded from the book's `id` (`seedOf`), so a book bleeds the same
+  way every time it comes round.
+- **A chilli by spice,** in the bottom right corner, 11 units wide: a brass
+  hairline over a soft ink halo and a drop shadow, so it holds on any cover,
+  with a moss calyx and stem. Hidden at 0. Its pod is washed in translucent
+  ink, and colour fills it from the tip up to a brass level line: one
+  gradient from amber at the tip to deep red at the stem, uncovered up to the
+  line that leaves `spice / 5` of the pod's area below it (`CHILLI.lines` in
+  `effects.js`, measured from the pod's path; measure again if the path
+  changes).
+- **Colour.** The blood is burgundy and rust darkened with ink, its teardrops
+  and pools a shade darker, its rim darker again; the chilli's gradient runs
+  from an amber of light brass and rust, through rust, to burgundy and rust
+  darkened with ink. Every colour comes from the palette's custom properties,
+  shaded with `color-mix()`.
+- **Motion.** Each time a slide becomes current, the band seeps in, each
+  drip runs down over 1.2 to 3.4 seconds (its length sets the time, its seed
+  a delay of up to half a second), the pools rise as the longest drips reach
+  them, and the chilli fills over 1.5 seconds: its clip window rises while
+  the gradient inside it moves down by as much, so the colour stays put and
+  the level only uncovers it. CSS animations under
+  `.display-slide.is-current` do it, with no timer; a slide that is not
+  current holds the finished state, so a slide fading out never changes.
+  `prefers-reduced-motion` shows the finished state at once.
+
 ### Address parameters
 
 | Parameter | Effect |
@@ -95,6 +148,7 @@ The shell's **Display** menu item opens `/display` in a new tab.
 | `seconds` | Seconds per book: default 10, clamped to 5 through 3600. |
 | `ratings=all` | Show spice and gore as well as the stars. |
 | `filter` | `all`, `read`, `unread` or `owned`, passed to the endpoint. Any other value is ignored and the endpoint's default applies. |
+| `effects=off` | Draw neither the blood nor the chilli on the covers. Any other value leaves both on. |
 
 For example, `/display?seconds=20&filter=unread` shows the unread books for 20
 seconds each.
@@ -183,10 +237,16 @@ television's browser does
 - `client/test/slideshow.test.js`: the timing functions with explicit times
   (wrap, catch-up, refetch, deletion, keys, pause, a backward clock, an empty
   list) and the address parameters.
+- `client/test/displayEffects.test.js`: the rating levels, the chilli's
+  level line, the face height, the seed, and the blood at every level over
+  many seeds: which corners, how many drips, how far they run, the heavier
+  runs, the pools, and the 12-unit edge.
 - `client/test/Display.test.jsx`: the page under `StrictMode` with fake
   timers: the schedule, catch-up on `visibilitychange`, the refetch, the
   notices, the keys, fullscreen, the idle cursor, and no interval, timer,
-  listener or wake lock left behind after an unmount.
+  listener or wake lock left behind after an unmount; the effects by gore and
+  spice, `effects=off`, and the face fitted to a loaded image or the cloth
+  cover.
 
 jsdom does no layout: check a change to the stage in a real browser at
 1920×1080, 1280×720 and 3840×2160 as well as at 1440, 768 and 390 pixels wide.

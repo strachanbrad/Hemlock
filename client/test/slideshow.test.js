@@ -152,8 +152,8 @@ describe('togglePause', () => {
 })
 
 describe('readOptions', () => {
-  it('defaults to 10 seconds, stars only and the server default filter', () => {
-    expect(readOptions('')).toEqual({ seconds: 10, ratings: false, filter: null })
+  it('defaults to 10 seconds, stars only, the server default filter and the effects on', () => {
+    expect(readOptions('')).toEqual({ seconds: 10, ratings: false, filter: null, effects: true })
   })
 
   it('clamps seconds to 5 through 3600 and ignores a value that is not a number', () => {
@@ -172,5 +172,11 @@ describe('readOptions', () => {
     expect(readOptions('?ratings=stars').ratings).toBe(false)
     expect(readOptions('?filter=unread').filter).toBe('unread')
     expect(readOptions('?filter=wishlist').filter).toBeNull()
+  })
+
+  it('draws the cover effects unless effects=off', () => {
+    expect(readOptions('?effects=off').effects).toBe(false)
+    expect(readOptions('?effects=on').effects).toBe(true)
+    expect(readOptions('?effects=').effects).toBe(true)
   })
 })

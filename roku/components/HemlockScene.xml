@@ -36,7 +36,7 @@ SPDX-License-Identifier: GPL-3.0-only
     </Group>
     <Group id="caption">
       <Poster id="captionUmbel" uri="pkg:/images/umbel-small.png" width="29" height="29" blendColor="0xC9A86AFF" />
-      <Label id="captionText" color="0xC9A86AFF" text="The Hemlock">
+      <Label id="captionText" color="0xC9A86AFF" text="Hemlock">
         <Font role="font" uri="pkg:/fonts/CormorantGaramond-MediumItalic.otf" size="29" />
       </Label>
     </Group>

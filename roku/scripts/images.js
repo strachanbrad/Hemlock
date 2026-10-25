@@ -77,21 +77,7 @@ async function text(value, fontFile, family, size, color) {
   return { data, width: info.width, height: info.height }
 }
 
-async function wordmark(size) {
-  const the = await text('The', 'CormorantGaramond-MediumItalic.otf', 'Cormorant Garamond Medium Italic', Math.round(size * 0.8), CREAM)
-  const hemlock = await text('Hemlock', 'CormorantGaramond-SemiBold.otf', 'Cormorant Garamond SemiBold', size, CREAM)
-  const gap = Math.round(size * 0.28)
-  const width = the.width + gap + hemlock.width
-  const height = Math.max(the.height, hemlock.height)
-  const data = await sharp({ create: { width, height, channels: 4, background: TRANSPARENT } })
-    .composite([
-      { input: the.data, left: 0, top: height - the.height },
-      { input: hemlock.data, left: the.width + gap, top: height - hemlock.height },
-    ])
-    .png()
-    .toBuffer()
-  return { data, width, height }
-}
+const wordmark = (size) => text('Hemlock', 'CormorantGaramond-SemiBold.otf', 'Cormorant Garamond SemiBold', size, CREAM)
 
 const logo = (height) => sharp(Buffer.from(read(path.join(repo, 'client/public/logo-cream.svg')))).resize({ height }).png().toBuffer({ resolveWithObject: true })
 

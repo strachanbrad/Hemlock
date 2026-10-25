@@ -4,25 +4,146 @@
  */
 
 .add-book {
-  max-width: 1040px;
+  max-width: 880px;
 }
 
-.add-book-grid {
+.add-section {
+  margin-bottom: 28px;
+}
+
+.add-helper {
+  max-width: 60ch;
+  margin: -4px 0 14px;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.add-find {
+  padding: 18px 22px 4px;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(137, 2, 62, 0.12), transparent 55%),
+    var(--lift);
+  box-shadow: 0 18px 40px -30px rgba(0, 0, 0, 0.9);
+}
+
+.add-find .isbn-field {
+  max-width: 560px;
+}
+
+.add-find .isbn-field .ant-input {
+  font-size: 17px;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.add-book-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: 184px minmax(0, 1fr);
+  column-gap: 28px;
 }
 
-@media (min-width: 992px) {
-  .add-book-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: 40px;
-  }
+.add-cover {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
 }
 
-/* A phone lists the formats one under another, each a full-width row to tap. */
-.add-book .ant-radio-group-vertical .ant-radio-wrapper {
-  min-height: 32px;
+.cover-preview {
+  display: flex;
+  width: 120px;
+  height: 180px;
+  padding: 7px;
+  border: 1px solid var(--hairline-faint);
+}
+
+.cover-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 0;
+  box-shadow: 0 8px 16px -10px rgba(0, 0, 0, 0.9);
+}
+
+.cover-preview .book-cover-large {
+  width: 100%;
+  height: 100%;
+}
+
+.add-cover-picker {
+  margin-bottom: 0;
+}
+
+.add-cover-picker .ant-upload-list-item-name {
+  max-width: 130px;
+}
+
+.add-title-input {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.ownership-choice {
+  max-width: 360px;
+}
+
+.wishlist-note {
+  display: flex;
   align-items: center;
+  gap: 8px;
+  margin: -4px 0 20px;
+  color: var(--rose);
+  font-size: 14px;
+  font-style: italic;
+}
+
+.wishlist-note-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.add-more {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 16px;
+}
+
+.take-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 36px;
+  padding: 12px 18px 0;
+  border: 1px solid var(--hairline-faint);
+  border-radius: 4px;
+  background: var(--lift);
+}
+
+.take-item {
+  margin-bottom: 12px;
+}
+
+.add-synopsis textarea {
+  font-family: var(--font-text);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.add-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--hairline-faint);
+}
+
+.add-submit {
+  min-width: 160px;
 }
 
 .add-book-conflict {
@@ -42,15 +163,18 @@
   align-items: center;
   gap: 8px;
   margin-top: 6px;
-  color: var(--ant-color-text-secondary, rgba(43, 29, 34, 0.65));
+  color: var(--muted);
+  font-family: var(--font-text);
+  font-size: 13.5px;
+  font-style: italic;
 }
 
 .isbn-notice-found {
-  color: var(--ant-color-success-text, #389e0d);
+  color: var(--sage);
 }
 
 .isbn-notice-error {
-  color: var(--ant-color-error-text, #cf1322);
+  color: var(--danger);
 }
 
 /* The lookup's cover keeps a 2:3 box, so the form does not jump when it loads. */
@@ -66,19 +190,138 @@
   width: 80px;
   height: 120px;
   object-fit: cover;
-  border-radius: 3px;
-  background: var(--ant-color-fill-tertiary, #f2eef0);
+  border-radius: 2px;
+  background: var(--cloth);
 }
 
 .lookup-cover-text {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
+  font-size: 13px;
+}
+
+.add-cover .lookup-cover-text .ant-btn {
+  padding-inline: 0;
 }
 
 .credit {
   margin: 24px 0 0;
+  font-family: var(--font-text);
   font-size: 12px;
+  font-style: italic;
+}
+
+@media (max-width: 991.98px) {
+  .add-book-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .add-cover {
+    display: grid;
+    grid-template-columns: 120px minmax(0, 1fr);
+    grid-template-areas:
+      'preview text'
+      'preview picker';
+    align-content: start;
+    align-items: start;
+    gap: 8px 14px;
+    margin-bottom: 18px;
+  }
+
+  .cover-preview {
+    grid-area: preview;
+    width: 104px;
+    height: 156px;
+    padding: 6px;
+  }
+
+  .add-cover .lookup-cover-text {
+    grid-area: text;
+  }
+
+  .add-cover-picker {
+    grid-area: picker;
+    align-self: end;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .add-find {
+    padding: 14px 14px 2px;
+  }
+
+  .add-find .isbn-field .ant-space-compact {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .add-find .isbn-field .ant-space-compact > .ant-input {
+    flex: 1 1 100%;
+    margin-inline-end: 0;
+    border-radius: 4px;
+  }
+
+  .add-find .isbn-field .ant-space-compact > .ant-btn {
+    flex: 1 1 0;
+  }
+
+  .add-find .isbn-field .ant-space-compact > .ant-btn:first-of-type {
+    border-start-start-radius: 4px;
+    border-end-start-radius: 4px;
+  }
+
+  .ownership-choice {
+    max-width: none;
+  }
+
+  /* antd forces a vertical label below 576px; these rows keep the label beside its control. */
+  .take-row {
+    flex-direction: column;
+    gap: 0;
+    padding: 6px 12px;
+  }
+
+  :root .ant-form .take-row .take-item {
+    margin-bottom: 0;
+  }
+
+  :root .ant-form .take-row .take-item .ant-form-item-row {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+
+  :root .ant-form .take-row .take-item .ant-form-item-label {
+    flex: 0 0 72px;
+    max-width: 72px;
+    padding: 0;
+  }
+
+  :root .ant-form .take-row .take-item .ant-form-item-control {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .add-more {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .add-actions {
+    position: sticky;
+    bottom: calc(48px + env(safe-area-inset-bottom));
+    z-index: 20;
+    margin: 0 -16px;
+    padding: 10px 16px;
+    border-top: 1px solid var(--hairline);
+    background: rgba(15, 13, 18, 0.95);
+    backdrop-filter: blur(6px);
+  }
+
+  .add-submit {
+    flex: 1;
+  }
 }

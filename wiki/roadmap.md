@@ -1,11 +1,11 @@
 # Roadmap
 
-The work planned for Hemlock. Lookup and the TV display come first, and the
-library (books, editions and the phone layout, which land together) comes
-last. This page describes work that does not exist yet, in the present-tense
-voice of the rest of the wiki; a step leaves this page when it is built and is
-described on its own page. Nothing is deployed, so a step may change the
-schema, the API or the file layout without a compatibility path.
+The work planned for Hemlock. Lookup comes first, and the library (books,
+editions and the phone layout, which land together) comes last. This page
+describes work that does not exist yet, in the present-tense voice of the rest
+of the wiki; a step leaves this page when it is built and is described on its
+own page. Nothing is deployed, so a step may change the schema, the API or the
+file layout without a compatibility path.
 
 ## 3. Books and editions
 
@@ -57,18 +57,6 @@ schema, the API or the file layout without a compatibility path.
   rather than a CDN. It accepts EAN-13 codes starting with `978` or `979`
   with a valid check digit, ignores the five-digit price supplement, and
   keeps manual ISBN entry as a fallback.
-
-## 6. TV display
-
-- `/display` is a full-viewport page with no navigation, laid out for a 16:9
-  television and opened by any browser attached to it (a laptop over HDMI, a
-  streaming stick's browser); an on-screen button requests fullscreen. A Roku
-  TV has no browser of its own.
-- The slideshow owns its own index and timer (no carousel component), derives
-  the current slide from timestamps so a throttled timer cannot drift,
-  preloads the next cover, and refreshes the library periodically.
-- `GET /api/display` returns the slides' data; a Roku SceneGraph client
-  sideloaded in developer mode can consume the same endpoint later.
 
 ## Later
 

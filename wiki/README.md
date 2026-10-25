@@ -14,6 +14,8 @@ A newcomer starts with [Development setup](dev-setup.md) to run the app,
 
 - [Development setup](dev-setup.md): install, the dev library, ports and
   `DATA_DIR`, the everyday commands, tests.
+- [TV display](display.md): the `/display` slideshow, `GET /api/display`,
+  and the ways to get the page onto a television.
 - [Migrations](migrations.md): numbered SQL files, how they are applied, and
   the rules for writing one.
 - [Security](security.md): bind address, error bodies, upload bounds,

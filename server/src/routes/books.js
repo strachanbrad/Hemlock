@@ -5,7 +5,7 @@
 
 import { Router } from 'express'
 import { readBody } from '../body.js'
-import { attachDownloadedCovers, checkCoverSources, coverDownload, withCoverFiles } from '../coverFiles.js'
+import { attachDownloadedCovers, coverDownload, prepareUpload, withCoverFiles } from '../coverFiles.js'
 import { createLibrary, pick } from '../library.js'
 import { PHYSICAL, bookPayload, listFilters, pathId } from '../validate.js'
 
@@ -25,7 +25,7 @@ export default function bookRoutes(db, saveCover) {
 
   router.post('/books', readBody, async (req, res) => {
     const input = bookPayload(req.payload, { create: true })
-    checkCoverSources(req.cover, input.cover_from_url, input.edition?.cover_from_url)
+    const cover = await prepareUpload(req.cover, input.cover_from_url, input.edition?.cover_from_url)
 
     const downloads = []
     const id = withCoverFiles(db, (files) => {
@@ -37,10 +37,10 @@ export default function bookRoutes(db, saveCover) {
       if (input.cover_from_url) downloads.push(coverDownload(db, 'books', bookId, input.cover_from_url))
       if (input.edition) {
         const editionId = library.insertEdition(bookId, input.edition)
-        if (req.cover) library.updateEdition(editionId, { cover: files.write(req.cover, `e${editionId}`) })
+        if (cover) library.updateEdition(editionId, { cover: files.write(cover, `e${editionId}`) })
         if (input.edition.cover_from_url) downloads.push(coverDownload(db, 'editions', editionId, input.edition.cover_from_url))
-      } else if (req.cover) {
-        library.updateBook(bookId, { cover: files.write(req.cover, `b${bookId}`) })
+      } else if (cover) {
+        library.updateBook(bookId, { cover: files.write(cover, `b${bookId}`) })
       }
       return bookId
     })
@@ -51,7 +51,7 @@ export default function bookRoutes(db, saveCover) {
   router.patch('/books/:id', readBody, async (req, res) => {
     const id = pathId(req.params.id, 'Book')
     const input = bookPayload(req.payload, { create: false })
-    checkCoverSources(req.cover, input.cover_from_url, input.remove_cover)
+    const cover = await prepareUpload(req.cover, input.cover_from_url, input.remove_cover)
 
     withCoverFiles(db, (files) => {
       const book = library.bookRow(id)
@@ -62,9 +62,9 @@ export default function bookRoutes(db, saveCover) {
         library.checkTitle(author, values.title ?? book.title, id)
         values.author_id = author.id
       }
-      if (req.cover || input.remove_cover) {
+      if (cover || input.remove_cover) {
         files.discard(book.cover)
-        values.cover = req.cover ? files.write(req.cover, `b${id}`) : null
+        values.cover = cover ? files.write(cover, `b${id}`) : null
       }
       library.updateBook(id, values)
     })

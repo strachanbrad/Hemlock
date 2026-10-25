@@ -7,7 +7,8 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { after, before, beforeEach, describe, it } from 'node:test'
-import { JPEG, PNG, loadApp, startServer } from './support/server.js'
+import sharp from 'sharp'
+import { JPEG, PNG, image, loadApp, startServer } from './support/server.js'
 import { client, coverFiles, emptyLibrary, multipart, placeCover } from './support/http.js'
 
 let app
@@ -200,14 +201,15 @@ describe('POST /api/books', () => {
     assert.equal(body.editions[0].isbn, null)
   })
 
-  it('saves a multipart cover on the edition, named by the edition id and the sniffed type', async () => {
+  it('saves a multipart cover on the edition, named by the edition id, a PNG stored as a JPEG', async () => {
     seed()
-    const { status, body } = await api.post('/api/books', multipart({ title: 'Lady Susan', author_id: 2, edition: { format: 'ebook' } }, PNG, { filename: 'x.jpg' }))
+    const { status, body } = await api.post('/api/books', multipart({ title: 'Lady Susan', author_id: 2, edition: { format: 'ebook' } }, PNG, { filename: 'x.png', type: 'image/png' }))
     assert.equal(status, 201)
     const editionId = body.editions[0].id
-    assert.match(body.editions[0].cover_url, new RegExp(`^/covers/e${editionId}-[0-9a-f]{8}\\.png$`))
+    assert.match(body.editions[0].cover_url, new RegExp(`^/covers/e${editionId}-[0-9a-f]{8}\\.jpg$`))
     assert.equal(body.cover_url, body.editions[0].cover_url)
-    assert.ok(fs.readFileSync(path.join(coversDir, path.basename(body.cover_url))).equals(PNG))
+    const stored = await sharp(path.join(coversDir, path.basename(body.cover_url))).metadata()
+    assert.deepEqual([stored.format, stored.width, stored.height], ['jpeg', 4, 6])
   })
 
   it('saves a cover without an edition on the book', async () => {
@@ -311,6 +313,15 @@ describe('POST /api/books', () => {
     assert.deepEqual(coverFiles(coversDir), ['b3-0000000b.jpg', 'e1-0000000a.jpg', 'e3-0000000c.png'])
   })
 
+  it('refuses a cover whose pixels cannot be decoded, and stores nothing', async () => {
+    seed()
+    const truncated = JPEG.subarray(0, JPEG.length - 40)
+    const { status, body } = await api.post('/api/books', multipart({ title: 'x', author_id: 1, edition: { format: 'paperback' } }, truncated))
+    assert.deepEqual({ status, body }, { status: 400, body: { error: 'The cover could not be read as an image' } })
+    assert.equal(app.db.prepare("SELECT COUNT(*) FROM books WHERE title = 'x'").pluck().get(), 0)
+    assert.deepEqual(coverFiles(coversDir), ['b3-0000000b.jpg', 'e1-0000000a.jpg', 'e3-0000000c.png'])
+  })
+
   it('refuses two cover sources in one request', async () => {
     seed()
     const payload = { title: 'x', author_id: 1, edition: { format: 'paperback', cover_from_url: 'https://covers.openlibrary.org/b/id/1-L.jpg' } }
@@ -356,9 +367,18 @@ describe('PATCH /api/books/:id', () => {
     seed()
     const { status, body } = await api.patch('/api/books/3', multipart({}, PNG))
     assert.equal(status, 200)
-    assert.match(body.cover_url, /^\/covers\/b3-[0-9a-f]{8}\.png$/)
+    assert.match(body.cover_url, /^\/covers\/b3-[0-9a-f]{8}\.jpg$/)
     assert.ok(!coverFiles(coversDir).includes('b3-0000000b.jpg'))
     assert.ok(coverFiles(coversDir).includes(path.basename(body.cover_url)))
+  })
+
+  it('stores a large upload at 1600 px on its long side', async () => {
+    seed()
+    const photo = await image({ width: 3000, height: 4000 }).png().toBuffer()
+    const { status, body } = await api.patch('/api/books/3', multipart({}, photo, { type: 'image/png', filename: 'photo.png' }))
+    assert.equal(status, 200)
+    const { format, width, height } = await sharp(path.join(coversDir, path.basename(body.cover_url))).metadata()
+    assert.deepEqual({ format, width, height }, { format: 'jpeg', width: 1200, height: 1600 })
   })
 
   it('removes the book cover for cover: null', async () => {

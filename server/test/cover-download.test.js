@@ -8,7 +8,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { after, before, beforeEach, describe, it } from 'node:test'
 import { fixturesDir } from './support/fixtures.js'
-import { JPEG, PNG, WEBP, dataDir, loadApp } from './support/server.js'
+import sharp from 'sharp'
+import { JPEG, PNG, WEBP, dataDir, image as picture, loadApp } from './support/server.js'
 
 const OL_COVER = 'https://covers.openlibrary.org/b/id/14839277-L.jpg'
 const GOOGLE_COVER = 'https://books.google.com/books/content?id=g1&printsec=frontcover&img=1&zoom=1&source=gbs_api'
@@ -50,14 +51,15 @@ describe('saveCoverFromUrl', () => {
     assert.match(calls[0].init.headers['User-Agent'], /^Hemlock\/\S+ \(github\.com\/strachanbrad\/hemlock\)$/)
   })
 
-  it('follows Open Library to archive.org by hand and names the file by its real type', async () => {
+  it('follows Open Library to archive.org by hand and stores the PNG it finds as a JPEG', async () => {
     const hops = {
       [OL_COVER]: () => redirect('https://archive.org/download/l_covers_0014/l_covers_0014_83.zip/0014839277-L.jpg'),
       'https://archive.org/download/l_covers_0014/l_covers_0014_83.zip/0014839277-L.jpg': () => redirect('https://ia800100.us.archive.org/view_archive.php?archive=/x.zip&file=0014839277-L.jpg', 301),
       'https://ia800100.us.archive.org/view_archive.php?archive=/x.zip&file=0014839277-L.jpg': () => image(PNG, 'image/jpeg'),
     }
     const { result, calls } = await save(OL_COVER, (url) => hops[url]())
-    assert.match(result, /^e7-[0-9a-f]{8}\.png$/)
+    assert.match(result, /^e7-[0-9a-f]{8}\.jpg$/)
+    assert.equal(covers.imageType(fs.readFileSync(path.join(covers.coversDir, result))), 'jpg')
     assert.equal(calls.length, 3)
     assert.ok(calls.every(({ init }) => init.redirect === 'manual'))
   })
@@ -68,11 +70,19 @@ describe('saveCoverFromUrl', () => {
     assert.equal(calls[1].url, 'https://archive.org/download/c/d.jpg')
   })
 
-  it("saves a WebP from Google Books as a book's own cover", async () => {
+  it("saves a WebP from Google Books as a book's own cover, stored as a JPEG", async () => {
     const { result } = await save(GOOGLE_COVER, () => image(WEBP, 'image/webp'), { base: 'b12' })
-    assert.match(result, /^b12-[0-9a-f]{8}\.webp$/)
+    assert.match(result, /^b12-[0-9a-f]{8}\.jpg$/)
     covers.deleteCover(result)
     assert.deepEqual(files(), [])
+  })
+
+  it('stores a large download at 1600 px on its long side', async () => {
+    const amazon = await picture({ width: 2000, height: 3000 }).jpeg().toBuffer()
+    const { result, logs } = await save('https://m.media-amazon.com/images/I/81abc.jpg', () => image(amazon))
+    assert.deepEqual(logs, [])
+    const { width, height } = await sharp(path.join(covers.coversDir, result)).metadata()
+    assert.deepEqual({ width, height }, { width: 1067, height: 1600 })
   })
 
   const refusals = [
@@ -82,6 +92,7 @@ describe('saveCoverFromUrl', () => {
     ['a network error', OL_COVER, () => Promise.reject(new TypeError('fetch failed')), /fetch failed/],
     ['a redirect without a Location', OL_COVER, () => new Response(null, { status: 302 }), /redirect without a Location/],
     ['a redirect to plain http on an allowed host', OL_COVER, () => redirect('http://archive.org/download/x.jpg'), /off the allow-list: http:\/\/archive\.org/],
+    ['a JPEG cut short', OL_COVER, () => image(JPEG.subarray(0, JPEG.length - 40)), /could not be read as an image/],
     ['a Content-Length over 10 MB', OL_COVER, () => new Response(JPEG, { headers: { 'content-type': 'image/jpeg', 'content-length': String(10 * 1024 * 1024 + 1) } }), /larger than 10 MB/],
   ]
 

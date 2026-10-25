@@ -72,10 +72,15 @@ a cover in one transaction:
 4. A `cover_from_url` is downloaded only after the commit, since a
    transaction cannot wait for the network: `attachDownloadedCovers()` calls
    `saveCoverFromUrl()` ([Lookup § Cover downloads](lookup.md#cover-downloads))
-   and, when it succeeds, a second transaction points the row at the new
-   file and the cover it replaces is deleted. A failed download changes
-   nothing, so a new record has no cover; a row deleted while its cover
-   downloaded leaves the file unreferenced, and it is removed.
+   and, when it succeeds, a second statement points the row at the new file
+   and the cover it replaces is deleted. A failed download changes nothing,
+   so a new record has no cover. The download carries the row's `cover` and
+   `created_at` as its transaction committed them (`coverDownload()`), and
+   the file is attached only while the row still holds both. A row deleted
+   during the download, given another cover meanwhile (an upload), or
+   replaced by a new row under the same id (SQLite gives the highest id out
+   again once it is deleted) keeps what it has; the downloaded file is
+   removed and nothing else is deleted.
 
 A crash between a write and the commit can leave an unreferenced file, which
 is harmless.

@@ -50,12 +50,12 @@ there is no compiler step and no `sqlite3` command-line tool to install.
 | `client/` | The React and Ant Design client, built by Vite (`client/vite.config.js`, `client/index.html`, `client/src/`). |
 | `client/src/api/` | The only modules that call `fetch`, one per resource. |
 | `client/src/lib/isbn.js` | ISBN-10/13 validation and conversion; identical to `server/src/lib/isbn.js`. |
-| `server/src/` | The Express server: `index.js` starts it, `app.js` builds it, `config.js` reads the environment, `db.js` opens the database, `migrate.js` applies migrations, `covers.js` downloads and deletes cover files, `coverFiles.js` writes uploads and ties cover files to transactions, `body.js` reads JSON and multipart bodies, `validate.js` checks every payload, `library.js` holds the book queries, `routes/` holds one module per resource ([Library](library.md)). |
-| `server/src/lookup/` | The Open Library and Google Books clients and the merge of their answers ([Lookup](lookup.md)). |
+| `server/src/` | The Express server: `index.js` starts it, `app.js` builds it, `config.js` reads the environment, `db.js` opens the database, `migrate.js` applies migrations, `covers.js` downloads and deletes cover files, `coverFiles.js` writes uploads and ties cover files to transactions, `body.js` reads JSON and multipart bodies, `validate.js` checks every payload, `library.js` holds the book queries, `settings.js` keeps the settings and encrypts their secrets, `auth.js` holds the admin password and sessions ([Admin](admin.md)), `routes/` holds one module per resource ([Library](library.md)). |
+| `server/src/lookup/` | The Open Library, Google Books and Claude clients and the merge of the catalogues' answers ([Lookup](lookup.md)). |
 | `server/migrations/` | The numbered SQL migrations ([Migrations](migrations.md)). |
 | `server/seed/` | The dev library: `seed.sql` and `covers/`. |
-| `server/scripts/` | The `db:migrate`, `db:new`, `db:reset` and `lookup:record` commands. |
-| `data/` | The dev data directory (gitignored): `hemlock.db` and `covers/`. |
+| `server/scripts/` | The `db:migrate`, `db:new`, `db:reset`, `lookup:record` and `admin:password` commands. |
+| `data/` | The dev data directory (gitignored): `hemlock.db`, `covers/`, and `secrets.key` once a secret is saved. |
 
 ## Commands
 
@@ -72,6 +72,7 @@ All run from the root of the checkout.
 | `npm run db:new <name>` | Writes the next empty migration file ([Migrations](migrations.md)). |
 | `npm run db:reset` | Rebuilds the dev library from `server/seed/` (below). |
 | `npm run lookup:record -- <isbn>` | Asks Open Library for an ISBN, over the network, and writes its answers as test fixtures ([Lookup § Tests](lookup.md#tests)). |
+| `npm run admin:password` | Sets the password of `/admin`, read from a hidden prompt or a pipe, and signs every browser out ([Admin § The password](admin.md#the-password)). |
 
 ## Configuration
 
@@ -84,8 +85,10 @@ there are no `.env` files.
 | `PORT` | `5000` | The server's port. Vite proxies to `http://127.0.0.1:$PORT`. |
 | `HOST` | `127.0.0.1` | The server's bind address; an empty value also means `127.0.0.1`. |
 | `NODE_ENV` | unset | `production` on the box ([Deployment](deployment.md)). |
-| `GOOGLE_BOOKS_API_KEY` | unset | A Google Books API key. Unset means lookups ask Open Library only ([Lookup § Google Books](lookup.md#google-books)). A secret. |
-| `LOOKUP_CONTACT` | unset | An email address for Open Library's `User-Agent`, which raises its limit from 1 to 3 requests a second. The server refuses to start when it is not an email address. |
+| `GOOGLE_BOOKS_API_KEY` | unset | A Google Books API key, used when none is saved on the admin page. Without either, lookups ask Open Library only ([Lookup § Google Books](lookup.md#google-books)). A secret. |
+| `ANTHROPIC_API_KEY` | unset | An Anthropic API key for the Claude lookup, used when none is saved on the admin page ([Lookup § Claude](lookup.md#claude)). A secret. |
+| `LOOKUP_CONTACT` | unset | An email address for Open Library's `User-Agent`, which raises its limit from 1 to 3 requests a second; one saved on the admin page wins. The server refuses to start when it is not an email address. |
+| `SECRETS_KEY` | unset | 64 hexadecimal characters that encrypt the secrets saved on the admin page; unset means `DATA_DIR/secrets.key` ([Admin § Secrets at rest](admin.md#secrets-at-rest)). The server refuses to start when it is malformed. A secret. |
 | `VITE_PORT` | `5173` | The Vite dev server's port. |
 | `HTTPS` | unset | `1` serves Vite over https on every interface, for testing on a phone (below). |
 
@@ -147,12 +150,14 @@ while it runs, anyone on the network can reach the dev library.
 ## The dev data directory
 
 `DATA_DIR` holds `hemlock.db` (with its `-wal` and `-shm` files while the
-server runs) and `covers/`, which Express serves at `/covers/` in dev. Nothing
+server runs), `covers/`, which Express serves at `/covers/` in dev, and
+`secrets.key`, written by the first secret saved on the admin page. Nothing
 tracked in the checkout is written at runtime.
 
 `npm run db:reset` empties the database in place, applies the migrations,
 loads `server/seed/seed.sql`, and replaces `DATA_DIR/covers/` with
-`server/seed/covers/`. Because it empties the file rather than deleting it, a
+`server/seed/covers/`. The settings go with the rest: run
+`npm run admin:password` again to use `/admin`. Because it empties the file rather than deleting it, a
 running `npm run dev` sees the reset library at once. It refuses to run:
 
 - when `NODE_ENV=production`, always;

@@ -2,9 +2,10 @@
 
 The defaults every change to Hemlock keeps. Hemlock serves one household from
 behind the owner's TLS-terminating reverse proxy, which owns access control;
-Hemlock itself has no accounts. These rules keep a mistake in the client, a
-crafted request or a hostile upload from reaching the database, the file
-system or another host.
+Hemlock itself has no accounts. The one exception is the admin page, which
+holds the lookup keys behind a password ([Admin sessions](#admin-sessions)).
+These rules keep a mistake in the client, a crafted request or a hostile
+upload from reaching the database, the file system or another host.
 
 ## Bind address
 
@@ -67,8 +68,8 @@ A client wrapper never assumes an error body is JSON: nginx answers 413 and
 
 ## Downloads
 
-Book lookups go through the server, which calls only Open Library and Google
-Books ([Lookup](lookup.md)). The one request the browser makes to another
+Book lookups go through the server, which calls only Open Library, Google
+Books and, through its SDK, the Anthropic API ([Lookup](lookup.md)). The one request the browser makes to another
 host is the preview of a lookup's cover on the add and edition forms: an
 `<img>` from that source's image host (Open Library's cover server redirects
 to archive.org), sent with `referrerpolicy="no-referrer"` so the page address
@@ -79,8 +80,12 @@ LAN address included. `saveCoverFromUrl()` (`server/src/covers.js`) fetches
 a cover only:
 
 - over https, from `covers.openlibrary.org`, `archive.org` or any subdomain
-  of it, or `books.google.com`, with no user name, password or explicit port
-  in the URL (`allowedCoverUrl()`); the validator answers 400 for anything
+  of it, or `books.google.com`, and, for the covers a Claude lookup finds on
+  a listing, from Amazon's image hosts (`m.media-amazon.com`,
+  `images-na.ssl-images-amazon.com` and any subdomain of
+  `images-amazon.com`) and Goodreads' (`i.gr-assets.com`,
+  `images.gr-assets.com`), with no user name, password or explicit port in
+  the URL (`allowedCoverUrl()`); the validator answers 400 for anything
   else, before the row is saved or a request is sent;
 - following at most three redirects by hand, each one checked against the
   same list before it is requested;
@@ -105,8 +110,59 @@ and column names come from code:
   picked by the validated payload's keys.
 - A `q` search is bound as a `LIKE` pattern with `%`, `_` and `\` escaped.
 
+A Claude lookup's answer is model output and is treated as untrusted: the
+server keeps it only when the listing shows the ISBN, bounds every field,
+and passes its cover URL through the same allow-list
+([Lookup § Claude](lookup.md#claude)).
+
+## Admin sessions
+
+`/admin` and `/api/admin/*` ([Admin](admin.md)):
+
+- **The password** is set only from the command line, never by a first
+  visit, and read from standard input, never an argument. The database
+  keeps a scrypt hash, itself encrypted as a secret (below). Five wrong
+  passwords within 15 minutes lock the login for the rest of the window
+  (429 with `Retry-After`), for the whole process: someone on the network
+  can lock the owner out for 15 minutes, but cannot keep guessing.
+- **The cookie** `hemlock_admin` holds 32 random bytes; the database keeps
+  only their SHA-256, with an expiry fixed 30 days after login. It is
+  `HttpOnly` (no script reads it), `SameSite=Strict` (no request from
+  another site carries it), `Path=/api/admin` (no other request carries it)
+  and `Secure` when `NODE_ENV=production`. Production always sits behind the
+  owner's TLS proxy, and the legs from the proxy to nginx to Express are
+  plain HTTP, so Express cannot see TLS itself; the variable says so. A
+  `Secure` cookie is never sent over plain HTTP, which is why it is off in
+  development.
+- **Every admin route** but login, logout and the session check answers 401
+  before it reads or changes a setting.
+- **Cross-site requests.** `SameSite=Strict` keeps the cookie off them, the
+  admin routes read only JSON bodies (a cross-site form can send only form
+  or plain-text bodies, which `express.json()` leaves unread), and the
+  server sends no CORS headers, so another site's script cannot read an
+  answer.
+- **Setting the password again** deletes every session.
+
+The identify endpoint is not behind the session: like the rest of the API,
+anyone who can reach Hemlock can ask it, and each call can cost a few cents
+of the owner's Anthropic credit. Keeping Hemlock LAN-only, or behind the
+proxy's authentication, bounds that ([Deployment § The reverse proxy](deployment.md#the-reverse-proxy)).
+
 ## Secrets
 
 Secrets never go into the repository, onto a command line or into a commit
 message. On the box they live in a root-only environment file loaded by the
-systemd unit ([Deployment](deployment.md)).
+systemd unit ([Deployment](deployment.md)), or in the database, entered on
+the admin page.
+
+- **At rest.** A secret saved on the admin page (a key, the password hash)
+  is stored AES-256-GCM encrypted under `SECRETS_KEY`, or under
+  `DATA_DIR/secrets.key` (mode 0600) when that is not set
+  ([Admin § Secrets at rest](admin.md#secrets-at-rest)). The database alone,
+  a copy of it included, does not reveal a key.
+- **In answers.** The settings API answers a secret as its status and last
+  four characters, never its value. A test button's error carries the
+  provider's message with the key replaced by `[redacted]`; the Claude
+  lookup's errors and log lines are redacted the same way.
+- **In logs.** The Google key is a query parameter, so no log line contains
+  a Google request URL; the Anthropic SDK runs with its own logging off.

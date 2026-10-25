@@ -1,37 +1,69 @@
 -- Copyright (c) 2023 Hemlock
 -- SPDX-License-Identifier: GPL-3.0-only
 
-INSERT INTO Authors (first_name, last_name) VALUES ('Nicholas', 'Sparks');
-INSERT INTO Authors (first_name, last_name) VALUES ('Jane', 'Austen');
-INSERT INTO Authors (first_name, last_name) VALUES ('Emily', 'Brontë');
-INSERT INTO Authors (first_name, last_name) VALUES ('E.L.', 'James');
-INSERT INTO Authors (first_name, last_name) VALUES ('Jojo', 'Moyes');
-INSERT INTO Authors (first_name, last_name) VALUES ('Charlotte', 'Brontë');
-INSERT INTO Authors (first_name, last_name) VALUES ('Leo', 'Tolstoy');
-INSERT INTO Authors (first_name, last_name) VALUES ('Gustave', 'Flaubert');
-INSERT INTO Authors (first_name, last_name) VALUES ('Gabriel Garcia', 'Marquez');
-INSERT INTO Authors (first_name, last_name) VALUES ('Audrey', 'Niffenegger');
-INSERT INTO Authors (first_name, last_name) VALUES ('Micheal', 'Lanfield');
-INSERT INTO Authors (first_name, last_name) VALUES ('Audrey', 'Niffenegger');
+INSERT INTO authors (id, name) VALUES
+  (1, 'Nicholas Sparks'),
+  (2, 'Jane Austen'),
+  (3, 'Emily Brontë'),
+  (4, 'E.L. James'),
+  (5, 'Jojo Moyes'),
+  (6, 'Charlotte Brontë'),
+  (7, 'Leo Tolstoy'),
+  (8, 'Gustave Flaubert'),
+  (9, 'Gabriel Garcia Marquez'),
+  (10, 'Audrey Niffenegger'),
+  (11, 'Micheal Lanfield'),
+  (12, 'John Steinbeck'),
+  (13, 'Caroline Peckham & Susanne Valenti');
 
-INSERT INTO Books (isbn, star_rating, spice_rating, title, author_id, synopsis, read, gore_rating, media) VALUES ('9781471132191', 5, 1, 'The Notebook', 1, 'A classic tale of enduring love.', 1, 2, 'Hardcover');
-INSERT INTO Books (isbn, star_rating, spice_rating, title, author_id, synopsis, read, gore_rating, media) VALUES ('9781501120686', 4, 1, 'Pride and Prejudice', 2, 'A story of love and social standing.', 0, 1, 'Paperback');
-INSERT INTO Books (isbn, star_rating, spice_rating, title, author_id, synopsis, read, gore_rating, media) VALUES ('9780553212587', 4, 2, 'Wuthering Heights', 3, 'A passionate story of love and revenge on the Yorkshire moors.', 1, 3, 'Hardcover');
-INSERT INTO Books (isbn, star_rating, spice_rating, title, author_id, synopsis, read, gore_rating, media) VALUES ('9780345803481', 3, 5, 'Fifty Shades of Grey', 4, 'A novel that brought the concept of erotic romance to the forefront of popular culture.', 0, 1, 'Paperback');
-INSERT INTO Books (isbn, star_rating, spice_rating, title, author_id, synopsis, read, gore_rating, media) VALUES ('9780143124542', 4, 2, 'Me Before You', 5, 'A heart-wrenching love story that poses ethical dilemmas.', 1, 2, 'Hardcover');
-INSERT INTO Books (isbn, star_rating, spice_rating, title, author_id, synopsis, read, gore_rating, media) VALUES ('9780140430892', 5, 1, 'Jane Eyre', 6, 'An influential novel in English literature, with a strong, independent female protagonist.', 0, 2, 'Paperback');
-INSERT INTO Books (isbn, star_rating, spice_rating, title, author_id, synopsis, read, gore_rating, media) VALUES ('9781853260629', 4, 1, 'Anna Karenina', 7, 'A tragic love story set in Russian high society.', 1, 3, 'Hardcover');
-INSERT INTO Books (isbn, star_rating, spice_rating, title, author_id, synopsis, read, gore_rating, media) VALUES ('9780140449122', 3, 2, 'Madame Bovary', 8, 'A profound exploration of desire, bourgeois vanity, and the claustrophobia of provincial life.', 0, 1, 'Paperback');
-INSERT INTO Books (isbn, star_rating, spice_rating, title, author_id, synopsis, read, gore_rating, media) VALUES ('9780060883287', 5, 1, 'Love in the Time of Cholera', 9, 'A novel that explores the theme of love in all its forms.', 1, 4, 'Hardcover');
-INSERT INTO Books (isbn, star_rating, spice_rating, title, author_id, synopsis, read, gore_rating, media) VALUES ('9780156029438', 4, 1, 'The Time Traveler''s Wife', 10, 'A unique love story about a man with a genetic disorder that causes him to time travel unpredictably.', 0, 2, 'Paperback');
+INSERT INTO books (id, title, author_id, synopsis, star_rating, spice_rating, gore_rating, read, wishlist, created_at, updated_at) VALUES
+  (1, 'The Notebook', 1, 'A classic tale of enduring love.', 5, 1, 2, 1, 0, '2023-01-02 09:00:00', '2023-01-02 09:00:00'),
+  (2, 'Pride and Prejudice', 2, 'A story of love and social standing.', 4, 1, 1, 0, 0, '2023-01-04 09:00:00', '2023-01-04 09:00:00'),
+  (3, 'Wuthering Heights', 3, 'A passionate story of love and revenge on the Yorkshire moors.', 4, 2, 3, 1, 0, '2023-01-07 09:00:00', '2023-01-07 09:00:00'),
+  (4, 'Fifty Shades of Grey', 4, 'A novel that brought the concept of erotic romance to the forefront of popular culture.', 3, 5, 1, 0, 0, '2023-01-11 09:00:00', '2023-01-11 09:00:00'),
+  (5, 'Me Before You', 5, 'A heart-wrenching love story that poses ethical dilemmas.', 4, 2, 2, 1, 0, '2023-01-16 09:00:00', '2023-01-16 09:00:00'),
+  (6, 'Jane Eyre', 6, 'An influential novel in English literature, with a strong, independent female protagonist.', 5, 1, 2, 0, 0, '2023-01-22 09:00:00', '2023-01-22 09:00:00'),
+  (7, 'Anna Karenina', 7, 'A tragic love story set in Russian high society.', 4, 1, 3, 1, 0, '2023-01-29 09:00:00', '2023-01-29 09:00:00'),
+  (8, 'Madame Bovary', 8, 'A profound exploration of desire, bourgeois vanity, and the claustrophobia of provincial life.', 3, 2, 1, 0, 0, '2023-02-06 09:00:00', '2023-02-06 09:00:00'),
+  (9, 'Love in the Time of Cholera', 9, 'A novel that explores the theme of love in all its forms.', 5, 1, 4, 1, 0, '2023-02-15 09:00:00', '2023-02-15 09:00:00'),
+  (10, 'The Time Traveler''s Wife', 10, 'A unique love story about a man with a genetic disorder that causes him to time travel unpredictably.', 4, 1, 2, 0, 0, '2023-02-25 09:00:00', '2023-02-25 09:00:00'),
+  (11, 'The Choice', 1, 'Another heartrending story from Nicholas Sparks, about choices and sacrifices in love.', 3, 2, 2, 1, 1, '2023-03-08 09:00:00', '2023-03-08 09:00:00'),
+  (12, 'Persuasion', 2, 'Jane Austen''s novel about second chances in love, with her nuanced character portrayal.', 5, 1, 1, 0, 0, '2023-03-20 09:00:00', '2023-03-20 09:00:00'),
+  (13, 'The Lost Love', 11, 'A touching story of lost and reclaimed love.', 4, 1, 3, 1, 1, '2023-04-02 09:00:00', '2023-04-02 09:00:00'),
+  (14, 'Grey', 4, 'E.L. James provides a deeper look into the world of Christian Grey.', 3, 3, 4, 0, 1, '2023-04-16 09:00:00', '2023-04-16 09:00:00'),
+  (15, 'After You', 5, 'The sequel to Me Before You, delving into dealing with grief and moving on.', 4, 2, 2, 1, 0, '2023-05-01 09:00:00', '2023-05-01 09:00:00'),
+  (16, 'Villette', 6, 'Charlotte Brontë''s deep and complex novel about the experiences of Lucy Snowe.', 4, 2, 1, 0, 1, '2023-05-17 09:00:00', '2023-05-17 09:00:00'),
+  (17, 'War and Peace', 7, 'Tolstoy''s epic tale of love and war.', 5, 1, 5, 1, 0, '2023-06-03 09:00:00', '2023-06-03 09:00:00'),
+  (18, 'Sentimental Education', 8, 'Flaubert''s novel of romantic ambition, disillusionment, and social satire.', 3, 1, 3, 0, 1, '2023-06-21 09:00:00', '2023-06-21 09:00:00'),
+  (19, 'One Hundred Years of Solitude', 9, 'Marquez''s masterpiece blending the real and the magical in the story of the Buendia family.', 4, 1, 1, 1, 0, '2023-07-10 09:00:00', '2023-07-10 09:00:00'),
+  (20, 'Her Fearful Symmetry', 10, 'A novel by Audrey Niffenegger about love and identity set near Highgate Cemetery.', 5, 1, 2, 0, 1, '2023-07-30 09:00:00', '2023-07-30 09:00:00'),
+  (21, 'Of Mice and Men', 12, 'Two displaced ranch hands share a dream of a farm of their own during the Great Depression.', 4, 0, 2, 1, 0, '2023-08-20 09:00:00', '2023-08-20 09:00:00'),
+  (22, 'Zodiac Academy: Shadow Princess', 13, 'The fourth Zodiac Academy novel, as the Vega twins fight for their place among the Celestial Heirs.', 5, 4, 3, 0, 0, '2023-09-11 09:00:00', '2023-09-11 09:00:00'),
+  (23, 'Emma', 2, 'Emma Woodhouse, handsome, clever and rich, tries her hand at matchmaking in Highbury.', 0, 0, 0, 0, 1, '2023-10-04 09:00:00', '2023-10-04 09:00:00');
 
-INSERT INTO EBooks (isbn, star_rating, spice_rating, title, author_id, synopsis, read, gore_rating, media, buy) VALUES ('9780316000010', 3, 2, 'The Choice', 1, 'Another heartrending story from Nicholas Sparks, about choices and sacrifices in love.', 1, 2, 'Ebook', 1);
-INSERT INTO EBooks (isbn, star_rating, spice_rating, title, author_id, synopsis, read, gore_rating, media, buy) VALUES ('9780316000011', 5, 1, 'Persuasion', 2, 'Jane Austen''s novel about second chances in love, with her nuanced character portrayal.', 0, 1, 'Ebook', 0);
-INSERT INTO EBooks (isbn, star_rating, spice_rating, title, author_id, synopsis, read, gore_rating, media, buy) VALUES ('9780316000012', 4, 1, 'The Lost Love', 11, 'A touching story of lost and reclaimed love.', 1, 3, 'Ebook', 1);
-INSERT INTO EBooks (isbn, star_rating, spice_rating, title, author_id, synopsis, read, gore_rating, media, buy) VALUES ('9780316000013', 3, 3, 'Grey', 4, 'E.L. James provides a deeper look into the world of Christian Grey.', 0, 4, 'Ebook', 1);
-INSERT INTO EBooks (isbn, star_rating, spice_rating, title, author_id, synopsis, read, gore_rating, media, buy) VALUES ('9780316000014', 4, 2, 'After You', 5, 'The sequel to Me Before You, delving into dealing with grief and moving on.', 1, 2, 'Ebook', 0);
-INSERT INTO EBooks (isbn, star_rating, spice_rating, title, author_id, synopsis, read, gore_rating, media, buy) VALUES ('9780316000015', 4, 2, 'Villette', 6, 'Charlotte Brontë''s deep and complex novel about the experiences of Lucy Snowe.', 0, 1, 'Ebook', 1);
-INSERT INTO EBooks (isbn, star_rating, spice_rating, title, author_id, synopsis, read, gore_rating, media, buy) VALUES ('9780316000016', 5, 1, 'War and Peace', 7, 'Tolstoy''s epic tale of love and war.', 1, 5, 'Ebook', 0);
-INSERT INTO EBooks (isbn, star_rating, spice_rating, title, author_id, synopsis, read, gore_rating, media, buy) VALUES ('9780316000017', 3, 1, 'Sentimental Education', 8, 'Flaubert''s novel of romantic ambition, disillusionment, and social satire.', 0, 3, 'Ebook', 1);
-INSERT INTO EBooks (isbn, star_rating, spice_rating, title, author_id, synopsis, read, gore_rating, media, buy) VALUES ('9780316000018', 4, 1, 'One Hundred Years of Solitude', 9, 'Marquez''s masterpiece blending the real and the magical in the story of the Buendia family.', 1, 1, 'Ebook', 0);
-INSERT INTO EBooks (isbn, star_rating, spice_rating, title, author_id, synopsis, read, gore_rating, media, buy) VALUES ('9780316000019', 5, 1, 'Her Fearful Symmetry', 12, 'A novel by Audrey Niffenegger about love and identity set near Highgate Cemetery.', 0, 2, 'Ebook', 1);
+INSERT INTO editions (id, book_id, format, isbn, publisher, published, cover, created_at) VALUES
+  (1, 1, 'hardcover', '9780446520805', 'Warner Books', '1996', 'e1-3c51be40.jpg', '2023-01-02 09:00:00'),
+  (2, 2, 'paperback', '9780141439518', 'Penguin Books', '2003', NULL, '2023-01-04 09:00:00'),
+  (3, 3, 'paperback', '9780553212587', 'Bantam Books', '1981-03', 'e3-231c6635.jpg', '2023-01-07 09:00:00'),
+  (4, 4, 'paperback', '9780345803481', 'Vintage Books', '2012', 'e4-9778cccc.jpg', '2023-01-11 09:00:00'),
+  (5, 5, 'paperback', '9780143124542', 'Penguin Publishing Group', '2013', 'e5-0c3ca6b8.jpg', '2023-01-16 09:00:00'),
+  (6, 6, 'paperback', '9780141441146', 'Penguin Classics', '2006-08-15', NULL, '2023-01-22 09:00:00'),
+  (7, 7, 'hardcover', '9780679410003', 'Knopf', '1992', NULL, '2023-01-29 09:00:00'),
+  (8, 8, 'paperback', '9780140449129', 'Penguin Books', '2003', NULL, '2023-02-06 09:00:00'),
+  (9, 9, 'hardcover', '9780394561615', 'Alfred A. Knopf', '1988', NULL, '2023-02-15 09:00:00'),
+  (10, 10, 'paperback', '9780156029438', 'Houghton Mifflin Harcourt', '2004-07', 'e10-b8fcf1e8.jpg', '2023-02-25 09:00:00'),
+  (11, 11, 'ebook', NULL, NULL, NULL, 'e11-3952e63d.png', '2023-03-08 09:00:00'),
+  (12, 12, 'ebook', NULL, NULL, NULL, NULL, '2023-03-20 09:00:00'),
+  (13, 13, 'ebook', NULL, NULL, NULL, NULL, '2023-04-02 09:00:00'),
+  (14, 14, 'ebook', NULL, NULL, NULL, NULL, '2023-04-16 09:00:00'),
+  (15, 15, 'ebook', NULL, NULL, NULL, NULL, '2023-05-01 09:00:00'),
+  (16, 16, 'ebook', NULL, NULL, NULL, NULL, '2023-05-17 09:00:00'),
+  (17, 17, 'ebook', NULL, NULL, NULL, NULL, '2023-06-03 09:00:00'),
+  (18, 18, 'ebook', NULL, NULL, NULL, NULL, '2023-06-21 09:00:00'),
+  (19, 19, 'ebook', NULL, NULL, NULL, NULL, '2023-07-10 09:00:00'),
+  (20, 20, 'ebook', NULL, NULL, NULL, NULL, '2023-07-30 09:00:00'),
+  (21, 4, 'ebook', NULL, NULL, NULL, NULL, '2023-08-02 09:00:00'),
+  (22, 21, 'paperback', '9780230031067', 'Macmillan Publishers Limited', '2012', 'e22-f7db8be4.jpg', '2023-08-20 09:00:00'),
+  (23, 22, 'paperback', '9781914425066', NULL, '2021-11-02', 'e23-ce4ae362.jpg', '2023-09-11 09:00:00'),
+  (24, 17, 'paperback', '9781853260629', 'NTC/Contemporary Publishing Company', '1997-09-01', 'e24-8413976e.jpg', '2023-06-12 09:00:00'),
+  (25, 19, 'paperback', '9780060883287', 'Harper Perennial Modern Classics', '2006-02-21', 'e25-86d343ae.jpg', '2023-07-18 09:00:00');

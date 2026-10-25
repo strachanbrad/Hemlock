@@ -50,7 +50,7 @@ there is no compiler step and no `sqlite3` command-line tool to install.
 | `client/` | The React and Ant Design client, built by Vite (`client/vite.config.js`, `client/index.html`, `client/src/`). |
 | `client/src/api/` | The only modules that call `fetch`, one per resource. |
 | `client/src/lib/isbn.js` | ISBN-10/13 validation and conversion; identical to `server/src/lib/isbn.js`. |
-| `server/src/` | The Express server: `index.js` starts it, `app.js` builds it, `config.js` reads the environment, `db.js` opens the database, `migrate.js` applies migrations, `covers.js` writes, downloads and deletes cover files, `routes/` holds one module per resource. |
+| `server/src/` | The Express server: `index.js` starts it, `app.js` builds it, `config.js` reads the environment, `db.js` opens the database, `migrate.js` applies migrations, `covers.js` downloads and deletes cover files, `coverFiles.js` writes uploads and ties cover files to transactions, `body.js` reads JSON and multipart bodies, `validate.js` checks every payload, `library.js` holds the book queries, `routes/` holds one module per resource ([Library](library.md)). |
 | `server/src/lookup/` | The Open Library and Google Books clients and the merge of their answers ([Lookup](lookup.md)). |
 | `server/migrations/` | The numbered SQL migrations ([Migrations](migrations.md)). |
 | `server/seed/` | The dev library: `seed.sql` and `covers/`. |
@@ -130,14 +130,15 @@ Vite's proxy.
 2. Vite prints a `Network: https://<address>:<VITE_PORT>/` line for each
    interface. Pick the one on the Wi-Fi network (`ip -4 addr` names them).
 3. On the phone, on the same Wi-Fi, open
-   `https://<address>:<VITE_PORT>/scan-test`.
+   `https://<address>:<VITE_PORT>/add`.
 4. Accept the certificate warning. Safari: "Show Details", then "visit this
    website", then "Visit Website". Chrome: "Advanced", then "Proceed to
    <address> (unsafe)". Firefox: "Advanced…", then "Accept the Risk and
    Continue". The certificate lasts 30 days; a new one brings the warning
    back.
-5. Tap "Scan barcode", allow the camera, and hold the barcode on the back of a
-   book inside the frame. The page shows the ISBN and its lookup answer.
+5. Tap "Scan" beside the ISBN, allow the camera, and hold the barcode on the
+   back of a book inside the frame. The form fills in from the lookup;
+   nothing is saved until "Add book".
 
 If the phone cannot connect, the dev machine's firewall must allow TCP on
 `VITE_PORT` from the local network. Stop the server with Ctrl-C after testing:

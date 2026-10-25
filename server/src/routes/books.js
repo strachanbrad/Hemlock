@@ -4,91 +4,82 @@
  */
 
 import { Router } from 'express'
-import multer from 'multer'
-import { MAX_COVER_BYTES, saveCoverFromUpload } from '../covers.js'
-import { httpError } from '../errors.js'
-import { pickFields } from './fields.js'
+import { readBody } from '../body.js'
+import { attachDownloadedCovers, checkCoverSources, withCoverFiles } from '../coverFiles.js'
+import { createLibrary, pick } from '../library.js'
+import { PHYSICAL, bookPayload, listFilters, pathId } from '../validate.js'
 
-const BOOK_COLUMNS = ['isbn', 'star_rating', 'spice_rating', 'gore_rating', 'title', 'author_id', 'synopsis', 'read', 'media']
+const BOOK_VALUES = ['title', 'synopsis', 'star_rating', 'spice_rating', 'gore_rating', 'read', 'wishlist']
 
-const TABLES = new Map([
-  ['Books', { table: 'Books', columns: BOOK_COLUMNS }],
-  ['EBooks', { table: 'EBooks', columns: [...BOOK_COLUMNS, 'buy'] }],
-])
-
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_COVER_BYTES, files: 1 },
-}).single('cover')
-
-function bookTable(bookType) {
-  const target = TABLES.get(bookType)
-  if (!target) throw httpError(400, 'Invalid book type')
-  return target
-}
-
-export default function bookRoutes(db) {
+export default function bookRoutes(db, saveCover) {
   const router = Router()
+  const library = createLibrary(db)
 
-  router.get('/:bookType/get', (req, res) => {
-    const { table } = bookTable(req.params.bookType)
-    res.json({ message: `${table} retrieved successfully`, data: db.prepare(`SELECT * FROM ${table}`).all() })
+  router.get('/books', (req, res) => {
+    res.json(library.listBooks(listFilters(req.query)))
   })
 
-  router.get('/:bookType/author/:authorId', (req, res) => {
-    const { table } = bookTable(req.params.bookType)
-    const books = db.prepare(`SELECT * FROM ${table} WHERE author_id = ?`).all(req.params.authorId)
-    res.json({ message: `${table} books retrieved successfully`, data: books })
+  router.get('/books/:id', (req, res) => {
+    res.json(library.getBook(pathId(req.params.id, 'Book')))
   })
 
-  router.post('/:bookType/:isbn/update', upload, (req, res) => {
-    const { table, columns } = bookTable(req.params.bookType)
-    const { isbn } = req.params
-    const fields = pickFields(req.body, columns.filter((column) => column !== 'isbn'))
+  router.post('/books', readBody, async (req, res) => {
+    const input = bookPayload(req.payload, { create: true })
+    checkCoverSources(req.cover, input.cover_from_url, input.edition?.cover_from_url)
 
-    const book = db.transaction(() => {
-      if (fields.length > 0) {
-        db.prepare(`UPDATE ${table} SET ${fields.map(([column]) => `${column} = ?`).join(', ')} WHERE isbn = ?`)
-          .run(...fields.map(([, value]) => value), isbn)
+    const downloads = []
+    const id = withCoverFiles(db, (files) => {
+      const author = library.resolveAuthor(input)
+      library.checkTitle(author, input.title)
+      const values = { ...pick(input, BOOK_VALUES), author_id: author.id }
+      if (input.edition && PHYSICAL.has(input.edition.format)) values.wishlist = 0
+      const bookId = library.insertBook(values)
+      if (input.cover_from_url) downloads.push({ table: 'books', id: bookId, url: input.cover_from_url })
+      if (input.edition) {
+        const editionId = library.insertEdition(bookId, input.edition)
+        if (req.cover) library.updateEdition(editionId, { cover: files.write(req.cover, `e${editionId}`) })
+        if (input.edition.cover_from_url) downloads.push({ table: 'editions', id: editionId, url: input.edition.cover_from_url })
+      } else if (req.cover) {
+        library.updateBook(bookId, { cover: files.write(req.cover, `b${bookId}`) })
       }
-      const row = db.prepare(`SELECT * FROM ${table} WHERE isbn = ?`).get(isbn)
-      if (!row) throw httpError(404, `Book with ISBN ${isbn} not found in ${table}`)
-      if (req.file) saveCoverFromUpload(req.file, isbn)
-      return row
-    })()
-
-    res.json({ message: 'Book updated successfully', data: book })
+      return bookId
+    })
+    await attachDownloadedCovers(db, downloads, saveCover)
+    res.status(201).json(library.getBook(id))
   })
 
-  router.post('/:bookType/:isbn/insert', upload, (req, res) => {
-    const { table, columns } = bookTable(req.params.bookType)
-    const fields = pickFields(req.body, columns)
-    if (fields.length === 0) throw httpError(400, 'No book fields given')
+  router.patch('/books/:id', readBody, async (req, res) => {
+    const id = pathId(req.params.id, 'Book')
+    const input = bookPayload(req.payload, { create: false })
+    checkCoverSources(req.cover, input.cover_from_url, input.remove_cover)
 
-    db.transaction(() => {
-      db.prepare(`INSERT INTO ${table} (${fields.map(([column]) => column).join(', ')}) VALUES (${fields.map(() => '?').join(', ')})`)
-        .run(...fields.map(([, value]) => value))
-      if (req.file) saveCoverFromUpload(req.file, req.params.isbn)
-    })()
-
-    res.json({ message: 'Book inserted successfully' })
+    withCoverFiles(db, (files) => {
+      const book = library.bookRow(id)
+      const values = pick(input, BOOK_VALUES)
+      const authorChanges = input.author_id !== undefined || input.author_name !== undefined
+      if (authorChanges || values.title !== undefined) {
+        const author = library.resolveAuthor(authorChanges ? input : { author_id: book.author_id })
+        library.checkTitle(author, values.title ?? book.title, id)
+        values.author_id = author.id
+      }
+      if (req.cover || input.remove_cover) {
+        files.discard(book.cover)
+        values.cover = req.cover ? files.write(req.cover, `b${id}`) : null
+      }
+      library.updateBook(id, values)
+    })
+    if (input.cover_from_url) await attachDownloadedCovers(db, [{ table: 'books', id, url: input.cover_from_url }], saveCover)
+    res.json(library.getBook(id))
   })
 
-  router.post('/convertEBookToBook', (req, res) => {
-    const { isbn, media } = req.body ?? {}
-    if (!isbn) throw httpError(400, 'ISBN must be provided')
-    if (typeof media !== 'string' || !media) throw httpError(400, 'Media must be provided')
-
-    db.transaction(() => {
-      const ebook = db.prepare('SELECT * FROM EBooks WHERE isbn = ?').get(isbn)
-      if (!ebook) throw httpError(404, 'EBook not found')
-      const book = { ...ebook, media }
-      db.prepare(`INSERT INTO Books (${BOOK_COLUMNS.join(', ')}) VALUES (${BOOK_COLUMNS.map(() => '?').join(', ')})`)
-        .run(...BOOK_COLUMNS.map((column) => book[column]))
-      db.prepare('DELETE FROM EBooks WHERE isbn = ?').run(isbn)
-    })()
-
-    res.json({ message: 'EBook converted to Book successfully' })
+  router.delete('/books/:id', (req, res) => {
+    const id = pathId(req.params.id, 'Book')
+    withCoverFiles(db, (files) => {
+      library.bookRow(id)
+      for (const cover of library.coversOfBook(id)) files.discard(cover)
+      db.prepare('DELETE FROM books WHERE id = ?').run(id)
+    })
+    res.status(204).end()
   })
 
   return router

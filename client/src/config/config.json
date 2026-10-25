@@ -5,10 +5,10 @@
     "theme": {
       "primary": "#89023e",
       "bgBase": "#ffffff",
-      "textBase": "#cc7178",
+      "textBase": "#2b1d22",
       "sizeStep": 6,
       "borderRadius": 4,
-      "secondary": "#f23E1dd",
+      "secondary": "#fbe3e8",
       "tertiary": "#ffd9da"
     }
   }

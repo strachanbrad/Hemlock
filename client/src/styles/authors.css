@@ -1,0 +1,71 @@
+/*
+ * Copyright (c) 2023 Hemlock
+ * SPDX-License-Identifier: GPL-3.0-only
+ */
+
+.authors {
+  max-width: 720px;
+}
+
+.authors-search {
+  margin-bottom: 16px;
+}
+
+.author-name {
+  font-weight: 500;
+}
+
+.author-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.author-actions .icon-button {
+  width: 32px;
+  height: 32px;
+}
+
+.rename-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.rename-field .ant-input {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.rename-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.rename-error {
+  flex-basis: 100%;
+  color: var(--ant-color-error, #d4380d);
+}
+
+.author-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.author-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--ant-color-border-secondary, #f0e6e9);
+}
+
+.author-row-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}

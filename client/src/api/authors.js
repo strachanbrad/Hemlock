@@ -3,18 +3,10 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 
-export const fetchAuthors = async (setAuthors) => {
-  try {
-    const response = await fetch('/api/authors')
-    if (response.ok) {
-      const data = await response.json()
-      setAuthors(data.data || [])
-    } else {
-      console.error('Failed to fetch authors:', response.statusText)
-      setAuthors([])
-    }
-  } catch (error) {
-    console.error('Network error when fetching authors:', error)
-    setAuthors([])
-  }
-}
+import { request } from './request.js'
+
+export const listAuthors = ({ signal } = {}) => request('/api/authors', { signal })
+
+export const renameAuthor = (id, name) => request(`/api/authors/${id}`, { method: 'PATCH', json: { name } })
+
+export const deleteAuthor = (id) => request(`/api/authors/${id}`, { method: 'DELETE' })

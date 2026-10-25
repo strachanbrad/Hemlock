@@ -17,11 +17,12 @@ export const loadApp = async () => ({
   ...(await import('../../src/db.js')),
 })
 
-export async function startServer() {
+// options reach createApp, for a test that injects the lookup or the cover download.
+export async function startServer(options = {}) {
   const { createApp, openDb } = await loadApp()
   const db = openDb(dataDir)
   const server = await new Promise((resolve, reject) => {
-    const listening = createApp({ db }).listen(0, '127.0.0.1', (err) => (err ? reject(err) : resolve(listening)))
+    const listening = createApp({ db, ...options }).listen(0, '127.0.0.1', (err) => (err ? reject(err) : resolve(listening)))
   })
   return {
     db,

@@ -37,34 +37,41 @@ A client wrapper never assumes an error body is JSON: nginx answers 413 and
 ## Uploads
 
 - A cover upload is bounded before it is held: multer with `memoryStorage`
-  and `limits: { fileSize: 10 MB, files: 1 }` (`server/src/routes/books.js`).
-  A larger file answers 413.
+  and `limits: { fileSize: 10 MB, files: 1, fields: 1, parts: 2 }`
+  (`server/src/body.js`). A larger file answers 413; a second file or any part
+  other than `data` and `cover` answers 400.
 - The type comes from the file's magic bytes (`imageType()` in
   `server/src/covers.js`: JPEG, PNG or WebP), never from the client's file
   name or MIME type. Anything else answers 400.
-- The upload is written inside the database transaction it belongs to, so a
-  refused cover leaves no row behind and a failed write leaves no file.
+- The upload is written inside the database transaction it belongs to
+  (`withCoverFiles()` in `server/src/coverFiles.js`): if the transaction
+  throws, the file is removed, so a refused write leaves neither a row nor a
+  file. A cover replaced or removed is deleted only after the commit.
 
 ## Cover file names
 
 - The server generates every cover file name; a name from a request never
-  reaches the file system. Under the current schema a cover is
-  `<isbn>.jpg`, and `saveCoverFromUpload()` accepts only 13 digits, or 9
-  digits followed by a digit or `X`, so a path in the ISBN is refused.
-- A downloaded cover is `e<edition id>-<8 hex>.<ext>`, or
-  `b<book id>-<8 hex>.<ext>` for a book's own cover, with the extension from
-  its magic bytes (`saveCoverFromUrl()`).
-- A cover is written to a temporary name inside `DATA_DIR/covers/` and renamed
-  into place. It never moves from `os.tmpdir()`: under the systemd unit's
-  `PrivateTmp` that is another mount, and the rename fails with `EXDEV`.
+  reaches the file system. A cover is `e<edition id>-<8 hex>.<ext>` or, for
+  a book's own cover, `b<book id>-<8 hex>.<ext>`, with the extension from the
+  magic bytes. The random part gives a replaced cover a new URL.
+- `writeCover()` (`server/src/coverFiles.js`) writes an upload under that
+  name with the `wx` flag, so it never replaces an existing file. A
+  downloaded cover (`saveCoverFromUrl()`) goes to a temporary name inside
+  `DATA_DIR/covers/` and is renamed into place, never from `os.tmpdir()`:
+  under the systemd unit's `PrivateTmp` that is another mount, and the rename
+  fails with `EXDEV`.
 - `deleteCover()` refuses any name that does not match the server's own
   patterns (`^(e\d+-[0-9a-f]{8}|b\d+-[0-9a-f]{8}|\d{13})\.(jpg|png|webp)$`) and
   ignores a file that is already gone.
 
 ## Downloads
 
-The browser never calls an outside service; book lookups go through the
-server, which calls only Open Library and Google Books ([Lookup](lookup.md)).
+Book lookups go through the server, which calls only Open Library and Google
+Books ([Lookup](lookup.md)). The one request the browser makes to another
+host is the preview of a lookup's cover on the add and edition forms: an
+`<img>` from that source's image host (Open Library's cover server redirects
+to archive.org), sent with `referrerpolicy="no-referrer"` so the page address
+is not passed on.
 A cover chosen from a lookup reaches the server as a URL from the client, so
 without bounds the server would fetch whatever a request names, a loopback or
 LAN address included. `saveCoverFromUrl()` (`server/src/covers.js`) fetches
@@ -72,8 +79,8 @@ a cover only:
 
 - over https, from `covers.openlibrary.org`, `archive.org` or any subdomain
   of it, or `books.google.com`, with no user name, password or explicit port
-  in the URL (`allowedCoverUrl()`); anything else is refused before a request
-  is sent;
+  in the URL (`allowedCoverUrl()`); the validator answers 400 for anything
+  else, before the row is saved or a request is sent;
 - following at most three redirects by hand, each one checked against the
   same list before it is requested;
 - within 10 seconds for the whole download, and up to 10 MB, checked against
@@ -90,14 +97,12 @@ the book or edition is saved without the cover.
 SQL never interpolates a request value. Values are bound as parameters; table
 and column names come from code:
 
-- A book type in a URL must be `Books` or `EBooks`
-  (`server/src/routes/books.js`), and the SQL uses the name from the code's
-  own table, not the request's string.
-- `/api/data/:table` accepts only the tables and columns listed in
-  `server/src/routes/data.js`; an unknown table or column answers 400.
-- `pickFields()` (`server/src/routes/fields.js`) takes column names from the
-  caller's list and binds only strings, numbers, booleans (as 1 or 0) and
-  null.
+- Every request body passes `server/src/validate.js` first: an unknown field
+  answers 400, and every value leaves it in its stored type (booleans as 1
+  or 0, ISBNs as ISBN-13, names trimmed).
+- An `UPDATE` names only columns from the lists in `server/src/library.js`,
+  picked by the validated payload's keys.
+- A `q` search is bound as a `LIKE` pattern with `%`, `_` and `\` escaped.
 
 ## Secrets
 

@@ -24,13 +24,14 @@ joins anything:
 | `title` | A string. |
 | `author` | The author's name, or null. |
 | `synopsis` | A string, `''` when there is none. |
-| `cover_url` | `/covers/<file>`, relative to the server's origin, or null when there is no cover file. |
-| `format` | `hardcover`, `paperback`, `ebook`, or null. |
+| `cover_url` | `/covers/<file>`, relative to the server's origin, or null when the book has no cover. |
+| `format` | The format of the edition whose cover is shown (`hardcover`, `paperback` or `ebook`), or null for a book with no edition. |
 | `read` | `true` or `false`. |
 | `star_rating`, `spice_rating`, `gore_rating` | Integers, `0` when unrated. |
 
-The filters: `all` and `owned` list every book, `read` and `unread` split them
-by read status. The order is `title COLLATE NOCASE, id`, the same on every
+The filters: `all` lists every book, `owned` (the default) every book with at
+least one edition, so a book only wanted stays off the television; `read` and
+`unread` split every book by read status. The order is `title COLLATE NOCASE, id`, the same on every
 call, which the slideshow relies on to keep its place.
 
 To see what the page receives, with `npm run dev` running on the dev machine:
@@ -41,23 +42,17 @@ curl -s 'http://localhost:5173/api/display?filter=unread'
 
 ## The query
 
-`listDisplayBooks(db, filter)` is the only code that knows the schema; the
-route handler around it stays the same when the schema changes. Against the
-`Authors`, `Books` and `EBooks` tables of `server/migrations/001_init.sql`:
+`listDisplayBooks(db, filter)` in `server/src/routes/display.js` is the only
+code here that knows the schema; the route handler around it stays the same
+when the schema changes. It reads the `books`, `authors` and `editions`
+tables ([Library § The model](library.md#the-model)):
 
-- It is a `UNION ALL` of `Books` and `EBooks`, each with a `LEFT JOIN` on
-  `Authors`, so a book whose author row is missing still shows, with a null
-  author.
-- `id` is `b` or `e` followed by the ISBN, because the same ISBN can be in
-  both tables.
-- The columns are loosely typed, so the query normalises them: a null rating
-  becomes `0` and a string rating an integer; `read` is true for `1`, `'1'` or
-  `'true'`; `media` becomes `hardcover` or `paperback` for a `Books` row, and
-  every `EBooks` row is `ebook`.
-- Every row is an owned copy, so `owned` lists the same books as `all`.
-- `cover_url` is `/covers/<isbn>.jpg` when that file is in `DATA_DIR/covers/`
-  (one directory listing per request) and null otherwise, so the page never
-  requests a cover that does not exist.
+- One row per book, joined to its author; `id` is `books.id`.
+- `cover_url` and `format` come from the cover rule
+  ([Library § The cover rule](library.md#the-cover-rule)): `bookCover()` and
+  `pickedEdition()` in `server/src/library.js`, the same SQL `/api/books`
+  uses, so the television and the library always show the same cover.
+- `owned` keeps the books with at least one edition.
 
 ## The page
 
@@ -179,8 +174,8 @@ television's browser does
 
 ## Tests
 
-- `server/test/display.test.js`: the record shape, each filter and the
-  default, the order, a missing cover file or directory, and the 400.
+- `server/test/display.test.js`: the record shape with the cover and format
+  the cover rule picks, each filter and the default, the order, and the 400.
 - `client/test/slideshow.test.js`: the timing functions with explicit times
   (wrap, catch-up, refetch, deletion, keys, pause, a backward clock, an empty
   list) and the address parameters.

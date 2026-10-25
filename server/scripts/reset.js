@@ -14,4 +14,4 @@ if (refusal) {
 }
 
 const result = resetDatabase(config.dataDir)
-console.log(`Reset ${databaseFile(config.dataDir)} to schema ${result.schema}: ${result.authors} authors, ${result.books} books, ${result.ebooks} ebooks, ${result.covers} covers`)
+console.log(`Reset ${databaseFile(config.dataDir)} to schema ${result.schema}: ${result.authors} authors, ${result.books} books, ${result.editions} editions, ${result.covers} covers`)

@@ -1,0 +1,103 @@
+/*
+ * Copyright (c) 2023 Hemlock
+ * SPDX-License-Identifier: GPL-3.0-only
+ */
+
+.shell {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.shell-header {
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+}
+
+.shell-brand {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  color: #fff;
+}
+
+.shell-logo {
+  height: 40px;
+  width: auto;
+  border-radius: 0;
+}
+
+.shell-title {
+  margin: 0;
+  color: #fff;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.shell-sider .shell-menu {
+  height: 100%;
+  border-inline-end: 0;
+}
+
+.shell-content {
+  min-width: 0;
+  padding: 24px;
+  background: var(--ant-color-bg-container, #fff);
+}
+
+/* Phone: a 56px header, 16px padding and a fixed 48px tab bar above the home indicator. */
+.shell-phone .shell-header {
+  height: 56px;
+  padding: 0 16px;
+  line-height: 56px;
+}
+
+.shell-phone .shell-logo {
+  height: 32px;
+}
+
+.shell-phone .shell-title {
+  font-size: 20px;
+}
+
+.shell-phone .shell-content {
+  padding: 16px 16px calc(48px + 16px + env(safe-area-inset-bottom));
+}
+
+.tab-bar {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 100;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  padding-bottom: env(safe-area-inset-bottom);
+  border-top: 1px solid var(--ant-color-border-secondary, #f0e6e9);
+  background: var(--ant-color-bg-container, #fff);
+}
+
+.tab-bar-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  height: 48px;
+  color: var(--ant-color-text-secondary, rgba(43, 29, 34, 0.65));
+  font-size: 12px;
+  line-height: 1;
+}
+
+.tab-bar-item .anticon {
+  font-size: 20px;
+}
+
+.tab-bar-item-active,
+.tab-bar-item:hover {
+  color: var(--ant-color-primary, #89023e);
+}
+
+.tab-bar-item-active {
+  font-weight: 600;
+}

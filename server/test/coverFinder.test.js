@@ -40,6 +40,7 @@ const claudeRequests = []
 const downloads = []
 const stageTwo = () => downloads.filter((url) => !Object.values(FREE).includes(url))
 const logs = []
+const published = []
 
 async function claudeFetch(url, init) {
   claudeRequests.push(JSON.parse(init.body))
@@ -63,7 +64,8 @@ before(async () => {
   coversDir = covers.coversDir
   app = await startServer((db) => {
     const saveCover = (url, base) => covers.saveCoverFromUrl(url, base, { fetch: imageFetch, log: (line) => logs.push(line) })
-    return { saveCover, findCover: createCoverFinder({ db, apiKey: () => key, saveCover, fetch: claudeFetch, log: (line) => logs.push(line) }) }
+    const events = { handler: (req, res) => res.end(), changes: (req, res) => res.end(), publish: (kind) => published.push(kind) }
+    return { saveCover, events, findCover: createCoverFinder({ db, apiKey: () => key, saveCover, fetch: claudeFetch, log: (line) => logs.push(line) }) }
   })
   api = client(app.base)
 })
@@ -77,7 +79,7 @@ beforeEach(async () => {
   images = {}
   key = KEY
   beforeAnswer = async () => {}
-  for (const list of [claudeRequests, downloads, logs]) list.length = 0
+  for (const list of [claudeRequests, downloads, logs, published]) list.length = 0
   app.db.exec(`
     INSERT INTO authors (id, name) VALUES (1, 'Iris Vane');
     INSERT INTO books (id, title, author_id) VALUES (1, 'The Poison Garden', 1), (2, 'Ledger of the Dead', 1);
@@ -107,6 +109,7 @@ describe('POST /api/books/:id/cover/find, stage one', () => {
     assert.deepEqual(coverFiles(coversDir), [path.basename(edition.cover_url)])
     assert.deepEqual(downloads.sort(), Object.values(FREE).sort())
     assert.equal(claudeRequests.length, 0)
+    assert.deepEqual(published, ['library'])
   })
 
   it("ignores Amazon's 1x1 GIF and a source without the book, and takes what is left", async () => {

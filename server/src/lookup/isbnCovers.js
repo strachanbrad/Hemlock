@@ -33,6 +33,12 @@ async function probe(source, url, { fetch, timeoutMs, userAgent }) {
   }
 }
 
+// The probes' cover in a lookup's order, Barnes & Noble before Amazon: { source, url } or null.
+export function retailCover(covers) {
+  const source = ['barnes_noble', 'amazon'].find((name) => covers?.[name])
+  return source ? { source, url: covers[source] } : null
+}
+
 // One HEAD request each to Barnes & Noble and Amazon. Resolves to { status: 'ok', barnes_noble, amazon },
 // each the cover URL when that source has one, else null, and `partial` when a request went unanswered,
 // so a cache asks again; never rejects.

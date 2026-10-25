@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 
+import { retailCover } from './isbnCovers.js'
+
 const GOOGLE = 'google'
 const OPEN_LIBRARY = 'open_library'
 const OPEN_LIBRARY_WORK = 'open_library_work'
-const BARNES_NOBLE = 'barnes_noble'
-const AMAZON = 'amazon'
 
 export function pick(record, fields) {
   if (!record || typeof record !== 'object') return null
@@ -136,6 +136,7 @@ export function googleThumbnail(imageLinks) {
 // `covers` is probeIsbnCovers()'s answer: the Barnes & Noble and Amazon cover URLs that exist for the ISBN.
 export function merge(isbn, google, openLibrary, covers = {}) {
   const volume = (google.status === 'ok' && google.volume) || {}
+  const retail = retailCover(covers)
   const { doc = {}, searchEdition = null, edition = null, work = null } = openLibrary.status === 'ok' ? openLibrary : {}
   const fields = {}
   const choose = (field, candidates) => {
@@ -174,8 +175,7 @@ export function merge(isbn, google, openLibrary, covers = {}) {
     ]),
     format: choose('format', [[mapFormat(edition?.physical_format), OPEN_LIBRARY]]),
     cover_url: choose('cover_url', [
-      [covers.barnes_noble, BARNES_NOBLE],
-      [covers.amazon, AMAZON],
+      [retail?.url, retail?.source],
       [coverUrl(firstCover(edition?.covers) ?? coverId(searchEdition?.cover_i)), OPEN_LIBRARY],
       [googleThumbnail(volume.imageLinks), GOOGLE],
       [coverUrl(coverId(doc.cover_i) ?? firstCover(work?.covers)), OPEN_LIBRARY_WORK],

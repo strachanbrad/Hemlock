@@ -29,7 +29,7 @@ export function createApp({ db, settings = createSettings(db), lookup, identify,
   const setting = (name) => () => settings.get(name)
   const agent = () => userAgent(config.version, settings.get('lookup_contact'))
   lookup ??= createLookup({ googleKey: setting('google_books_api_key'), contact: setting('lookup_contact'), anthropicKey: setting('anthropic_api_key') })
-  identify ??= createIdentify({ apiKey: setting('anthropic_api_key'), model: setting('anthropic_model') })
+  identify ??= createIdentify({ apiKey: setting('anthropic_api_key'), model: setting('anthropic_model'), contact: setting('lookup_contact') })
   probes ??= {
     google: (key) => probeGoogle({ key, userAgent: agent() }),
     anthropic: (key) => createAnthropic({ apiKey: key, model: settings.get('anthropic_model') ?? DEFAULT_MODEL }).probe(),

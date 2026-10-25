@@ -72,17 +72,23 @@ describe('createAnthropic identify', () => {
     assert.equal(body.max_tokens, 8000)
     assert.deepEqual(body.tool_choice, { type: 'auto' })
     assert.deepEqual(body.output_config, { effort: 'medium' })
-    assert.deepEqual(body.tools[0], { type: 'web_search_20260209', name: 'web_search', max_uses: 5 })
-    const report = body.tools[1]
+    assert.deepEqual(body.tools.slice(0, 2), [{ type: 'web_search_20260209', name: 'web_search', max_uses: 4 }, { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: 3 }])
+    const report = body.tools[2]
     assert.equal(report.name, 'report_book')
     assert.equal(report.strict, undefined)
     assert.equal(report.input_schema.additionalProperties, false)
     assert.deepEqual(report.input_schema.required, Object.keys(report.input_schema.properties))
     assert.deepEqual(report.input_schema.properties.found, { type: 'boolean', description: report.input_schema.properties.found.description })
     for (const absent of ['temperature', 'top_p', 'top_k', 'thinking']) assert.equal(body[absent], undefined, absent)
-    assert.match(body.system, /quoted string/)
-    assert.match(body.system, /never your own summary/i)
-    assert.match(body.system, /cover_url: a direct image URL of the listing's main cover image .*at the largest size the listing offers/)
+    for (const rule of [
+      /Search once for the ISBN-13 as a quoted string .*, then once for its ISBN-10 the same way/,
+      /Open one listing of this exact edition with web_fetch, and only at a URL that appeared in a search result/,
+      /Barnes & Noble and Google Books pages open and carry the title, authors, publisher, date, binding and the publisher's description; AbeBooks pages open too/,
+      /Amazon, Goodreads and Bookshop\.org pages cannot be opened, so use their search results only to confirm the ISBN/,
+      /Copy every field from the opened page/,
+      /never your own summary/i,
+      /cover_url: a direct image URL from the opened page \(its og:image\), else null/,
+    ]) assert.match(body.system, rule)
     assert.match(body.messages[0].content, /ISBN-13 9781969253096 \(ISBN-10 1969253096\)/)
   })
 

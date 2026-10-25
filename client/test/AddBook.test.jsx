@@ -118,6 +118,17 @@ describe('AddBook', () => {
     expect(posts[0].edition).toMatchObject({ format: 'paperback', isbn: '9781969253096', publisher: 'Nightshade Press', published: '2025-09-16', cover_from_url: CLAUDE.cover_url })
   })
 
+  it("credits Barnes & Noble for the cover of a book Claude identified", async () => {
+    const bn = 'https://cdn.shopify.com/s/files/1/0674/5433/7265/files/9781969253096_p0.jpg'
+    const record = { ...CLAUDE, cover_url: bn, sources: { anthropic: 'ok', fields: { title: 'anthropic', cover_url: 'barnes_noble' } } }
+    fakeServer({ identified: { 9781969253096: record } })
+    mount()
+    await lookUp('9781969253096', 'The Poison Garden')
+    const credit = screen.getByRole('link', { name: 'amazon.com' })
+    expect(credit.closest('p').textContent).toBe('Book data from amazon.com, found by Claude; cover from Barnes & Noble')
+    expect(screen.getByAltText('The cover the lookup found').getAttribute('src')).toBe(bn)
+  })
+
   it('brings a title conflict into view and offers to add the copy as an edition', async () => {
     const posts = fakeServer({ lookups: { 9780553212587: WUTHERING }, create: () => json(TITLE_CONFLICT, 409) })
     mount()

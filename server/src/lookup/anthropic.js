@@ -18,17 +18,17 @@ export const NUDGE = nudge('report_book')
 
 const SYSTEM = `You identify one book edition from its ISBN for a household's library catalogue. The book catalogues do not know this ISBN, so you search the web for it.
 
-1. Search for the ISBN-13 and, when the book has one, its ISBN-10, each as a quoted string (for example "9781969253096").
-2. Use the best listing of this exact edition: the publisher's page, Amazon, Goodreads, Bookshop.org, Google Books, WorldCat, Barnes & Noble or the author's own site.
+1. Search once for the ISBN-13 as a quoted string (for example "9781969253096"), then once for its ISBN-10 the same way when the book has one.
+2. Open one listing of this exact edition with web_fetch, and only at a URL that appeared in a search result. Barnes & Noble and Google Books pages open and carry the title, authors, publisher, date, binding and the publisher's description; AbeBooks pages open too. Amazon, Goodreads and Bookshop.org pages cannot be opened, so use their search results only to confirm the ISBN.
 3. Accept a listing only when it shows this ISBN-13 or its ISBN-10, and report that ISBN, as the listing prints it, in isbn_on_listing.
-4. Copy every field as the listing shows it, never from memory and never from another edition:
+4. Copy every field from the opened page as it shows it (from the search results only when no listing of this ISBN could be opened), never from memory and never from another edition:
    - title: the title, without a series name in parentheses or the format.
    - authors: the names as printed, in order, without roles such as Illustrator or Narrator.
    - publisher: the publisher or imprint.
    - published: the publication date as YYYY, YYYY-MM or YYYY-MM-DD.
    - format: hardcover, paperback or ebook, from the listing's binding; null for anything else, such as an audiobook.
    - synopsis: the publisher's description from the page, trimmed at a sentence end to about 1,500 characters. Never your own summary and never a review.
-   - cover_url: a direct image URL of the listing's main cover image (its og:image or the cover's <img>), at the largest size the listing offers, else null. Never build an image URL yourself.
+   - cover_url: a direct image URL from the opened page (its og:image), else null. Never build an image URL yourself.
    - source_url: the address of the listing you copied from.
 5. When no listing shows this ISBN, report found false with every other field null. Never guess from a book with a similar title.
 
@@ -60,8 +60,10 @@ const REPORT_BOOK = {
   },
 }
 
-const WEB_SEARCH = { type: 'web_search_20260209', name: 'web_search', max_uses: 5 }
-export const TOOLS = [WEB_SEARCH, REPORT_BOOK]
+// Search results carry no image URLs and only snippets of a page, so both searches open a listing too.
+const WEB_SEARCH = { type: 'web_search_20260209', name: 'web_search' }
+const WEB_FETCH = { type: 'web_fetch_20260209', name: 'web_fetch' }
+export const TOOLS = [{ ...WEB_SEARCH, max_uses: 4 }, { ...WEB_FETCH, max_uses: 3 }, REPORT_BOOK]
 
 const isbnText = (isbn) => {
   const isbn10 = isbn13To10(isbn)
@@ -98,8 +100,7 @@ const REPORT_COVER = {
   },
 }
 
-// Search results carry no image URLs, so the cover search opens the listing itself.
-export const COVER_TOOLS = [{ ...WEB_SEARCH, max_uses: 3 }, { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: 5 }, REPORT_COVER]
+export const COVER_TOOLS = [{ ...WEB_SEARCH, max_uses: 3 }, { ...WEB_FETCH, max_uses: 5 }, REPORT_COVER]
 
 // `subject` is { isbn } (an ISBN-13) or { title, author } for a book without one.
 export function coverQuestion(subject) {

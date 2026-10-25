@@ -19,7 +19,6 @@
   --flow-muted: var(--muted, #b8a9a0);
   --flow-accent: var(--brass, #c9a86a);
   --flow-line: var(--hairline-faint, rgba(201, 168, 106, 0.18));
-  --flow-cloth: var(--cloth, #221c26);
   --flow-top: 24px;
   overflow: hidden;
   border: 1px solid var(--flow-line);
@@ -88,10 +87,27 @@
   width: var(--cover-w);
   height: calc(var(--cover-w) * 1.5);
   border-radius: 2px;
-  background: var(--flow-cloth);
-  color: var(--flow-muted);
-  font-size: calc(var(--cover-w) * 0.22);
   box-shadow: 0 18px 32px -14px rgba(0, 0, 0, 0.9);
+}
+
+/* The cloth cover at flow scale: every size follows the cover's width. */
+.coverflow .book-cover-flow.book-cover-cloth {
+  gap: calc(var(--cover-w) * 0.07);
+  padding: calc(var(--cover-w) * 0.12);
+}
+
+.coverflow .book-cover-flow.book-cover-cloth::before {
+  inset: calc(var(--cover-w) * 0.035) calc(var(--cover-w) * 0.035) calc(var(--cover-w) * 0.035) calc(var(--cover-w) * 0.055);
+}
+
+.coverflow .book-cover-flow .cover-title {
+  font-size: calc(var(--cover-w) * 0.1);
+  -webkit-line-clamp: 6;
+  line-clamp: 6;
+}
+
+.coverflow .book-cover-flow .cover-umbel {
+  width: calc(var(--cover-w) * 0.1);
 }
 
 .coverflow .book-cover-flow img {
@@ -131,9 +147,9 @@
   overflow: hidden;
   color: var(--flow-text);
   font-family: var(--font-display, Georgia, 'Times New Roman', serif);
-  font-size: 22px;
+  font-size: 26px;
   font-weight: 600;
-  line-height: 1.25;
+  line-height: 1.15;
   overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -146,20 +162,46 @@
 }
 
 .coverflow-author {
-  color: var(--flow-muted);
+  color: var(--flow-text);
   font-family: var(--font-text, Georgia, 'Times New Roman', serif);
+  font-size: 17px;
   font-style: italic;
+}
+
+.coverflow-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .coverflow-caption .format-tags {
   justify-content: center;
 }
 
+.coverflow-wishlist {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--rose, #c98b8b);
+  font-family: var(--font-text, Georgia, 'Times New Roman', serif);
+  font-size: 13px;
+  font-style: italic;
+}
+
+.coverflow-wishlist svg {
+  width: 14px;
+  height: 14px;
+}
+
 .coverflow-position {
   margin-top: auto;
   color: var(--flow-muted);
-  font-size: 12px;
-  letter-spacing: 0.08em;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   font-variant-numeric: tabular-nums;
 }
 
@@ -194,7 +236,7 @@
   }
 
   .coverflow-title {
-    font-size: 20px;
+    font-size: 21px;
   }
 
   .library-search-row .view-toggle .ant-segmented-item-label {

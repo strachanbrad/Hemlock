@@ -93,12 +93,8 @@
 
 .library-search-row {
   display: flex;
+  justify-content: space-between;
   gap: 8px;
-}
-
-.library-search-input {
-  flex: 1;
-  min-width: 0;
 }
 
 .filters-badge {

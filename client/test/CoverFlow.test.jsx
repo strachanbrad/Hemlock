@@ -40,13 +40,13 @@ afterEach(() => {
 })
 
 describe('CoverFlow', () => {
-  it('centres the first book with its author, formats, wishlist tag and position', () => {
+  it('centres the first book with its author, formats, wishlist mark and position', () => {
     mount(BOOKS)
     expect(centreTitle()).toBe('Emma')
     expect(document.querySelector('.coverflow-author').textContent).toBe('Jane Austen')
     expect(document.querySelector('.coverflow-position').textContent).toBe('1 of 3')
     fireEvent.keyDown(stage(), { key: 'ArrowRight' })
-    expect(screen.getByText('Wishlist')).toBeTruthy()
+    expect(screen.getByText('On the wishlist')).toBeTruthy()
   })
 
   it('moves with the arrow keys, Home and End', () => {

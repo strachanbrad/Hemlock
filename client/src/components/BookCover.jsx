@@ -18,7 +18,7 @@ const BookCover = ({ url, title, size = 'small' }) => {
   }
   return (
     <span className={`book-cover book-cover-${size} book-cover-cloth`} role="img" aria-label={`No cover: ${title}`}>
-      {size === 'large'
+      {size === 'large' || size === 'flow'
         ? <span className="cover-title" aria-hidden="true">{title}</span>
         : <span className="cover-initial" aria-hidden="true">{initialOf(title)}</span>}
       <Umbel className="cover-umbel" aria-hidden="true" />

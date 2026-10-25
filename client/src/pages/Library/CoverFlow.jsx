@@ -9,6 +9,7 @@ import { PicCenterOutlined, UnorderedListOutlined } from '@ant-design/icons'
 import { Link } from 'react-router'
 import BookCover from '../../components/BookCover.jsx'
 import FormatTags from '../../components/FormatTags.jsx'
+import { BookmarkFilled } from '../../images/index.js'
 import {
   DRAG_THRESHOLD, WHEEL_START, centreIndex, coverPose, dragPosition, flowGeometry, keyTarget, poseTransform,
   releaseTarget, stepIndex, storeView, storedView, visibleRange, wheelDelta, wheelStep,
@@ -205,7 +206,10 @@ const CoverFlow = ({ books, loading = false, linkTo, onOpen }) => {
             <>
               <Link className="coverflow-title" to={linkTo(book.id)} state={{ fromList: true }}>{book.title}</Link>
               <span className="coverflow-author">{book.author.name}</span>
-              <FormatTags book={book} />
+              <span className="coverflow-tags">
+                <FormatTags book={book} />
+                {book.wishlist && <span className="coverflow-wishlist"><BookmarkFilled aria-hidden="true" />On the wishlist</span>}
+              </span>
               <span className="coverflow-position">{index + 1} of {count}</span>
             </>
           )}

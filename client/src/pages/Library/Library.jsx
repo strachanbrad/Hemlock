@@ -78,8 +78,8 @@ const Library = () => {
       <PageHeading meta={library.loading || library.error || books.length === 0 ? null : countOf(books.length)}>{wishlist ? 'Wishlist' : 'Library'}</PageHeading>
       {isPhone ? (
         <div className="library-search">
+          <SearchBox value={filters.q} onChange={changeSearch} />
           <div className="library-search-row">
-            <SearchBox className="library-search-input" value={filters.q} onChange={changeSearch} />
             <PhoneFilters filters={filters} open={filtersOpen} onOpen={() => setFiltersOpen(true)} onClose={() => setFiltersOpen(false)} onChange={changeFilters} />
             <ViewToggle compact view={view} onChange={changeView} />
           </div>

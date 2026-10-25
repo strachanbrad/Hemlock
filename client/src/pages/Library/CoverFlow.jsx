@@ -60,6 +60,7 @@ const CoverFlow = ({ books, loading = false, linkTo, onOpen }) => {
   const count = books.length
   const index = centreIndex(books, centre)
   const book = books[index]
+  if (centre.id == null && book) setCentre({ id: book.id, index })
   const position = dragPos ?? index
   const [from, to] = visibleRange(position, g.side, count)
 

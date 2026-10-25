@@ -207,7 +207,8 @@ beside it on Library, Wishlist and Authors.
 `/library` (`pages/Library/Library.jsx`) keeps its filters in the address:
 the Wishlist is `/library?wishlist=1`, physical books `?format=physical`,
 ebooks `?format=ebook`, one author's books `?author_id=<id>`. The search
-waits 250 ms after the last keystroke.
+waits 250 ms after the last keystroke, and what is typed while the list
+updates stays in the box (`SearchBox.jsx`).
 
 - **Desktop:** a toolbar of search and Format, Owned (Owned or Wishlist
   only), Wishlist (On the wishlist) and Read selects, and a table that

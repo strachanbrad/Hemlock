@@ -20,63 +20,13 @@ Dedicated to my wife Chelsea, whose love for dark romance books breathed life in
 
 ## Installation
 
-### Prerequisites
+- **Development:** [wiki/dev-setup.md](wiki/dev-setup.md) covers the
+  requirements (Node 26), the install, the dev library and the everyday
+  commands.
+- **Deployment:** [wiki/deployment.md](wiki/deployment.md) covers installing
+  Hemlock on a Debian box with nginx and systemd.
 
-- Node.js v20.9.0 or higher (tested)
-- A web server (Apache or Nginx recommended)
-
-### Setting Up
-
-1. **Clone the repository:**
-   ```
-   git clone https://github.com/strachanbrad/Hemlock.git ~/hemlock
-   ```
-2. **Deployment (using Nginx as an example):**
-   - Ensure Nginx and Node.js are installed on your system.
-   - Navigate to the Hemlock directory and run the deployment script:
-     ```
-     cd ~/hemlock
-     ./deploy.sh
-     ```
-   This script assumes Nginx is installed with the user `www-data` and the Node user as `node`. It also assumes PM2 to manage the Node server process. The Deployment script is built for use with TurnKey Linux's node CT container, however is contents should make for a good refrence for other environments.
-
-### Development Setup
-
-1. **Clone the repository:**
-   ```
-   git clone https://github.com/strachanbrad/Hemlock.git ~/hemlock
-   ```
-2. **Install dependencies:**
-   ```
-   cd hemlock
-   npm run install-all
-   ```
-3. **Run the development server:**
-   ```
-   npm run dev
-   ```
-
-## TODO
-
-- Implement a cleaner styling solution (current styles are inline and disorganized).
-- Clean up the deployment strategy.
-- Implement responsiveness for mobile and tablet devices.
-- Prompt user to change ISBN when an Ebook is converted to a Book (ISBNs are unique to media type).
-- Separate out common code into a utils.js script.
-- Organize and group components under a common directory.
-- Develop a multi-stack/distribution deployment script.
-
-## Known Bugs
-
-- Carousel in fullscreen mode does not rotate sometimes.
-
-## Future Features
-
-- Barcode scanning for book ISBNs.
-- Integration with isbndb.com API for automatic book data collection.
-- Admin page, to include profile, themeing, and prefrences.
-- Customizable ratings and option to hide unwanted ratings.
-- User account system for personalized experiences.
+The rest of the documentation starts at [wiki/README.md](wiki/README.md).
 
 ## License
 

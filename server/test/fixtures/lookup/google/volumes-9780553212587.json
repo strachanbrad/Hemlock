@@ -1,0 +1,44 @@
+{
+  "_source": "hand-written from the documented Books API volume shape (developers.google.com/books/docs/v1/reference/volumes), not recorded: Google refuses keyless requests. The first item is a same-title edition, the second the exact ISBN.",
+  "kind": "books#volumes",
+  "totalItems": 2,
+  "items": [
+    {
+      "id": "handSameTitle1",
+      "volumeInfo": {
+        "title": "Wuthering Heights",
+        "subtitle": "Penguin Classics",
+        "authors": ["Emily Bronte"],
+        "publisher": "Penguin UK",
+        "publishedDate": "2003-04-01",
+        "description": "Another edition of the same title.",
+        "industryIdentifiers": [
+          { "type": "ISBN_13", "identifier": "9780141439556" },
+          { "type": "ISBN_10", "identifier": "0141439556" }
+        ],
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=handSameTitle1&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=handSameTitle1&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        }
+      }
+    },
+    {
+      "id": "handExactIsbn1",
+      "volumeInfo": {
+        "title": "Wuthering Heights",
+        "authors": ["Emily Brontë"],
+        "publisher": "Bantam Classics",
+        "publishedDate": "1983-07-01",
+        "description": "<p>Emily Brontë's only novel, a tale of <b>love</b> &amp; revenge on the Yorkshire moors.</p><p>A Bantam Classic.</p>",
+        "industryIdentifiers": [
+          { "type": "ISBN_10", "identifier": "0553212583" },
+          { "type": "ISBN_13", "identifier": "9780553212587" }
+        ],
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=handExactIsbn1&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=handExactIsbn1&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        }
+      }
+    }
+  ]
+}

@@ -1,11 +1,11 @@
 # Roadmap
 
-The work planned for Hemlock. Lookup comes first, and the library (books,
-editions and the phone layout, which land together) comes last. This page
-describes work that does not exist yet, in the present-tense voice of the rest
-of the wiki; a step leaves this page when it is built and is described on its
-own page. Nothing is deployed, so a step may change the schema, the API or the
-file layout without a compatibility path.
+The work planned for Hemlock: the library (books, editions and the phone
+layout, which land together) comes next. This page describes work that does
+not exist yet, in the present-tense voice of the rest of the wiki; a step
+leaves this page when it is built and is described on its own page. Nothing
+is deployed, so a step may change the schema, the API or the file layout
+without a compatibility path.
 
 ## 3. Books and editions
 
@@ -23,6 +23,10 @@ file layout without a compatibility path.
 - **Mark as purchased** adds a physical edition to the same book and clears
   its `wishlist` flag, so ratings and read status carry over. An ebook
   edition does not clear it.
+- Adding a book and marking one purchased start from a barcode scan
+  (`BarcodeScanner`) or a typed ISBN, prefilled from `GET /api/lookup/:isbn`
+  and saved with the chosen cover ([Lookup](lookup.md)); a scanned book is
+  never preselected as an ebook.
 - A title is unique per author, so a second format of a book becomes an
   edition of it rather than a second book.
 - An author is one `name` field; first and last name splitting fails on
@@ -39,24 +43,6 @@ file layout without a compatibility path.
 - Inline styles move into stylesheets and theme tokens, per
   [style.md](style.md#ant-design).
 - This step lands together with step 3, since both rewrite the same pages.
-
-## 5. ISBN lookup and barcode scanning
-
-- `GET /api/lookup/:isbn` asks Open Library, and Google Books when an API key
-  is configured (its API refuses keyless requests), merges the answers field
-  by field with an exact-ISBN match preferred over a same-work record, and
-  returns one normalized record for the add form to prefill.
-- The server downloads the chosen cover once into `DATA_DIR/covers/`, from an
-  allow-list of hosts, after the edition is saved; a failed download never
-  fails the save.
-- Open Library's limits are respected: an identifying `User-Agent` with a
-  contact address, at most one metadata request a second (three with the
-  contact), covers fetched by cover id, answers cached for a day.
-- The add page scans the barcode with the phone camera through the
-  `barcode-detector` package (ZXing), with the WASM served from the app
-  rather than a CDN. It accepts EAN-13 codes starting with `978` or `979`
-  with a valid check digit, ignores the five-digit price supplement, and
-  keeps manual ISBN entry as a fallback.
 
 ## Later
 

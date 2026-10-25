@@ -1,0 +1,34 @@
+{
+  "_source": "recorded 2026-10-25 by npm run lookup:record -- 9780345803481",
+  "numFound": 1,
+  "docs": [
+    {
+      "key": "/works/OL16336633W",
+      "title": "Fifty Shades of Grey",
+      "author_name": [
+        "E. L. James"
+      ],
+      "cover_i": 12648183,
+      "editions": {
+        "numFound": 8,
+        "docs": [
+          {
+            "key": "/books/OL50543114M",
+            "title": "Fifty Shades of Grey",
+            "publisher": [
+              "Vintage Books"
+            ],
+            "publish_date": [
+              "2012"
+            ],
+            "cover_i": 14566895,
+            "isbn": [
+              "9780345803481",
+              "0345803485"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

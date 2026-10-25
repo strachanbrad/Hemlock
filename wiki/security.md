@@ -51,6 +51,9 @@ A client wrapper never assumes an error body is JSON: nginx answers 413 and
   reaches the file system. Under the current schema a cover is
   `<isbn>.jpg`, and `saveCoverFromUpload()` accepts only 13 digits, or 9
   digits followed by a digit or `X`, so a path in the ISBN is refused.
+- A downloaded cover is `e<edition id>-<8 hex>.<ext>`, or
+  `b<book id>-<8 hex>.<ext>` for a book's own cover, with the extension from
+  its magic bytes (`saveCoverFromUrl()`).
 - A cover is written to a temporary name inside `DATA_DIR/covers/` and renamed
   into place. It never moves from `os.tmpdir()`: under the systemd unit's
   `PrivateTmp` that is another mount, and the rename fails with `EXDEV`.
@@ -61,10 +64,26 @@ A client wrapper never assumes an error body is JSON: nginx answers 413 and
 ## Downloads
 
 The browser never calls an outside service; book lookups go through the
-server. A download the server makes on a client's behalf (a cover chosen from
-a lookup) is https only, from the lookup sources' hosts, with every redirect
-re-checked against that list, a size cap counted while streaming, and a
-timeout.
+server, which calls only Open Library and Google Books ([Lookup](lookup.md)).
+A cover chosen from a lookup reaches the server as a URL from the client, so
+without bounds the server would fetch whatever a request names, a loopback or
+LAN address included. `saveCoverFromUrl()` (`server/src/covers.js`) fetches
+a cover only:
+
+- over https, from `covers.openlibrary.org`, `archive.org` or any subdomain
+  of it, or `books.google.com`, with no user name, password or explicit port
+  in the URL (`allowedCoverUrl()`); anything else is refused before a request
+  is sent;
+- following at most three redirects by hand, each one checked against the
+  same list before it is requested;
+- within 10 seconds for the whole download, and up to 10 MB, checked against
+  `Content-Length` and counted again while streaming (archive.org sends no
+  `Content-Length`);
+- keeping it only when its magic bytes say JPEG, PNG or WebP, and never
+  Google's "image not available" placeholder.
+
+A refused or failed download leaves no file and is logged in one line;
+the book or edition is saved without the cover.
 
 ## SQL
 

@@ -1,0 +1,24 @@
+{
+  "_source": "hand-written from the documented Books API volume shape (developers.google.com/books/docs/v1/reference/volumes), not recorded: Google refuses keyless requests. The only item is a same-title volume without the ISBN.",
+  "kind": "books#volumes",
+  "totalItems": 1,
+  "items": [
+    {
+      "id": "handSameTitle2",
+      "volumeInfo": {
+        "title": "Breaking Rosalind",
+        "authors": ["Gigi Styx"],
+        "publisher": "Independently Published",
+        "publishedDate": "2024-06-16",
+        "description": "A same-title volume carrying another edition's ISBN.",
+        "industryIdentifiers": [
+          { "type": "ISBN_13", "identifier": "9798322853497" },
+          { "type": "OTHER", "identifier": "9798322853480X" }
+        ],
+        "imageLinks": {
+          "thumbnail": "http://books.google.com/books/content?id=handSameTitle2&printsec=frontcover&img=1&zoom=1&source=gbs_api"
+        }
+      }
+    }
+  ]
+}

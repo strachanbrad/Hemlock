@@ -1,0 +1,15 @@
+{
+  "_source": "recorded 2026-10-25 by npm run lookup:record -- 9780345803481",
+  "type": {
+    "key": "/type/edition"
+  },
+  "key": "/books/OL50543114M",
+  "title": "Fifty Shades of Grey",
+  "publishers": [
+    "Vintage Books"
+  ],
+  "publish_date": "2012",
+  "covers": [
+    14566895
+  ]
+}

@@ -50,3 +50,111 @@ export function deleteCover(filename) {
     if (err.code !== 'ENOENT') throw err
   }
 }
+
+const DOWNLOAD_TIMEOUT_MS = 10 * 1000
+const MAX_REDIRECTS = 3
+// Google Books answers a volume without a cover with this 1269-byte "image not available" PNG.
+const GOOGLE_PLACEHOLDER_SHA256 = 'e3f8c414b288cbdf4e6d1e00eb6d3826157d10a5b5628b9318f726ea490eca12'
+const COVER_STEM = /^[eb][1-9]\d*$/
+
+class DownloadError extends Error {}
+
+// A cover URL comes from the client, so the server fetches only the lookup sources' image hosts.
+export function allowedCoverUrl(input) {
+  let url
+  try {
+    url = new URL(input)
+  } catch {
+    return null
+  }
+  if (url.protocol !== 'https:' || url.username || url.password || url.port) return null
+  const host = url.hostname
+  const allowed = host === 'covers.openlibrary.org' || host === 'books.google.com' || host === 'archive.org' || host.endsWith('.archive.org')
+  return allowed ? url : null
+}
+
+// archive.org sends no Content-Length, so the cap is counted while the body streams.
+async function readCapped(body) {
+  const chunks = []
+  let size = 0
+  for await (const chunk of body) {
+    size += chunk.byteLength
+    if (size > MAX_COVER_BYTES) throw new DownloadError('larger than 10 MB')
+    chunks.push(chunk)
+  }
+  return Buffer.concat(chunks)
+}
+
+const discard = (response) => response.body?.cancel().catch(() => {})
+
+// Redirects are followed by hand so that every hop is checked against the allow-list.
+async function download(start, { fetch, timeoutMs }) {
+  const signal = AbortSignal.timeout(timeoutMs)
+  let url = allowedCoverUrl(start)
+  if (!url) throw new DownloadError('not an https URL on an allowed host')
+  for (let hop = 0; ; hop++) {
+    const response = await fetch(url.href, {
+      redirect: 'manual',
+      signal,
+      headers: { 'User-Agent': config.userAgent, Accept: 'image/jpeg, image/png, image/webp' },
+    })
+    if (response.status >= 300 && response.status < 400) {
+      await discard(response)
+      if (hop === MAX_REDIRECTS) throw new DownloadError(`more than ${MAX_REDIRECTS} redirects`)
+      const location = response.headers.get('location')
+      if (!location) throw new DownloadError('redirect without a Location')
+      url = URL.canParse(location, url) ? allowedCoverUrl(new URL(location, url)) : null
+      if (!url) throw new DownloadError(`redirected to a URL off the allow-list: ${location.slice(0, 120)}`)
+      continue
+    }
+    if (!response.ok) {
+      await discard(response)
+      throw new DownloadError(`HTTP ${response.status}`)
+    }
+    if (Number(response.headers.get('content-length')) > MAX_COVER_BYTES) {
+      await discard(response)
+      throw new DownloadError('larger than 10 MB')
+    }
+    return response.body ? readCapped(response.body) : Buffer.alloc(0)
+  }
+}
+
+async function writeCover(buffer, filename) {
+  await fs.promises.mkdir(coversDir, { recursive: true })
+  // The temp file stays in coversDir: a rename across mounts (PrivateTmp) fails with EXDEV.
+  const temp = path.join(coversDir, `.${filename}.tmp`)
+  try {
+    await fs.promises.writeFile(temp, buffer, { flag: 'wx' })
+    await fs.promises.rename(temp, path.join(coversDir, filename))
+  } catch (err) {
+    await fs.promises.rm(temp, { force: true })
+    throw err
+  }
+  return filename
+}
+
+function hostOf(url) {
+  try {
+    return new URL(url).host
+  } catch {
+    return 'an invalid URL'
+  }
+}
+
+// `id` is an edition id (e<id>-…) or 'b<book id>' for a book's own cover. Resolves to the file name,
+// or to null after logging one line when anything fails; never rejects for an upstream problem.
+export async function saveCoverFromUrl(url, id, { fetch = globalThis.fetch, timeoutMs = DOWNLOAD_TIMEOUT_MS, log = console.warn } = {}) {
+  const stem = typeof id === 'number' ? `e${id}` : id
+  if (typeof stem !== 'string' || !COVER_STEM.test(stem)) throw new TypeError(`A cover needs an edition id or 'b<book id>', not ${JSON.stringify(id)}`)
+
+  try {
+    const buffer = await download(url, { fetch, timeoutMs })
+    const type = imageType(buffer)
+    if (!type) throw new DownloadError('not a JPEG, PNG or WebP image')
+    if (crypto.createHash('sha256').update(buffer).digest('hex') === GOOGLE_PLACEHOLDER_SHA256) throw new DownloadError("Google's image-not-available placeholder")
+    return await writeCover(buffer, `${stem}-${crypto.randomBytes(4).toString('hex')}.${type}`)
+  } catch (err) {
+    log(`Cover not saved from ${hostOf(url)}: ${err.name === 'TimeoutError' ? `no answer in ${timeoutMs} ms` : err.message}`)
+    return null
+  }
+}

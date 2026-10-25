@@ -1,0 +1,34 @@
+{
+  "_source": "recorded 2026-10-25 by npm run lookup:record -- 9780553212587",
+  "numFound": 1,
+  "docs": [
+    {
+      "key": "/works/OL21177W",
+      "title": "Wuthering Heights",
+      "author_name": [
+        "Emily Brontë"
+      ],
+      "cover_i": 12818862,
+      "editions": {
+        "numFound": 2,
+        "docs": [
+          {
+            "key": "/books/OL7820421M",
+            "title": "Wuthering Heights",
+            "publisher": [
+              "Bantam Books"
+            ],
+            "publish_date": [
+              "1981-03"
+            ],
+            "cover_i": 14839277,
+            "isbn": [
+              "9780553212587",
+              "0553212583"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

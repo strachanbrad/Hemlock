@@ -161,4 +161,17 @@ describe('migrate', () => {
     assert.throws(() => migrate(db, migrationsIn({ '001_a.sql': '', '001_b.sql': '' })), /share the version 001/)
     db.close()
   })
+
+  it('refuses a database whose schema is newer than the checkout, and changes nothing', () => {
+    const db = connection()
+    migrate(db, migrationsIn({ '001_first.sql': PARENT_AND_CHILD, '002_second.sql': 'ALTER TABLE parent ADD COLUMN note TEXT;' }))
+    const older = migrationsIn({ '001_first.sql': PARENT_AND_CHILD, '000_before.sql': 'CREATE TABLE never (id INTEGER);' })
+    assert.throws(
+      () => migrate(db, older),
+      { message: "Database is at schema 2, newer than this checkout's migrations (1); restore a backup (wiki/deployment.md#restore)" },
+    )
+    assert.ok(!tables(db).includes('never'), 'nothing is applied')
+    assert.equal(schemaVersion(db), 2)
+    db.close()
+  })
 })

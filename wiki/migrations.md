@@ -28,7 +28,15 @@ which applies it.
 
 1. Creates `schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT
    NULL, applied_at TEXT NOT NULL)` if it does not exist.
-2. For each file whose version is not in `schema_migrations`, in filename
+2. Refuses to go on, before it applies anything, when the highest version in
+   `schema_migrations` is newer than the newest file: a later checkout
+   migrated the database, and this one does not know its schema. The error
+   is `Database is at schema N, newer than this checkout's migrations (M);
+   restore a backup (wiki/deployment.md#restore)`, and the server does not
+   start. In production, restore the backup taken before the newer version
+   was deployed ([Deployment § Restore](deployment.md#restore)); on the dev
+   machine, run `npm run db:reset`, which drops the newer schema first.
+3. For each file whose version is not in `schema_migrations`, in filename
    order:
    1. sets `PRAGMA foreign_keys = OFF` (outside any transaction, the only
       place it takes effect);
@@ -37,7 +45,7 @@ which applies it.
       timestamp), `COMMIT`;
    3. sets `PRAGMA foreign_keys = ON` again, whether the file succeeded or
       not.
-3. Returns the highest applied version, which `GET /api/health` reports as
+4. Returns the highest applied version, which `GET /api/health` reports as
    `schema`.
 
 If the file fails, or `foreign_key_check` returns any row, the transaction

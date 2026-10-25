@@ -158,7 +158,9 @@ recent commits, and each deploy prints the commit it builds):
 1. `sudo git -C /opt/hemlock reset --hard <commit>`
 2. When the failed version applied a migration, restore the backup that its
    deploy took before the restart ([Restore](#restore)); migrations have no
-   down step.
+   down step. Without the restore, the older server refuses to start on the
+   newer schema ([Migrations](migrations.md#what-migrate-does)), and the
+   deploy stops at its health poll.
 3. `sudo /opt/hemlock/deploy/deploy.sh`
 
 ## Secrets

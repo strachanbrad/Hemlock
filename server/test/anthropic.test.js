@@ -82,6 +82,7 @@ describe('createAnthropic identify', () => {
     for (const absent of ['temperature', 'top_p', 'top_k', 'thinking']) assert.equal(body[absent], undefined, absent)
     assert.match(body.system, /quoted string/)
     assert.match(body.system, /never your own summary/i)
+    assert.match(body.system, /cover_url: a direct image URL of the listing's main cover image .*at the largest size the listing offers/)
     assert.match(body.messages[0].content, /ISBN-13 9781969253096 \(ISBN-10 1969253096\)/)
   })
 
@@ -208,6 +209,21 @@ describe('verdict', () => {
     }
     assert.equal(check({ cover_url: 'https://i.gr-assets.com/images/S/1.jpg' }).record.cover_url, 'https://i.gr-assets.com/images/S/1.jpg')
   })
+
+  it("drops the size modifier from an Amazon image, so the CDN serves the original, and leaves other hosts alone", () => {
+    const cases = [
+      ['https://m.media-amazon.com/images/I/81abcXYZL._SY466_.jpg', 'https://m.media-amazon.com/images/I/81abcXYZL.jpg'],
+      ['https://m.media-amazon.com/images/I/71x9+aB-cL._AC_UF1000,1000_QL80_.jpg', 'https://m.media-amazon.com/images/I/71x9+aB-cL.jpg'],
+      ['https://images-na.ssl-images-amazon.com/images/I/51abc._SX331_BO1,204,203,200_.jpg', 'https://images-na.ssl-images-amazon.com/images/I/51abc.jpg'],
+      ['https://ecx.images-amazon.com/images/I/51abc._SL500_._AA300_.png', 'https://ecx.images-amazon.com/images/I/51abc.png'],
+      ['https://m.media-amazon.com/images/I/81abcXYZL.jpg', 'https://m.media-amazon.com/images/I/81abcXYZL.jpg'],
+      ['https://m.media-amazon.com/images/I/._SY466_.jpg', 'https://m.media-amazon.com/images/I/._SY466_.jpg'],
+      ['https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1/1._SY475_.jpg', 'https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1/1._SY475_.jpg'],
+      ['https://covers.openlibrary.org/b/id/1._SY466_.jpg', 'https://covers.openlibrary.org/b/id/1._SY466_.jpg'],
+    ]
+    for (const [cover_url, expected] of cases) assert.equal(check({ cover_url }).record.cover_url, expected, cover_url)
+  })
+
 
   it('counts a missing or wrong found flag and a missing ISBN as not found', () => {
     for (const input of [{ found: false }, { found: 'true' }, { isbn_on_listing: null }, { isbn_on_listing: '' }, { isbn_on_listing: '9781969253096 and 9781969253102' }]) {

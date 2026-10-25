@@ -113,7 +113,8 @@ const coverId = (id) => (Number.isSafeInteger(id) && id > 0 ? id : null)
 const firstCover = (covers) => (Array.isArray(covers) ? (covers.map(coverId).find((id) => id !== null) ?? null) : null)
 export const coverUrl = (id) => (id === null ? null : `https://covers.openlibrary.org/b/id/${id}-L.jpg`)
 
-// zoom=1 is the one size Google serves reliably; edge=curl paints a page curl onto the image.
+// zoom=1 is the one size Google serves reliably; fife=w1600 asks for the largest image Google holds up
+// to that width; edge=curl paints a page curl onto the image.
 export function googleThumbnail(imageLinks) {
   if (typeof imageLinks?.thumbnail !== 'string') return null
   let url
@@ -126,6 +127,7 @@ export function googleThumbnail(imageLinks) {
   url.protocol = 'https:'
   url.port = ''
   url.searchParams.delete('edge')
+  url.searchParams.set('fife', 'w1600')
   return url.href
 }
 

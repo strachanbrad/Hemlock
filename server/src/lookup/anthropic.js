@@ -27,7 +27,7 @@ const SYSTEM = `You identify one book edition from its ISBN for a household's li
    - published: the publication date as YYYY, YYYY-MM or YYYY-MM-DD.
    - format: hardcover, paperback or ebook, from the listing's binding; null for anything else, such as an audiobook.
    - synopsis: the publisher's description from the page, trimmed at a sentence end to about 1,500 characters. Never your own summary and never a review.
-   - cover_url: a direct image URL of the cover that appears on the listing (its og:image or the cover's <img>), else null. Never build an image URL yourself.
+   - cover_url: a direct image URL of the listing's main cover image (its og:image or the cover's <img>), at the largest size the listing offers, else null. Never build an image URL yourself.
    - source_url: the address of the listing you copied from.
 5. When no listing shows this ISBN, report found false with every other field null. Never guess from a book with a similar title.
 
@@ -77,6 +77,15 @@ function httpsUrl(value) {
 
 const NOT_FOUND = Object.freeze({ status: 'not_found' })
 
+const AMAZON_IMAGES = (host) => host === 'm.media-amazon.com' || host === 'images-na.ssl-images-amazon.com' || host.endsWith('.images-amazon.com')
+
+// An Amazon image URL names its size in the file name (81abcXYZL._SY466_.jpg); without it the CDN
+// serves the original upload, the largest there is.
+export function largestCover(url) {
+  if (AMAZON_IMAGES(url.hostname)) url.pathname = url.pathname.replace(/([^/])(?:\._[^./]*_)+(\.[a-z]+)$/i, '$1$2')
+  return url
+}
+
 // The model's answer is untrusted: only a listing that shows this ISBN counts, and every field is
 // bounded and checked here whatever the schema promised.
 export function verdict(isbn, input, log = () => {}) {
@@ -99,7 +108,7 @@ export function verdict(isbn, input, log = () => {}) {
       published,
       synopsis,
       format: FORMATS.includes(input.format) ? input.format : null,
-      cover_url: cover ? cover.href : null,
+      cover_url: cover ? largestCover(cover).href : null,
       source_url: httpsUrl(input.source_url),
     },
   }

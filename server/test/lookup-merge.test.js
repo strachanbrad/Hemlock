@@ -37,7 +37,7 @@ const googleExact = () => ({
   },
 })
 
-const GOOGLE_COVER = 'https://books.google.com/books/content?id=g1&printsec=frontcover&img=1&zoom=1&source=gbs_api'
+const GOOGLE_COVER = 'https://books.google.com/books/content?id=g1&printsec=frontcover&img=1&zoom=1&source=gbs_api&fife=w1600'
 const olCover = (id) => `https://covers.openlibrary.org/b/id/${id}-L.jpg`
 
 function without(record, path) {
@@ -94,7 +94,7 @@ describe('merge', () => {
       fields: { title: 'open_library_work', authors: 'open_library', synopsis: 'open_library_work', cover_url: 'open_library_work' },
     },
     {
-      name: 'the Google exact cover beats the work cover, on https without edge=curl',
+      name: 'the Google exact cover beats the work cover, on https with fife=w1600 and without edge=curl',
       google: googleExact(),
       openLibrary: { ...olFull(), searchEdition: null, edition: null },
       expect: { cover_url: GOOGLE_COVER },
@@ -297,8 +297,10 @@ describe('stripHtml', () => {
 })
 
 describe('googleThumbnail', () => {
-  it('forces https, drops edge=curl and keeps the rest', () => {
+  it('forces https, drops edge=curl, asks for up to 1600 px wide and keeps the rest', () => {
     assert.equal(googleThumbnail({ thumbnail: 'http://books.google.com/books/content?id=g1&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api' }), GOOGLE_COVER)
+    const sized = new URL(googleThumbnail({ thumbnail: 'https://books.google.com/books/content?id=g1&zoom=1&fife=w200&edge=curl' }))
+    assert.deepEqual([...sized.searchParams], [['id', 'g1'], ['zoom', '1'], ['fife', 'w1600']])
   })
 
   it('refuses a thumbnail from any other host or no thumbnail', () => {

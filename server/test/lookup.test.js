@@ -308,7 +308,7 @@ describe('Google Books by volume id (Dynamic Links)', () => {
     assert.equal(body.title, 'The Unindexed Edition')
     assert.deepEqual(body.authors, ['Ada Placeholder'])
     assert.equal(body.synopsis, 'A volume the search index does not return.')
-    assert.equal(body.cover_url, 'https://books.google.com/books/content?id=cXnt0QEACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api')
+    assert.equal(body.cover_url, 'https://books.google.com/books/content?id=cXnt0QEACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api&fife=w1600')
     assert.deepEqual(googleCalls(calls), ['/books/v1/volumes', '/books', '/books/v1/volumes/cXnt0QEACAAJ'])
     const links = calls.find(({ url }) => isLinks(url))
     assert.equal(links.url, `${LINKS}bibkeys=ISBN:${UNINDEXED}&jscmd=viewapi`)

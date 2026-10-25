@@ -195,7 +195,7 @@ describe('the cover choice', () => {
     assert.deepEqual(cover(DISABLED, noEditionCover(), {}), [olCover(222), 'open_library_work'])
   })
 
-  it('takes the probes through answer() only when they answered', () => {
+  it('takes the probes through answer(), and none from a failed probe', () => {
     const covers = { status: 'ok', barnes_noble: BN, amazon: null }
     assert.equal(answer(ISBN, DISABLED, olFull(), { covers }).body.cover_url, BN)
     assert.equal(answer(ISBN, DISABLED, olFull(), { covers: { status: 'failed' } }).body.cover_url, olCover(111))

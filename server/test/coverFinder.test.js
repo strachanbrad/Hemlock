@@ -122,6 +122,14 @@ describe('POST /api/books/:id/cover/find, stage one', () => {
     assert.equal(claudeRequests.length, 0)
   })
 
+  it('takes the widest free cover wherever it comes in the order', async () => {
+    images[FREE.amazon] = await jpeg(324, 500)
+    images[FREE.open_library] = await jpeg(333, 500)
+    const { body } = await find(1)
+    assert.deepEqual([body.replaced, body.source, body.width], [true, 'open_library', 333])
+    assert.equal(coverFiles(coversDir).length, 1)
+  })
+
   it('goes on to Claude when nothing free is wider, and deletes the free downloads', async () => {
     placeCover(coversDir, 'e11-0000000a.jpg', await jpeg(500, 750))
     images[FREE.amazon] = await jpeg(324, 500)
@@ -134,9 +142,9 @@ describe('POST /api/books/:id/cover/find, stage one', () => {
     assert.deepEqual(coverFiles(coversDir), [path.basename(body.book.cover_url)])
   })
 
-  it('answers 503 without a key when nothing free is wider, leaving no file', async () => {
+  it('answers 503 without a key when nothing free is wider, an equal width included, leaving no file', async () => {
     key = null
-    placeCover(coversDir, 'e11-0000000a.jpg', await jpeg(500, 750))
+    placeCover(coversDir, 'e11-0000000a.jpg', await jpeg(333, 500))
     images[FREE.open_library] = await jpeg(333, 500)
     assert.deepEqual(await find(1), { status: 503, body: { error: 'Claude is not configured' } })
     assert.deepEqual(coverFiles(coversDir), ['e11-0000000a.jpg'])

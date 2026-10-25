@@ -189,7 +189,7 @@ export function merge(isbn, google, openLibrary, covers = {}) {
 export function answer(isbn, google, openLibrary, { claude = false, covers } = {}) {
   const statuses = [google.status, openLibrary.status]
   if (statuses.includes('ok')) {
-    const body = merge(isbn, google, openLibrary, covers?.status === 'ok' ? covers : {})
+    const body = merge(isbn, google, openLibrary, covers)
     return { status: 200, body: { ...body, sources: { ...body.sources, anthropic: 'disabled' } } }
   }
   const sources = { google: google.status, open_library: openLibrary.status, anthropic: claude ? 'available' : 'disabled' }

@@ -75,9 +75,6 @@ nginx.
 
 ## Install
 
-A box that still runs the old pm2 install is retired first
-([below](#retiring-the-old-pm2-install)).
-
 1. Clone the repository, on the box:
 
    ```bash
@@ -180,7 +177,7 @@ surfaces as an error.
 - When `nginx -t` rejects the configuration, the script puts back the previous
   site file, its link and Debian's default link, and exits; the running nginx
   keeps its old configuration. The usual cause is another site that also
-  claims `default_server` on port 80, such as TurnKey's `nodejs` site.
+  claims `default_server` on port 80.
 
 To roll back, on the box (`sudo git -C /opt/hemlock log --oneline -5` lists the
 recent commits, and each deploy prints the commit it builds):
@@ -243,7 +240,7 @@ Once the new version answers its health checks, the deploy keeps the newest
 10 pairs and deletes the rest. A deploy that fails deletes none, so each rerun
 of a failing deploy adds a backup and never pushes out the one taken before
 the failing version first started. Other names in the directory
-(`manual-*`, `pre-restore-*`, `old/`) are never deleted.
+(`manual-*`, `pre-restore-*`) are never deleted.
 
 A backup at any other time, on the box:
 
@@ -428,101 +425,6 @@ The edit is a local change to a tracked file in the checkout:
   duplicate default server, and `deploy.sh` puts the previous site back and
   stops ([When a deploy fails](#when-a-deploy-fails)). Make the edit again
   and rerun `deploy.sh`.
-
-## Retiring the old pm2 install
-
-The old install runs the server under pm2 from `/var/www/hemlock` on a TurnKey
-Node.js container, and it blocks a deploy on the same box three ways: its
-server holds port 5000 on every interface, so `deploy.sh` refuses to start;
-its nginx site names the old host name exactly, which beats the new
-catch-all until `deploy.sh` overwrites `sites-available/hemlock`; and TurnKey's own
-`nodejs` site claims the default server on ports 80 and 443, so `nginx -t`
-fails. Its library is not migrated (its schema is the old Authors, Books and
-EBooks tables); its database and covers are kept in
-`/var/lib/hemlock/backups/old/`.
-
-TurnKey logs in as root, so the commands on the old container below run in its
-root shell; `runuser -u node --` runs one as its `node` user. The old server is
-in root's pm2 list or the `node` user's (`pm2 ls` and
-`runuser -u node -- pm2 ls` show which); use the matching form of each `pm2`
-command.
-
-### Moving to a fresh container
-
-1. Stop the old server and pack its files, on the old container as root:
-
-   ```bash
-   pm2 stop Hemlock
-   cd /var/www/hemlock && tar -czf /root/hemlock-old.tar.gz server/hemlock.db* static/covers
-   ```
-
-   The old server's SQLite driver uses a rollback journal, so the stopped
-   database is consistent as it lies.
-
-2. Carry the archive across, on the Proxmox host as root:
-
-   ```bash
-   pct pull <old ctid> /root/hemlock-old.tar.gz /root/hemlock-old.tar.gz
-   pct push <new ctid> /root/hemlock-old.tar.gz /root/hemlock-old.tar.gz
-   ```
-
-3. Unpack it, on the new box:
-
-   ```bash
-   sudo install -d -m 0700 /var/lib/hemlock/backups/old
-   sudo tar -C /var/lib/hemlock/backups/old --strip-components=1 -xzf /root/hemlock-old.tar.gz
-   ```
-
-4. Point the proxy at port 80 on the new box, then shut the old container
-   down, on the Proxmox host as root: `pct shutdown <old ctid>`.
-
-### Reusing the TurnKey container
-
-On the TurnKey container as root:
-
-1. See what runs:
-
-   ```bash
-   pm2 ls
-   runuser -u node -- pm2 ls
-   systemctl list-units 'pm2*'
-   ss -ltnp 'sport = :5000'
-   ls -l /etc/nginx/sites-enabled/
-   ```
-
-2. Stop the old server: `pm2 stop Hemlock`.
-
-3. Keep its files:
-
-   ```bash
-   install -d -m 0700 /var/lib/hemlock/backups/old
-   cp -a /var/www/hemlock/server/hemlock.db* /var/www/hemlock/static/covers /var/lib/hemlock/backups/old/
-   ```
-
-4. Remove it from pm2: `pm2 delete Hemlock && pm2 save`. When `pm2 ls` is then
-   empty, `pm2 kill` stops root's pm2 daemon.
-
-5. Disable TurnKey's `nodejs` site: `rm /etc/nginx/sites-enabled/nodejs`. Its
-   sample app (`/opt/tklweb-cp`, in the `node` user's pm2 list) can stop with
-   it:
-
-   ```bash
-   runuser -u node -- pm2 delete all
-   runuser -u node -- pm2 save
-   pm2 unstartup systemd -u node --hp /home/node
-   ```
-
-6. Prepare the box ([The box](#the-box), steps 2 and 3, and the `nesting=1`
-   check) and install Hemlock ([Install](#install)). `deploy.sh` overwrites
-   `sites-available/hemlock` in place.
-
-7. Once the new site answers, remove the rest of the old install:
-
-   ```bash
-   rm -rf /var/www/hemlock /var/log/pm2-node /var/log/nginx/hemlock_*.log
-   ```
-
-   pm2 itself (`npm -g uninstall pm2`) and `/opt/tklweb-cp` can go too.
 
 ## Checking the deploy files on the dev machine
 

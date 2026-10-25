@@ -84,7 +84,7 @@ fi
 for cmd in npm sqlite3; do command -v "$cmd" >/dev/null || fail "$cmd not found"; done
 (( SYSTEM == 0 )) || command -v nginx >/dev/null || fail "nginx not found"
 if ss -Hltn "sport = :$PORT" | grep -q . && ! { (( SYSTEM )) && systemctl -q is-active hemlock; }; then
-  fail "port $PORT is held by another process (the old pm2 Hemlock? wiki/deployment.md)"
+  fail "port $PORT is held by another process"
 fi
 
 say "User and directories"

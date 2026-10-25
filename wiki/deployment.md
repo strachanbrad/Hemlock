@@ -134,13 +134,20 @@ surfaces as an error.
    service.
 2. Creates the `hemlock` system user when it is missing, and creates
    `/var/lib/hemlock`, `covers/` and `backups/` or resets their owner and mode.
-3. Builds while the running version keeps serving: `npm ci --include=dev
-   --ignore-scripts`, `npm run build`, then `chmod -R go+rX /opt/hemlock`, so a
-   strict umask on the caller's side never hides files from the service or
-   nginx. No dependency's install script runs as root: better-sqlite3 loads
-   the prebuilt binary it ships, and its inferred `node-gyp rebuild` would
-   need a compiler the box does not have. While Vite rewrites `client/dist`,
-   nginx answers 404 for the client's pages.
+3. Builds while the running version keeps serving. First it keeps the tree
+   the running version uses: each of `node_modules`, `client/node_modules`,
+   `server/node_modules` and `client/dist` that exists is copied as hardlinks
+   (`cp -al`) to `<path>.deploy-prev`, after any copy an interrupted run left
+   is removed. Then `npm ci --include=dev --ignore-scripts` and `npm run
+   build`; when both succeed the copies are removed, and `chmod -R go+rX
+   /opt/hemlock` runs, so a strict umask on the caller's side never hides
+   files from the service or nginx. The hardlink copies stay whole because
+   `npm ci` (which empties every `node_modules` before it fetches anything)
+   and Vite (which empties `client/dist`) remove files and write new ones,
+   never into an existing file. No dependency's install script runs as root:
+   better-sqlite3 loads the prebuilt binary it ships, and its inferred
+   `node-gyp rebuild` would need a compiler the box does not have. While Vite
+   rewrites `client/dist`, nginx answers 404 for the client's pages.
 4. Backs up the database and the covers ([Backups](#backups)).
 5. Installs the unit, enables and restarts it, and polls
    `http://127.0.0.1:5000/api/health` for 30 seconds until it answers 2xx.
@@ -149,15 +156,27 @@ surfaces as an error.
    it is Debian's stock link (it also claims the default server on port 80),
    runs `nginx -t`, reloads or starts nginx, and polls `/api/health` again
    through nginx on port 80.
-7. Prints the health answer, `200 {"ok":true,"version":…,"schema":…}`.
+7. Prints the health answer, `200 {"ok":true,"version":…,"schema":…}`, then
+   deletes all but the newest 10 backup pairs ([Backups](#backups)).
 
 ### When a deploy fails
 
-- A failed check, build or backup stops the script before the restart, and the
+- A failed check or backup stops the script before the restart, and the
   running version keeps serving.
-- A failed health poll prints the last 40 lines of the journal and stops before
-  nginx is touched. systemd keeps restarting the new version
-  (`Restart=on-failure`); fix the cause and rerun, or roll back.
+- A failed `npm ci` or build puts the kept `node_modules` and `client/dist`
+  back, prints `the install or build failed; the previous node_modules and
+  client/dist are back in place`, and stops before the backup and the
+  restart. The running version keeps serving with the dependencies it
+  started with. The checkout is already at the new commit, though, so a
+  restart before the next good deploy (a reboot, a crash) runs the new code
+  against the old dependencies: fix the cause and rerun, or roll back.
+- A failed restart or health poll prints the last 40 lines of the journal and
+  stops before nginx is touched, with `hemlock did not start; nginx is
+  unchanged` (the restart itself failed, as with `226/NAMESPACE`) or
+  `hemlock is not answering on 127.0.0.1:5000; nginx is unchanged`. systemd
+  keeps restarting the new version (`Restart=on-failure`); fix the cause and
+  rerun, or roll back.
+- A failed deploy deletes no backup ([Backups](#backups)).
 - When `nginx -t` rejects the configuration, the script puts back the previous
   site file, its link and Debian's default link, and exits; the running nginx
   keeps its old configuration. The usual cause is another site that also
@@ -219,9 +238,12 @@ restart, into `/var/lib/hemlock/backups/`:
   `saveCoverFromUrl()` in `server/src/covers.js` writes a temporary file and
   renames it.
 
-`<stamp>` is the UTC time as `YYYYMMDDTHHMMSSZ`, so the names sort by age. The
-deploy keeps the newest 10 pairs and deletes the rest; other names in the
-directory (`manual-*`, `pre-restore-*`, `old/`) are never deleted.
+`<stamp>` is the UTC time as `YYYYMMDDTHHMMSSZ`, so the names sort by age.
+Once the new version answers its health checks, the deploy keeps the newest
+10 pairs and deletes the rest. A deploy that fails deletes none, so each rerun
+of a failing deploy adds a backup and never pushes out the one taken before
+the failing version first started. Other names in the directory
+(`manual-*`, `pre-restore-*`, `old/`) are never deleted.
 
 A backup at any other time, on the box:
 

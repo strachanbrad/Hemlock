@@ -217,8 +217,9 @@ optional `autoStart`.
   together.
 - The build emits `client/dist/assets/zxing_reader-<hash>.wasm` (947 KB,
   414 KB compressed). A phone downloads it on its first scan and caches it.
-  It is served as `application/wasm`; a wrong type is not fatal, since the
-  glue falls back to instantiating from an ArrayBuffer. A
+  It is served as `application/wasm`, which nginx gzips (`gzip_types` in
+  `deploy/nginx/hemlock.conf`); a wrong type is not fatal, since the glue
+  falls back to instantiating from an ArrayBuffer. A
   Content-Security-Policy in front of the app needs `'wasm-unsafe-eval'` in
   `script-src`.
 

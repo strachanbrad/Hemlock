@@ -3,6 +3,7 @@ node_modules/
 
 # Build and test output
 /client/dist/
+/dist/
 coverage/
 .eslintcache
 

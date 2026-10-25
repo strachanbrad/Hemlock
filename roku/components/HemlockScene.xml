@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+Copyright (c) 2023 Hemlock
+SPDX-License-Identifier: GPL-3.0-only
+-->
+<component name="HemlockScene" extends="Scene">
+  <script type="text/brightscript" uri="pkg:/components/common.brs" />
+  <script type="text/brightscript" uri="pkg:/components/slideshow.brs" />
+  <script type="text/brightscript" uri="pkg:/components/HemlockScene.brs" />
+  <children>
+    <Poster uri="pkg:/images/background.png" width="1920" height="1080" />
+    <Group id="slides">
+      <Slide id="slideA" />
+      <Slide id="slideB" />
+      <Slide id="slideC" />
+    </Group>
+    <Label id="message" width="1920" height="1080" horizAlign="center" vertAlign="center" wrap="true" color="0xB8A9A0FF" visible="false">
+      <Font role="font" uri="pkg:/fonts/CormorantGaramond-MediumItalic.otf" size="58" />
+    </Label>
+    <!-- Everything stays inside the 5 percent overscan border: 96 px at the sides, 54 at top and bottom. -->
+    <Group id="paused" translation="[816, 54]" visible="false">
+      <Rectangle width="150" height="34" color="0x00000080" />
+      <Rectangle width="6" height="34" color="0xC9A86AFF" />
+      <Label translation="[20, 0]" height="34" vertAlign="center" color="0xEFE6DAFF" text="PAUSED">
+        <Font role="font" uri="pkg:/fonts/Inter-SemiBold.ttf" size="22" />
+      </Label>
+    </Group>
+    <Group id="notice" visible="false">
+      <Rectangle id="noticeBox" height="44" color="0x262030F2" />
+      <Rectangle width="6" height="44" color="0xDE6F66FF" />
+      <Label id="noticeText" translation="[22, 0]" height="44" vertAlign="center" color="0xDE6F66FF">
+        <Font role="font" uri="pkg:/fonts/Inter-Regular.ttf" size="24" />
+      </Label>
+    </Group>
+    <Group id="caption">
+      <Poster id="captionUmbel" uri="pkg:/images/umbel-small.png" width="29" height="29" blendColor="0xC9A86AFF" />
+      <Label id="captionText" color="0xC9A86AFF" text="The Hemlock">
+        <Font role="font" uri="pkg:/fonts/CormorantGaramond-MediumItalic.otf" size="29" />
+      </Label>
+    </Group>
+    <SettingsDialog id="settings" visible="false" />
+    <HttpTask id="http" />
+    <Timer id="tick" duration="0.5" repeat="true" />
+    <Timer id="retry" duration="30" />
+    <Timer id="noticeTimer" duration="3" />
+  </children>
+</component>

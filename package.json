@@ -22,13 +22,19 @@
     "db:new": "node server/scripts/new-migration.js",
     "db:reset": "node server/scripts/reset.js",
     "lookup:record": "node server/scripts/lookup-record.js",
-    "admin:password": "node server/scripts/admin-password.js"
+    "admin:password": "node server/scripts/admin-password.js",
+    "roku:build": "node roku/scripts/build.js",
+    "roku:install": "node roku/scripts/install.js",
+    "roku:check": "bsc --project roku/bsconfig.json"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "brighterscript": "^0.73.8",
     "concurrently": "^10.0.6",
     "eslint": "^10.13.0",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "globals": "^17.13.0"
+    "globals": "^17.13.0",
+    "roku-deploy": "^3.18.4",
+    "sharp": "^0.35.5"
   }
 }

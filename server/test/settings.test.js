@@ -91,7 +91,10 @@ describe('encryption', () => {
     const stored = encrypt('google_books_api_key', 'value', KEY)
     assert.equal(decrypt('google_books_api_key', stored, KEY), 'value')
     assert.throws(() => decrypt('anthropic_api_key', stored, KEY))
-    assert.throws(() => decrypt('google_books_api_key', stored.replace(/.$/, (c) => (c === 'A' ? 'B' : 'A')), KEY))
+    // The first character of the ciphertext carries six significant bits, so this always changes a byte.
+    const tampered = stored.replace(/:(.)([^:]*)$/, (match, first, rest) => `:${first === 'A' ? 'B' : 'A'}${rest}`)
+    assert.notEqual(tampered, stored)
+    assert.throws(() => decrypt('google_books_api_key', tampered, KEY))
     assert.throws(() => decrypt('google_books_api_key', 'plain text', KEY))
     assert.notEqual(encrypt('google_books_api_key', 'value', KEY), stored)
   })

@@ -16,6 +16,7 @@ import './styles/index.css'
 import config from './config/config.json'
 import App from './App.jsx'
 import { renderEmpty } from './components/ShelfEmpty.jsx'
+import { reloadOnStaleChunk } from './lib/staleChunks.js'
 
 const c = config.website.theme
 const FONT_UI = "'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
@@ -158,6 +159,8 @@ const hemlockTheme = {
     },
   },
 }
+
+reloadOnStaleChunk()
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

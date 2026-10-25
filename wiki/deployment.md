@@ -115,6 +115,17 @@ sudo git -C /opt/hemlock pull --ff-only && sudo /opt/hemlock/deploy/deploy.sh
 `deploy.sh` deploys exactly what is checked out and never fetches code itself.
 A rerun repeats every step: one more backup, the same files, a restart.
 
+A tab opened before a redeploy still runs the old build, whose lazy chunks
+(the barcode scanner, the display page) the new build no longer has: Vite
+empties `client/dist`, and nginx answers 404 for a missing asset. When such a
+tab asks for one, it reloads itself once. `reloadOnStaleChunk()`
+(`client/src/lib/staleChunks.js`, called from `client/src/main.jsx`) listens
+for Vite's `vite:preloadError` and, when the tab has not reloaded for this
+reason in the last minute, reloads it, which loads the new build and loses
+any unsaved input on the page. The reload is remembered in session storage;
+a second failure within the minute, or one in a tab without session storage,
+surfaces as an error.
+
 ### What deploy.sh does
 
 1. Refuses to run as anyone but root or from anywhere but `/opt/hemlock`, then

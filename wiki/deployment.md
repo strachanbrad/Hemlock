@@ -388,10 +388,11 @@ The owner's reverse proxy sits in front of nginx and needs:
   plus the multipart framing, and a lower limit at the proxy answers 413
   before nginx sees the upload.
 - **The read timeout.** At least 5 minutes for
-  `POST /api/lookup/<isbn>/identify`. A Claude lookup makes up to three
-  requests of up to 90 seconds each before it answers; the nginx site gives
-  that path a 300-second `proxy_read_timeout`, and a shorter timeout at the
-  proxy answers 504 while Claude is still searching.
+  `POST /api/lookup/<isbn>/identify` and `POST /api/books/<id>/cover/find`.
+  A Claude lookup or cover search makes up to three requests of up to 90
+  seconds each before it answers; the nginx site gives both paths a
+  300-second `proxy_read_timeout` (one regex location), and a shorter
+  timeout at the proxy answers 504 while Claude is still searching.
 - **The event stream.** `GET /api/events` stays open for as long as a page
   that shows the library is open
   ([Library § Live updates](library.md#live-updates)). The proxy passes it

@@ -3,7 +3,8 @@
 How Hemlock fills in a book from its ISBN. The server asks Open Library, and
 Google Books when a key is configured, and merges the answers into one
 record. When neither knows the ISBN and an Anthropic key is configured, the
-page can ask Claude, which searches the web for a listing of the edition.
+page can ask Claude, which searches the web for a listing of the edition;
+for a book already in the library, Claude can also look for a larger cover.
 The client reads the ISBN from the book's barcode with the phone camera.
 Every lookup and every cover download goes through the server; the only
 image the browser loads from another host is the preview of a lookup's
@@ -11,7 +12,8 @@ cover ([Library § Add a book](library.md#add-a-book)).
 
 Code: `server/src/lookup/` (the clients, the limiter, the merge and
 `anthropic.js`), `server/src/routes/lookup.js`, `saveCoverFromUrl()` in
-`server/src/covers.js`, `client/src/components/BarcodeScanner.jsx`,
+`server/src/covers.js`, `server/src/coverFinder.js`,
+`client/src/components/BarcodeScanner.jsx`,
 `client/src/components/IsbnField.jsx` and `client/src/api/lookup.js`.
 
 The keys, the Claude model and the Open Library contact are settings: saved
@@ -214,6 +216,66 @@ any lookup, or "No catalogue or search knows <isbn>; fill in the details by
 hand.", or the failure. A newer lookup, or leaving the page, drops the
 answer when it arrives. The person can type or look up another ISBN while
 Claude searches.
+
+### Finding a better cover
+
+A cover from a lookup can be small (Google's is often 300 px wide, Open
+Library's about 300), so a book's page has a button that asks Claude for
+the largest cover of that edition on the web. It is never automatic: each
+press is one search, a few cents, and nothing is cached.
+
+```
+POST /api/books/:id/cover/find      no body
+  200 { replaced, book, source_url, width, height }
+  404 { error }   'Book not found', or 'No cover found for this book'
+  409 { error }   the book's cover changed during the search
+  502 { error }   the search or the download failed; the message says why
+  503 { error }   'Claude is not configured': no key is set
+```
+
+`createCoverFinder()` in `server/src/coverFinder.js` answers it:
+
+1. **What the search is given.** The ISBN of the edition whose cover the
+   book shows (the cover rule's order,
+   [Library § The cover rule](library.md#the-cover-rule)), else the ISBN of
+   any of its editions, else the book's title and author's name.
+2. **The search.** `findCover()` in `anthropic.js` runs the same loop as a
+   lookup (the same model, at most three requests of 90 seconds, the same
+   handling of `pause_turn`, the nudge, `max_tokens` and a refusal) with the
+   web search tool (at most 5 searches) and a `report_cover` tool:
+   `found`, `cover_url`, `source_url` and `isbn_on_listing`. The prompt asks
+   for the largest cover image of this exact edition on Amazon, Goodreads,
+   the publisher's page, Bookshop.org or Barnes & Noble: the page's
+   `og:image` or main product image, an Amazon image without its size
+   modifier; a listing counts only when it shows the ISBN given or, without
+   one, the exact title and author; otherwise `found: false`, never a
+   similar edition's cover.
+3. **What the server accepts** (`coverVerdict()`). With an ISBN, the
+   listing's `isbn_on_listing` must be it or its ISBN-10. `cover_url` must
+   pass `allowedCoverUrl()` and loses an Amazon size modifier, as for a
+   lookup; a cover off the allow-list counts as not found. `source_url` is
+   kept only when it is https.
+4. **Wider or nothing.** The cover is downloaded with `saveCoverFromUrl()`
+   ([Cover downloads](#cover-downloads)), so it is stored as every cover is,
+   and its width is compared with the width of the file the book shows now,
+   read with sharp (no cover, or a missing file, counts as 0). Not wider:
+   the new file is deleted and the answer is `replaced: false`. Wider: it
+   becomes the cover of the slot the cover rule reads first (that edition
+   when the book has editions, else the book), the old file of that slot is
+   discarded inside the `withCoverFiles()` transaction, and the answer is
+   `replaced: true` with the whole book. `width` and `height` are the found
+   image's as stored, at most 1600 px on its long side.
+5. **A book that changed meanwhile.** The search takes up to a few minutes.
+   When the book is deleted meanwhile the answer is 404; when its shown
+   cover or that slot changed (an upload, a new edition with a cover), 409.
+   Either way the downloaded file is deleted.
+
+Concurrent presses for one book share one search. In the page
+(`BookDetail.jsx`), **Find a better cover** sits with the book's buttons
+for every book, says "Asking Claude…" while it waits, and then shows "Cover
+replaced, from <host> (<width> × <height>)", "The current cover is already
+the largest found", or the error as the server states it; the page shows
+the book the server returns.
 
 ## Limits and courtesy
 

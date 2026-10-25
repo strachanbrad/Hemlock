@@ -92,8 +92,8 @@ LAN address included. `saveCoverFromUrl()` (`server/src/covers.js`) fetches
 a cover only:
 
 - over https, from `covers.openlibrary.org`, `archive.org` or any subdomain
-  of it, or `books.google.com`, and, for the covers a Claude lookup finds on
-  a listing, from Amazon's image hosts (`m.media-amazon.com`,
+  of it, or `books.google.com`, and, for the covers a Claude lookup or cover
+  search finds on a listing, from Amazon's image hosts (`m.media-amazon.com`,
   `images-na.ssl-images-amazon.com` and any subdomain of
   `images-amazon.com`) and Goodreads' (`i.gr-assets.com`,
   `images.gr-assets.com`), with no user name, password or explicit port in
@@ -138,7 +138,10 @@ and column names come from code:
 A Claude lookup's answer is model output and is treated as untrusted: the
 server keeps it only when the listing shows the ISBN, bounds every field,
 and passes its cover URL through the same allow-list
-([Lookup § Claude](lookup.md#claude)).
+([Lookup § Claude](lookup.md#claude)). A cover search's answer is checked
+the same way, and its image replaces a cover only after it has been
+downloaded, decoded and found wider
+([Lookup § Finding a better cover](lookup.md#finding-a-better-cover)).
 
 ## Admin sessions
 

@@ -130,14 +130,15 @@ Vite's proxy.
 2. Vite prints a `Network: https://<address>:<VITE_PORT>/` line for each
    interface. Pick the one on the Wi-Fi network (`ip -4 addr` names them).
 3. On the phone, on the same Wi-Fi, open
-   `https://<address>:<VITE_PORT>/scan-test`.
+   `https://<address>:<VITE_PORT>/add`.
 4. Accept the certificate warning. Safari: "Show Details", then "visit this
    website", then "Visit Website". Chrome: "Advanced", then "Proceed to
    <address> (unsafe)". Firefox: "Advanced…", then "Accept the Risk and
    Continue". The certificate lasts 30 days; a new one brings the warning
    back.
-5. Tap "Scan barcode", allow the camera, and hold the barcode on the back of a
-   book inside the frame. The page shows the ISBN and its lookup answer.
+5. Tap "Scan" beside the ISBN, allow the camera, and hold the barcode on the
+   back of a book inside the frame. The form fills in from the lookup;
+   nothing is saved until "Add book".
 
 If the phone cannot connect, the dev machine's firewall must allow TCP on
 `VITE_PORT` from the local network. Stop the server with Ctrl-C after testing:

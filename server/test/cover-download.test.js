@@ -26,14 +26,14 @@ const files = () => (fs.existsSync(covers.coversDir) ? fs.readdirSync(covers.cov
 const image = (bytes, type = 'image/jpeg') => new Response(bytes, { headers: { 'content-type': type } })
 const redirect = (location, status = 302) => new Response(null, { status, headers: { location } })
 
-async function save(url, respond, { id = 7, timeoutMs } = {}) {
+async function save(url, respond, { base = 'e7', timeoutMs } = {}) {
   const calls = []
   const logs = []
   const fetch = async (target, init) => {
     calls.push({ url: target, init })
     return respond(target, init)
   }
-  const result = await covers.saveCoverFromUrl(url, id, { fetch, timeoutMs, log: (line) => logs.push(line) })
+  const result = await covers.saveCoverFromUrl(url, base, { fetch, timeoutMs, log: (line) => logs.push(line) })
   return { result, calls, logs }
 }
 
@@ -69,7 +69,7 @@ describe('saveCoverFromUrl', () => {
   })
 
   it("saves a WebP from Google Books as a book's own cover", async () => {
-    const { result } = await save(GOOGLE_COVER, () => image(WEBP, 'image/webp'), { id: 'b12' })
+    const { result } = await save(GOOGLE_COVER, () => image(WEBP, 'image/webp'), { base: 'b12' })
     assert.match(result, /^b12-[0-9a-f]{8}\.webp$/)
     covers.deleteCover(result)
     assert.deepEqual(files(), [])
@@ -183,15 +183,10 @@ describe('saveCoverFromUrl', () => {
     assert.deepEqual(logs, ['Cover not saved from covers.openlibrary.org: no answer in 20 ms'])
   })
 
-  it('throws for an id that is not an edition id or a book key, before any request', async () => {
-    for (const id of [0, -1, 1.5, '12', 'x12', 'e0', '../e1', 'b12/..', null]) {
-      await assert.rejects(save(OL_COVER, () => image(jpeg), { id }), TypeError, String(id))
+  it('throws for a base that is not e<edition id> or b<book id>, before any request', async () => {
+    for (const base of [7, 0, '12', 'x12', 'e0', 'e-1', 'e1.5', '../e1', 'b12/..', null]) {
+      await assert.rejects(save(OL_COVER, () => image(jpeg), { base }), TypeError, String(base))
     }
     assert.deepEqual(files(), [])
-  })
-
-  it('leaves the existing upload functions as they are', () => {
-    assert.equal(covers.saveCoverFromUpload({ buffer: JPEG }, '9780553212587'), '9780553212587.jpg')
-    assert.deepEqual(files(), ['9780553212587.jpg'])
   })
 })

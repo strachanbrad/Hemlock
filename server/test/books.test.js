@@ -253,7 +253,7 @@ describe('POST /api/books', () => {
       [{ title: 'x', author_id: 1, edition: { format: 'Hardcover' } }, 'format must be one of hardcover, paperback, ebook'],
       [{ title: 'x', author_id: 1, edition: { format: 'paperback', isbn: '9780140449122' } }, '"9780140449122" is not a valid ISBN-10 or ISBN-13'],
       [{ title: 'x', author_id: 1, edition: { format: 'paperback', published: 'March 2005' } }, 'published must be YYYY, YYYY-MM or YYYY-MM-DD'],
-      [{ title: 'x', author_id: 1, edition: { format: 'paperback', cover_from_url: 'http://covers.openlibrary.org/b/id/1-L.jpg' } }, 'cover_from_url must be an https URL'],
+      [{ title: 'x', author_id: 1, edition: { format: 'paperback', cover_from_url: 'http://covers.openlibrary.org/b/id/1-L.jpg' } }, 'cover_from_url must be an https URL from Open Library, archive.org or Google Books'],
       [{ title: 'x', author_id: 1, edition: { format: 'paperback', cover_url: '/covers/e1-0000000a.jpg' } }, 'Unknown field in the edition: cover_url'],
       [[], 'The book must be a JSON object'],
     ]

@@ -65,9 +65,11 @@ const BookDetail = ({ book, loaded, initialMode, onSave, onReplace, onDeleted })
     return <BookEditForm book={book} onSaved={saved} onCancel={view} />
   }
   if (mode.form) {
-    const submit = mode.form === 'edit'
-      ? async (payload, file) => saved(await updateEdition(mode.edition.id, payload, file))
-      : async (payload, file) => saved(await addEdition(book.id, payload, file))
+    const submit = async (payload, file) => {
+      const next = mode.form === 'edit' ? await updateEdition(mode.edition.id, payload, file) : await addEdition(book.id, payload, file)
+      saved(next)
+      return next
+    }
     return <EditionForm mode={mode.form} edition={mode.edition} onSubmit={submit} onCancel={view} />
   }
 

@@ -67,6 +67,13 @@ a cover in one transaction:
 3. If the transaction throws, the files it wrote are removed and the
    collected ones are kept. If it commits, the collected files are deleted
    (`deleteCover()`, a missing file ignored).
+4. A `cover_from_url` is downloaded only after the commit, since a
+   transaction cannot wait for the network: `attachDownloadedCovers()` calls
+   `saveCoverFromUrl()` ([Lookup § Cover downloads](lookup.md#cover-downloads))
+   and, when it succeeds, a second transaction points the row at the new
+   file and the cover it replaces is deleted. A failed download changes
+   nothing, so a new record has no cover; a row deleted while its cover
+   downloaded leaves the file unreferenced, and it is removed.
 
 A crash between a write and the commit can leave an unreferenced file, which
 is harmless.
@@ -134,10 +141,13 @@ the book by `id` without another request.
   `cover_from_url`; on PATCH `"cover": null` removes the cover.
 - **Covers:** the multipart `cover` goes to the edition when a POST carries
   one, otherwise to the book. A request carries at most one cover source (the
-  file, a `cover_from_url`, or `"cover": null`). `cover_from_url` must be an
-  absolute `https` URL; it is validated and otherwise ignored, so the
-  response carries the cover the record already had. `cover_url` is
-  output-only.
+  file, a `cover_from_url`, or `"cover": null`). `cover_from_url` (on the
+  book for its own cover, or on the edition) must be an https URL on the
+  download allow-list ([Security § Downloads](security.md#downloads));
+  anything else is 400 before anything is saved or fetched. The response
+  waits for the download: when it fails, the record is saved and its
+  `cover_url` is null (or the previous cover on a replacement), which the
+  pages report as saved without the cover. `cover_url` is output-only.
 
 ### List filters
 
@@ -223,22 +233,49 @@ phone); Back closes it.
 - A book with no editions has Change cover for its own cover.
 - **Delete book** asks first, naming how many editions and covers go with it.
 
-The edition form (`EditionForm.jsx`): format, ISBN (checked with
-`client/src/lib/isbn.js`), cover, and Publisher and Published behind "More".
-A chosen cover is scaled in the browser to at most 1200px on its long side
-(`client/src/lib/resizeImage.js`) before it is sent.
+The edition form (`EditionForm.jsx`): format, ISBN with Look up and Scan
+(below), cover, and Publisher and Published behind "More". A lookup fills
+publisher, date, the format (physical only when marking a purchase) and the
+cover. A chosen cover file is scaled in the browser to at most 1200px on its
+long side (`client/src/lib/resizeImage.js`) before it is sent.
 
 ### Add a book
 
 `/add` (`pages/AddBook/AddBook.jsx`), one column on a phone and two from
 992px: ISBN, title, author, format (Hardcover, Paperback, Ebook or Not owned
 yet), "Want a physical copy" for an ebook (always on for Not owned yet),
-cover, read, ratings, synopsis. The author field (`AuthorSelect.jsx`) lists
-the authors and, when the typed name matches none of them without regard to
-case, offers Add "<name>", which sends `author_name`. A book not owned yet
-keeps its cover on the book. When the title or the ISBN is already in the
-library, the page offers Open the existing book and, for a title, Add this
-as an edition.
+publisher and date behind "More", cover, read, ratings, synopsis. The author
+field (`AuthorSelect.jsx`) lists the authors and, when the typed name matches
+none of them without regard to case, offers Add "<name>", which sends
+`author_name`. A book not owned yet keeps its cover on the book. When the
+title or the ISBN is already in the library, the page offers Open the
+existing book and, for a title, Add this as an edition.
+
+**Scan and look up.** The ISBN field (`components/IsbnField.jsx`, also in
+the edition form) is checked with `client/src/lib/isbn.js` and has two
+buttons:
+
+- **Scan** opens the camera in a dialog; the scanner and its WASM load on
+  the first tap ([Lookup § Barcode scanning](lookup.md#barcode-scanning)). A
+  scanned ISBN is looked up at once.
+- **Look up** (or Enter) sends a typed ISBN to `GET /api/lookup/:isbn`
+  through `client/src/api/lookup.js`.
+
+The answer fills the form (`client/src/lib/prefill.js`): title; author,
+matched to an existing author without regard to case, else offered as a new
+one (co-authors joined with " & "); synopsis; publisher and date; and the
+format hint when no format is chosen yet. A scan never preselects Ebook: the
+person is holding a printed book. A lookup that finds nothing says so and
+leaves the form for typing.
+
+The lookup's cover shows as a preview, the one image the browser loads from
+another host (Open Library's cover server, which redirects to archive.org, or
+Google Books). It is sent as
+`cover_from_url` on save unless a file is chosen or "Don't use this cover"
+is tapped; if the server cannot download it, the book is saved without it
+and the page says so. The page ends with the credit "Book data from Open
+Library", which names Google Books too once a lookup shows a Google key is
+set.
 
 ### Authors
 

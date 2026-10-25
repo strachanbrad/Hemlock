@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 
+import { allowedCoverUrl } from './covers.js'
 import { httpError } from './errors.js'
 import { toIsbn13 } from './lib/isbn.js'
 
@@ -80,15 +81,10 @@ function published(value) {
   return value
 }
 
+// Refused here, before any request, unless it is on the download allow-list.
 function coverUrl(value) {
-  if (typeof value !== 'string' || value.length > MAX_URL) throw invalid('cover_from_url must be an https URL')
-  let url
-  try {
-    url = new URL(value)
-  } catch {
-    throw invalid('cover_from_url must be an https URL')
-  }
-  if (url.protocol !== 'https:') throw invalid('cover_from_url must be an https URL')
+  const url = typeof value === 'string' && value.length <= MAX_URL ? allowedCoverUrl(value) : null
+  if (!url) throw invalid('cover_from_url must be an https URL from Open Library, archive.org or Google Books')
   return url.href
 }
 

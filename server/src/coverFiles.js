@@ -66,3 +66,24 @@ export function withCoverFiles(db, fn) {
   for (const filename of stale) removeCover(filename)
   return result
 }
+
+const COVER_PREFIX = { books: 'b', editions: 'e' }
+
+// Runs after the row's transaction commits, since a transaction cannot wait for a download.
+// A failed download leaves the row as it was; a row deleted meanwhile leaves the new file
+// unreferenced, so it is removed. `table` is 'books' or 'editions', from code.
+export async function attachDownloadedCovers(db, downloads, saveCover) {
+  for (const { table, id, url } of downloads) {
+    const prefix = COVER_PREFIX[table]
+    if (!prefix) throw new TypeError(`No covers in ${table}`)
+    const filename = await saveCover(url, `${prefix}${id}`)
+    if (!filename) continue
+    const stale = db.transaction(() => {
+      const row = db.prepare(`SELECT cover FROM ${table} WHERE id = ?`).get(id)
+      if (!row) return filename
+      db.prepare(`UPDATE ${table} SET cover = ? WHERE id = ?`).run(filename, id)
+      return row.cover
+    })()
+    if (stale) removeCover(stale)
+  }
+}

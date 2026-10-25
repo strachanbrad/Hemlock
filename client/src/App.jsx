@@ -10,7 +10,6 @@ import { Link, Navigate, Outlet, Route, Routes, useLocation } from 'react-router
 import AddBook from './pages/AddBook/AddBook.jsx'
 import Authors from './pages/Authors/Authors.jsx'
 import Library from './pages/Library/Library.jsx'
-import ScanTest from './pages/ScanTest/ScanTest.jsx'
 import config from './config/config.json'
 import { useIsPhone } from './lib/viewport.js'
 import './styles/shell.css'
@@ -88,7 +87,6 @@ const App = () => (
       <Route path="*" element={<Navigate to="/library" replace />} />
     </Route>
     <Route path="/display" element={<Suspense fallback={null}><Display /></Suspense>} />
-    <Route path="/scan-test" element={<ScanTest />} />
   </Routes>
 )
 

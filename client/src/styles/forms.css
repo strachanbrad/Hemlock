@@ -36,3 +36,49 @@
   gap: 12px;
   margin-top: 8px;
 }
+
+.isbn-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  color: var(--ant-color-text-secondary, rgba(43, 29, 34, 0.65));
+}
+
+.isbn-notice-found {
+  color: var(--ant-color-success-text, #389e0d);
+}
+
+.isbn-notice-error {
+  color: var(--ant-color-error-text, #cf1322);
+}
+
+/* The lookup's cover keeps a 2:3 box, so the form does not jump when it loads. */
+.lookup-cover {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: -8px 0 24px;
+}
+
+.lookup-cover img {
+  flex: none;
+  width: 80px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 3px;
+  background: var(--ant-color-fill-tertiary, #f2eef0);
+}
+
+.lookup-cover-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.credit {
+  margin: 24px 0 0;
+  font-size: 12px;
+}

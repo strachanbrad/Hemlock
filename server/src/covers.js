@@ -7,13 +7,11 @@ import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { config } from './config.js'
-import { httpError } from './errors.js'
 
 export const coversDir = path.join(config.dataDir, 'covers')
 export const MAX_COVER_BYTES = 10 * 1024 * 1024
 
-const COVER_NAME = /^(e\d+-[0-9a-f]{8}|b\d+-[0-9a-f]{8}|\d{13})\.(jpg|png|webp)$/
-const ISBN_KEY = /^(\d{13}|\d{9}[\dX])$/
+const COVER_NAME = /^[eb][1-9]\d*-[0-9a-f]{8}\.(jpg|png|webp)$/
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 
 export function imageType(buffer) {
@@ -21,25 +19,6 @@ export function imageType(buffer) {
   if (buffer.length >= 8 && buffer.subarray(0, 8).equals(PNG_SIGNATURE)) return 'png'
   if (buffer.length >= 12 && buffer.toString('latin1', 0, 4) === 'RIFF' && buffer.toString('latin1', 8, 12) === 'WEBP') return 'webp'
   return null
-}
-
-// Under the Books/EBooks schema a cover is <isbn>.jpg whatever its type, replaced in place.
-export function saveCoverFromUpload(file, isbn) {
-  if (!imageType(file.buffer)) throw httpError(400, 'The cover must be a JPEG, PNG or WebP image')
-  if (!ISBN_KEY.test(isbn)) throw httpError(400, 'A cover needs a 10 or 13 digit ISBN')
-
-  fs.mkdirSync(coversDir, { recursive: true })
-  const filename = `${isbn}.jpg`
-  // The temp file stays in coversDir: a rename across mounts (PrivateTmp) fails with EXDEV.
-  const temp = path.join(coversDir, `.${filename}.${crypto.randomBytes(4).toString('hex')}.tmp`)
-  fs.writeFileSync(temp, file.buffer, { flag: 'wx' })
-  try {
-    fs.renameSync(temp, path.join(coversDir, filename))
-  } catch (err) {
-    fs.rmSync(temp, { force: true })
-    throw err
-  }
-  return filename
 }
 
 export function deleteCover(filename) {
@@ -141,18 +120,17 @@ function hostOf(url) {
   }
 }
 
-// `id` is an edition id (e<id>-…) or 'b<book id>' for a book's own cover. Resolves to the file name,
-// or to null after logging one line when anything fails; never rejects for an upstream problem.
-export async function saveCoverFromUrl(url, id, { fetch = globalThis.fetch, timeoutMs = DOWNLOAD_TIMEOUT_MS, log = console.warn } = {}) {
-  const stem = typeof id === 'number' ? `e${id}` : id
-  if (typeof stem !== 'string' || !COVER_STEM.test(stem)) throw new TypeError(`A cover needs an edition id or 'b<book id>', not ${JSON.stringify(id)}`)
+// `base` is 'e<edition id>' or 'b<book id>', as for writeCover() in coverFiles.js. Resolves to the file
+// name, or to null after logging one line when anything fails; never rejects for an upstream problem.
+export async function saveCoverFromUrl(url, base, { fetch = globalThis.fetch, timeoutMs = DOWNLOAD_TIMEOUT_MS, log = console.warn } = {}) {
+  if (typeof base !== 'string' || !COVER_STEM.test(base)) throw new TypeError(`A cover needs 'e<edition id>' or 'b<book id>', not ${JSON.stringify(base)}`)
 
   try {
     const buffer = await download(url, { fetch, timeoutMs })
     const type = imageType(buffer)
     if (!type) throw new DownloadError('not a JPEG, PNG or WebP image')
     if (crypto.createHash('sha256').update(buffer).digest('hex') === GOOGLE_PLACEHOLDER_SHA256) throw new DownloadError("Google's image-not-available placeholder")
-    return await writeCover(buffer, `${stem}-${crypto.randomBytes(4).toString('hex')}.${type}`)
+    return await writeCover(buffer, `${base}-${crypto.randomBytes(4).toString('hex')}.${type}`)
   } catch (err) {
     log(`Cover not saved from ${hostOf(url)}: ${err.name === 'TimeoutError' ? `no answer in ${timeoutMs} ms` : err.message}`)
     return null

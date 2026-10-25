@@ -5,32 +5,34 @@
 
 import { Router } from 'express'
 import { readBody } from '../body.js'
-import { checkCoverSources, withCoverFiles } from '../coverFiles.js'
+import { attachDownloadedCovers, checkCoverSources, withCoverFiles } from '../coverFiles.js'
 import { createLibrary, pick } from '../library.js'
 import { PHYSICAL, editionPayload, pathId } from '../validate.js'
 
 const EDITION_VALUES = ['format', 'isbn', 'publisher', 'published']
 
-export default function editionRoutes(db) {
+export default function editionRoutes(db, saveCover) {
   const router = Router()
   const library = createLibrary(db)
 
   // A physical edition clears the wishlist flag, which means a physical copy is wanted.
-  router.post('/books/:id/editions', readBody, (req, res) => {
+  router.post('/books/:id/editions', readBody, async (req, res) => {
     const id = pathId(req.params.id, 'Book')
     const input = editionPayload(req.payload, { create: true })
     checkCoverSources(req.cover, input.cover_from_url)
 
-    withCoverFiles(db, (files) => {
+    const editionId = withCoverFiles(db, (files) => {
       library.bookRow(id)
-      const editionId = library.insertEdition(id, input)
-      if (req.cover) library.updateEdition(editionId, { cover: files.write(req.cover, `e${editionId}`) })
+      const newId = library.insertEdition(id, input)
+      if (req.cover) library.updateEdition(newId, { cover: files.write(req.cover, `e${newId}`) })
       if (PHYSICAL.has(input.format)) library.updateBook(id, { wishlist: 0 })
+      return newId
     })
+    if (input.cover_from_url) await attachDownloadedCovers(db, [{ table: 'editions', id: editionId, url: input.cover_from_url }], saveCover)
     res.status(201).json(library.getBook(id))
   })
 
-  router.patch('/editions/:id', readBody, (req, res) => {
+  router.patch('/editions/:id', readBody, async (req, res) => {
     const id = pathId(req.params.id, 'Edition')
     const input = editionPayload(req.payload, { create: false })
     checkCoverSources(req.cover, input.cover_from_url, input.remove_cover)
@@ -48,6 +50,7 @@ export default function editionRoutes(db) {
       library.updateEdition(id, values)
       return edition.book_id
     })
+    if (input.cover_from_url) await attachDownloadedCovers(db, [{ table: 'editions', id, url: input.cover_from_url }], saveCover)
     res.json(library.getBook(bookId))
   })
 

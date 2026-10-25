@@ -3,8 +3,9 @@
 How Hemlock fills in a book from its ISBN. The server asks Open Library, and
 Google Books when a key is configured, and merges the answers into one
 record; the client reads the ISBN from the book's barcode with the phone
-camera. The browser never calls an outside service: every lookup and every
-cover download goes through the server.
+camera. Every lookup and every cover download goes through the server; the
+only image the browser loads from another host is the preview of a lookup's
+cover ([Library § Add a book](library.md#add-a-book)).
 
 Code: `server/src/lookup/` (the clients, the limiter and the merge),
 `server/src/routes/lookup.js`, `saveCoverFromUrl()` in
@@ -140,12 +141,15 @@ Normalisation:
 
 ## Cover downloads
 
-`saveCoverFromUrl(url, id)` in `server/src/covers.js` downloads a cover the
+`saveCoverFromUrl(url, base)` in `server/src/covers.js` downloads a cover the
 person chose from a lookup, once, after the book or edition row is saved:
 the database transaction is synchronous and cannot wait for a download.
+`attachDownloadedCovers()` in `server/src/coverFiles.js` calls it after the
+commit and points the row at the file in a second statement
+([Library § Cover files](library.md#cover-files)).
 
-- `id` is an edition id, giving `e<id>-<8 hex>.<ext>`, or `'b<book id>'` for
-  a book's own cover, giving `b<id>-<8 hex>.<ext>`. Anything else throws a
+- `base` is `'e<edition id>'` or `'b<book id>'`, as for an upload, giving
+  `e<id>-<8 hex>.<ext>` or `b<id>-<8 hex>.<ext>`. Anything else throws a
   `TypeError`: that is a bug in the caller, not an upstream problem.
 - It resolves to the new file name, or to `null` after logging one line
   (`Cover not saved from <host>: <reason>`) when anything fails. It never
@@ -222,11 +226,12 @@ owner's TLS proxy in production ([Deployment](deployment.md)), and the dev
 server's `HTTPS=1` mode on the LAN
 ([Development setup § Testing on a phone](dev-setup.md#testing-on-a-phone)).
 
-### The test page
+### Where it is used
 
-`/scan-test` (`client/src/pages/ScanTest/`) shows the scanner, a typed ISBN
-field and the lookup's whole answer with each field's source. It saves
-nothing; it exists to prove the camera and the lookup on a real phone.
+The add page and the edition form (adding an edition, marking a book
+purchased) put a Scan button beside the ISBN field (`IsbnField.jsx`), which
+loads the scanner the first time it is tapped and shows it in a dialog
+([Library § Add a book](library.md#add-a-book)).
 
 ## Tests
 

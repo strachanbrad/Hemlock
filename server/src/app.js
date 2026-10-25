@@ -5,7 +5,7 @@
 
 import express from 'express'
 import { config } from './config.js'
-import { coversDir } from './covers.js'
+import { coversDir, saveCoverFromUrl } from './covers.js'
 import { errorHandler } from './errors.js'
 import { createLookup } from './lookup/index.js'
 import authorRoutes from './routes/authors.js'
@@ -15,12 +15,12 @@ import editionRoutes from './routes/editions.js'
 import healthRoutes from './routes/health.js'
 import lookupRoutes from './routes/lookup.js'
 
-export function createApp({ db, lookup = createLookup({ googleKey: config.googleBooksApiKey, contact: config.lookupContact }) }) {
+export function createApp({ db, lookup = createLookup({ googleKey: config.googleBooksApiKey, contact: config.lookupContact }), saveCover = saveCoverFromUrl }) {
   const app = express()
   app.disable('x-powered-by')
   app.use(express.json())
 
-  app.use('/api', healthRoutes(db), lookupRoutes(lookup), authorRoutes(db), displayRoutes(db), bookRoutes(db), editionRoutes(db))
+  app.use('/api', healthRoutes(db), lookupRoutes(lookup), authorRoutes(db), displayRoutes(db), bookRoutes(db, saveCover), editionRoutes(db, saveCover))
   app.use('/covers', express.static(coversDir, { index: false }))
 
   app.use((req, res) => res.status(404).json({ error: 'Not found' }))

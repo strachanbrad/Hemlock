@@ -24,27 +24,15 @@ describe('covers', () => {
     assert.equal(covers.imageType(Buffer.alloc(0)), null)
   })
 
-  it('saves an upload under the data directory and replaces it in place', () => {
-    assert.equal(covers.saveCoverFromUpload({ buffer: JPEG }, '9780553212587'), '9780553212587.jpg')
-    assert.equal(covers.saveCoverFromUpload({ buffer: PNG }, '9780553212587'), '9780553212587.jpg')
-    assert.equal(covers.coversDir, path.join(dataDir, 'covers'))
-    assert.deepEqual(fs.readdirSync(covers.coversDir), ['9780553212587.jpg'])
-    assert.ok(fs.readFileSync(path.join(covers.coversDir, '9780553212587.jpg')).equals(PNG))
-  })
-
-  it('refuses an upload named by anything but an ISBN', () => {
-    for (const isbn of ['../9780553212587', '9780553212587.png', '', '978055321258/']) {
-      assert.throws(() => covers.saveCoverFromUpload({ buffer: JPEG }, isbn), { status: 400 }, isbn)
-    }
-  })
-
   it('deletes only server-generated names and ignores a missing file', () => {
-    covers.saveCoverFromUpload({ buffer: JPEG }, '9780156029438')
-    covers.deleteCover('9780156029438.jpg')
-    assert.ok(!fs.existsSync(path.join(covers.coversDir, '9780156029438.jpg')))
-    covers.deleteCover('9780156029438.jpg')
+    assert.equal(covers.coversDir, path.join(dataDir, 'covers'))
+    fs.mkdirSync(covers.coversDir, { recursive: true })
+    fs.writeFileSync(path.join(covers.coversDir, 'b3-0123abcd.jpg'), JPEG)
+    covers.deleteCover('b3-0123abcd.jpg')
+    assert.ok(!fs.existsSync(path.join(covers.coversDir, 'b3-0123abcd.jpg')))
+    covers.deleteCover('b3-0123abcd.jpg')
     covers.deleteCover('e12-0123abcd.webp')
-    for (const name of ['../hemlock.db', 'hemlock.db', '.9780156029438.jpg.tmp', '9780156029438.gif', 'e12-XYZ.jpg']) {
+    for (const name of ['../hemlock.db', 'hemlock.db', '.e12-0123abcd.jpg.tmp', '9780156029438.jpg', 'e12-0123abcd.gif', 'e12-XYZ.jpg', 'e0-0123abcd.jpg', 'x12-0123abcd.jpg']) {
       assert.throws(() => covers.deleteCover(name), /Refusing to delete/, name)
     }
   })

@@ -34,7 +34,8 @@ What the rows mean:
   without an ISBN (`editions_book_format_without_isbn`), so a double tap
   cannot add the same ebook twice; two paperbacks with different ISBNs are
   allowed.
-- **`published`** is `YYYY`, `YYYY-MM` or `YYYY-MM-DD`.
+- **`published`** is `YYYY`, `YYYY-MM` or `YYYY-MM-DD`, and a real date:
+  `2023-02-31` answers 400.
 - **Names and titles** are stored trimmed with inner whitespace collapsed.
   Comparisons ignore case for ASCII letters only (`NOCASE`): `Brontë` and
   `BRONTË` are different names.

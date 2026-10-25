@@ -42,6 +42,10 @@ function seed() {
 }
 
 const titles = (books) => books.map((book) => book.title)
+const longCoverUrl = (length) => {
+  const start = 'https://covers.openlibrary.org/b/id/1-L.jpg?q='
+  return start + 'x'.repeat(length - start.length)
+}
 
 describe('GET /api/books', () => {
   it('answers an empty array for an empty library', async () => {
@@ -253,7 +257,15 @@ describe('POST /api/books', () => {
       [{ title: 'x', author_id: 1, edition: { format: 'Hardcover' } }, 'format must be one of hardcover, paperback, ebook'],
       [{ title: 'x', author_id: 1, edition: { format: 'paperback', isbn: '9780140449122' } }, '"9780140449122" is not a valid ISBN-10 or ISBN-13'],
       [{ title: 'x', author_id: 1, edition: { format: 'paperback', published: 'March 2005' } }, 'published must be YYYY, YYYY-MM or YYYY-MM-DD'],
+      [{ title: 'x', author_id: 1, edition: { format: 'paperback', published: '2023-13' } }, 'published must be YYYY, YYYY-MM or YYYY-MM-DD'],
+      [{ title: 'x', author_id: 1, edition: { format: 'paperback', published: '2023-02-31' } }, 'published "2023-02-31" is not a real date'],
+      [{ title: 'x', author_id: 1, edition: { format: 'paperback', published: '2023-02-29' } }, 'published "2023-02-29" is not a real date'],
+      [{ title: 'x'.repeat(501), author_id: 1 }, 'title is longer than 500 characters'],
+      [{ title: 'x', author_name: 'a'.repeat(201) }, 'author_name is longer than 200 characters'],
+      [{ title: 'x', author_id: 1, synopsis: 's'.repeat(20001) }, 'synopsis is longer than 20000 characters'],
+      [{ title: 'x', author_id: 0 }, 'author_id must be a positive whole number'],
       [{ title: 'x', author_id: 1, edition: { format: 'paperback', cover_from_url: 'http://covers.openlibrary.org/b/id/1-L.jpg' } }, 'cover_from_url must be an https URL from Open Library, archive.org or Google Books'],
+      [{ title: 'x', author_id: 1, edition: { format: 'paperback', cover_from_url: longCoverUrl(2049) } }, 'cover_from_url must be an https URL from Open Library, archive.org or Google Books'],
       [{ title: 'x', author_id: 1, edition: { format: 'paperback', cover_url: '/covers/e1-0000000a.jpg' } }, 'Unknown field in the edition: cover_url'],
       [[], 'The book must be a JSON object'],
     ]
@@ -261,6 +273,20 @@ describe('POST /api/books', () => {
       assert.deepEqual(await api.post('/api/books', payload), { status: 400, body: { error } }, JSON.stringify(payload))
     }
     assert.equal(app.db.prepare('SELECT COUNT(*) FROM books').pluck().get(), 4)
+  })
+
+  it('accepts every value at its cap and 29 February of a leap year', async () => {
+    seed()
+    const { status, body } = await api.post('/api/books', {
+      title: 'x'.repeat(500),
+      author_name: 'a'.repeat(200),
+      synopsis: 's'.repeat(20000),
+      edition: { format: 'paperback', published: '2024-02-29' },
+    })
+    assert.equal(status, 201)
+    assert.deepEqual([body.title.length, body.author.name.length, body.synopsis.length, body.editions[0].published], [500, 200, 20000, '2024-02-29'])
+    const { editionPayload } = await import('../src/validate.js')
+    assert.equal(editionPayload({ cover_from_url: longCoverUrl(2048) }, { create: false }).cover_from_url, longCoverUrl(2048))
   })
 
   it('refuses a multipart part other than data and cover', async () => {

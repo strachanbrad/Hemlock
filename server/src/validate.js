@@ -78,6 +78,11 @@ function isbn(value) {
 function published(value) {
   if (value === null || value === '') return null
   if (typeof value !== 'string' || !PUBLISHED.test(value)) throw invalid('published must be YYYY, YYYY-MM or YYYY-MM-DD')
+  // PUBLISHED allows day 31 in every month; Date.UTC rolls a day the month lacks into the next.
+  const [year, month, day] = value.split('-').map(Number)
+  if (day !== undefined && new Date(Date.UTC(year, month - 1, day)).getUTCDate() !== day) {
+    throw invalid(`published ${JSON.stringify(value)} is not a real date`)
+  }
   return value
 }
 

@@ -9,9 +9,9 @@ import { EMPTY_FILTERS, activeFilterCount, apiQuery, filtersFromSearch, isBuyLis
 const parse = (search) => filtersFromSearch(new URLSearchParams(search))
 
 describe('filters from the address', () => {
-  it('read every filter and the sort', () => {
-    expect(parse('q=bront&format=physical&owned=0&wishlist=1&read=1&author_id=3&sort=added')).toEqual({
-      q: 'bront', format: 'physical', owned: '0', wishlist: '1', read: '1', author_id: '3', sort: 'added',
+  it('read every filter, the sort and the view', () => {
+    expect(parse('q=bront&format=physical&owned=0&wishlist=1&read=1&author_id=3&sort=added&view=flow')).toEqual({
+      q: 'bront', format: 'physical', owned: '0', wishlist: '1', read: '1', author_id: '3', sort: 'added', view: 'flow',
     })
   })
 
@@ -20,7 +20,7 @@ describe('filters from the address', () => {
   })
 
   it('ignore values the server would refuse', () => {
-    expect(parse('format=audio&owned=yes&wishlist=0&read=2&author_id=0&sort=price')).toEqual(EMPTY_FILTERS)
+    expect(parse('format=audio&owned=yes&wishlist=0&read=2&author_id=0&sort=price&view=grid')).toEqual(EMPTY_FILTERS)
   })
 
   it('make the buy list the wishlist view', () => {
@@ -34,6 +34,15 @@ describe('filters to the address and the API', () => {
     const filters = { ...EMPTY_FILTERS, q: 'jane ', format: 'ebook', wishlist: '1', sort: 'stars' }
     expect(searchFromFilters(filters)).toBe('q=jane+&format=ebook&wishlist=1&sort=stars')
     expect(parse(searchFromFilters(filters))).toEqual(filters)
+  })
+
+  it('keep the view in the address, never in the API query or the filter count', () => {
+    const filters = { ...EMPTY_FILTERS, format: 'ebook', view: 'flow' }
+    expect(searchFromFilters(filters)).toBe('format=ebook&view=flow')
+    expect(parse(searchFromFilters(filters))).toEqual(filters)
+    expect(parse('view=list').view).toBe('list')
+    expect(apiQuery(filters)).toBe('format=ebook')
+    expect(activeFilterCount(filters)).toBe(1)
   })
 
   it('leave the default sort out of the address', () => {

@@ -1,36 +1,12 @@
 # Roadmap
 
-The work planned for Hemlock. Foundation lands first and deployment after it;
-lookup and the TV display follow, and the library (books, editions and the
-phone layout, which land together) comes last. This page describes work that
-does not exist yet, in the present-tense voice of the rest of the wiki; a step
-leaves this page when it is built and is described on its own page. Nothing is
-deployed, so a step may change the schema, the API or the file layout without
-a compatibility path.
-
-## 1. Foundation
-
-- **One install.** npm workspaces (`client`, `server`) under the root
-  `package.json`, one committed `package-lock.json`, a pinned Node release
-  (`.nvmrc`) that dev and the box share.
-- **Vite** builds and serves the client; its dev server proxies `/api` and
-  `/covers` to Express and refuses to start on a busy port. Every dependency
-  is on its current major, Ant Design included.
-- **better-sqlite3** is the database driver: one connection, synchronous
-  statements, `db.transaction` for multi-statement writes, WAL and
-  `foreign_keys` set on the connection when it opens.
-- **Migrations.** Numbered SQL files under `server/migrations/`, applied in
-  order when the server starts, each in its own transaction, with the applied
-  version recorded in the database. `npm run db:new <name>` writes the next
-  file; `npm run db:reset` rebuilds the dev database from the seed data and
-  refuses to touch a production data directory.
-- **One data directory.** `DATA_DIR` holds `hemlock.db` and `covers/`;
-  nothing tracked is written at runtime, and in production the checkout is
-  read-only to the service.
-- `GET /api/health` answers `{ ok, version, schema }` for the deploy script.
-- The unused packages (`nodejs-web-scraper`, `quagga`, `node-fetch`,
-  `method-override`, `cors`, the Create React App testing libraries) and the
-  ISBNdb key and code are gone.
+The work planned for Hemlock. Deployment comes first; lookup and the TV
+display follow, and the library (books, editions and the phone layout, which
+land together) comes last. This page describes work that does not exist yet,
+in the present-tense voice of the rest of the wiki; a step leaves this page
+when it is built and is described on its own page. Nothing is deployed, so a
+step may change the schema, the API or the file layout without a
+compatibility path.
 
 ## 2. Deployment
 

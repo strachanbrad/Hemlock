@@ -4,23 +4,48 @@
  */
 
 import express from 'express'
-import { config } from './config.js'
+import { createSessions } from './auth.js'
+import { config, userAgent } from './config.js'
 import { coversDir, saveCoverFromUrl } from './covers.js'
 import { errorHandler } from './errors.js'
-import { createLookup } from './lookup/index.js'
+import { DEFAULT_MODEL, createAnthropic } from './lookup/anthropic.js'
+import { probeGoogle } from './lookup/google.js'
+import { createIdentify, createLookup } from './lookup/index.js'
+import adminRoutes from './routes/admin.js'
 import authorRoutes from './routes/authors.js'
 import bookRoutes from './routes/books.js'
 import displayRoutes from './routes/display.js'
 import editionRoutes from './routes/editions.js'
 import healthRoutes from './routes/health.js'
 import lookupRoutes from './routes/lookup.js'
+import { createSettings } from './settings.js'
 
-export function createApp({ db, lookup = createLookup({ googleKey: config.googleBooksApiKey, contact: config.lookupContact }), saveCover = saveCoverFromUrl }) {
+// Every consumer reads its key, contact and model from `settings` at request time.
+export function createApp({ db, settings = createSettings(db), lookup, identify, probes, saveCover, secure = config.production, now = Date.now }) {
+  const setting = (name) => () => settings.get(name)
+  const agent = () => userAgent(config.version, settings.get('lookup_contact'))
+  lookup ??= createLookup({ googleKey: setting('google_books_api_key'), contact: setting('lookup_contact'), anthropicKey: setting('anthropic_api_key') })
+  identify ??= createIdentify({ apiKey: setting('anthropic_api_key'), model: setting('anthropic_model') })
+  probes ??= {
+    google: (key) => probeGoogle({ key, userAgent: agent() }),
+    anthropic: (key) => createAnthropic({ apiKey: key, model: settings.get('anthropic_model') ?? DEFAULT_MODEL }).probe(),
+  }
+  saveCover ??= (url, base) => saveCoverFromUrl(url, base, { userAgent: agent() })
+
   const app = express()
   app.disable('x-powered-by')
   app.use(express.json())
 
-  app.use('/api', healthRoutes(db), lookupRoutes(lookup), authorRoutes(db), displayRoutes(db), bookRoutes(db, saveCover), editionRoutes(db, saveCover))
+  app.use(
+    '/api',
+    adminRoutes({ db, settings, sessions: createSessions(db, { now }), probes, secure, now }),
+    healthRoutes(db),
+    lookupRoutes(lookup, identify),
+    authorRoutes(db),
+    displayRoutes(db),
+    bookRoutes(db, saveCover),
+    editionRoutes(db, saveCover),
+  )
   app.use('/covers', express.static(coversDir, { index: false }))
 
   app.use((req, res) => res.status(404).json({ error: 'Not found' }))

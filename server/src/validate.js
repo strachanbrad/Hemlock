@@ -75,21 +75,25 @@ function isbn(value) {
   return isbn13
 }
 
+// PUBLISHED allows day 31 in every month; Date.UTC rolls a day the month lacks into the next.
+const isRealDate = (value) => {
+  const [year, month, day] = value.split('-').map(Number)
+  return day === undefined || new Date(Date.UTC(year, month - 1, day)).getUTCDate() === day
+}
+
+export const isPublished = (value) => typeof value === 'string' && PUBLISHED.test(value) && isRealDate(value)
+
 function published(value) {
   if (value === null || value === '') return null
   if (typeof value !== 'string' || !PUBLISHED.test(value)) throw invalid('published must be YYYY, YYYY-MM or YYYY-MM-DD')
-  // PUBLISHED allows day 31 in every month; Date.UTC rolls a day the month lacks into the next.
-  const [year, month, day] = value.split('-').map(Number)
-  if (day !== undefined && new Date(Date.UTC(year, month - 1, day)).getUTCDate() !== day) {
-    throw invalid(`published ${JSON.stringify(value)} is not a real date`)
-  }
+  if (!isRealDate(value)) throw invalid(`published ${JSON.stringify(value)} is not a real date`)
   return value
 }
 
 // Refused here, before any request, unless it is on the download allow-list.
 function coverUrl(value) {
   const url = typeof value === 'string' && value.length <= MAX_URL ? allowedCoverUrl(value) : null
-  if (!url) throw invalid('cover_from_url must be an https URL from Open Library, archive.org or Google Books')
+  if (!url) throw invalid('cover_from_url must be an https URL from Open Library, archive.org, Google Books, Amazon or Goodreads')
   return url.href
 }
 

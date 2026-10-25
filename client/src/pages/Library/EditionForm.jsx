@@ -10,8 +10,9 @@ import { SectionHeading } from '../../components/Headings.jsx'
 import { FORMAT_LABELS } from '../../components/FormatTags.jsx'
 import IsbnField from '../../components/IsbnField.jsx'
 import LookupCover from '../../components/LookupCover.jsx'
+import LookupCredit from '../../components/LookupCredit.jsx'
 import { toIsbn13 } from '../../lib/isbn.js'
-import { creditLine, editionFromLookup, untouchedFields } from '../../lib/prefill.js'
+import { editionFromLookup, untouchedFields } from '../../lib/prefill.js'
 import { resizeCover } from '../../lib/resizeImage.js'
 import '../../styles/forms.css'
 
@@ -123,7 +124,7 @@ const EditionForm = ({ mode, edition, onSubmit, onCancel }) => {
         <Button onClick={onCancel}>Cancel</Button>
         <Button type="primary" htmlType="submit" loading={saving}>Save</Button>
       </div>
-      {found && <p className="credit secondary">{creditLine(found)}</p>}
+      {found && <LookupCredit record={found} />}
     </Form>
   )
 }

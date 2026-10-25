@@ -120,6 +120,8 @@ if [[ -f $DATA/hemlock.db ]]; then
   # As hemlock: a backup that dies leaves -wal and -shm behind, and root-owned ones lock the service out.
   as_hemlock sqlite3 "$DATA/hemlock.db" ".backup '$DATA/backups/hemlock-$stamp.db'"
   as_hemlock cp -al "$DATA/covers" "$DATA/backups/covers-$stamp"
+  # Without SECRETS_KEY the settings' secrets decrypt only with this file, so it goes with the database.
+  [[ ! -f $DATA/secrets.key ]] || as_hemlock cp -p "$DATA/secrets.key" "$DATA/backups/secrets-$stamp.key"
 else
   echo "no database yet"
 fi
@@ -197,7 +199,7 @@ if [[ -d $DATA/backups ]]; then
   for f in "${old[@]}"; do
     s=${f#hemlock-}
     s=${s%.db}
-    run rm -rf -- "$DATA/backups/$f" "$DATA/backups/covers-$s"
+    run rm -rf -- "$DATA/backups/$f" "$DATA/backups/covers-$s" "$DATA/backups/secrets-$s.key"
   done
 fi
 say "Done"

@@ -15,10 +15,11 @@ import { RATINGS } from '../../components/BookRatings.jsx'
 import { CoverPicker } from '../../components/CoverPicker.jsx'
 import { PageHeading, SectionHeading } from '../../components/Headings.jsx'
 import IsbnField from '../../components/IsbnField.jsx'
+import LookupCredit from '../../components/LookupCredit.jsx'
 import Rating from '../../components/Rating.jsx'
 import ToggleIcon from '../../components/ToggleIcon.jsx'
 import { BookClosed, BookmarkFilled, BookOpen } from '../../images/index.js'
-import { bookFromLookup, creditLine, untouchedFields } from '../../lib/prefill.js'
+import { bookFromLookup, untouchedFields } from '../../lib/prefill.js'
 import { resizeCover } from '../../lib/resizeImage.js'
 import { useIsPhone } from '../../lib/viewport.js'
 import { isbnRule, publishedRule } from '../Library/EditionForm.jsx'
@@ -277,7 +278,7 @@ const AddBook = () => {
           <Button type="primary" htmlType="submit" size="large" loading={saving} className="add-submit">Add book</Button>
         </div>
       </Form>
-      <p className="credit secondary">{creditLine(found)}</p>
+      <LookupCredit record={found} />
     </section>
   )
 }

@@ -67,7 +67,7 @@ nginx.
 | Path | Owner | Holds |
 |---|---|---|
 | `/opt/hemlock` | root | The git checkout; `deploy.sh` builds the client into `client/dist`, which nginx serves. The service reads the checkout and cannot write it (`ProtectSystem=strict`). |
-| `/var/lib/hemlock` | `hemlock` | `DATA_DIR`: `hemlock.db` (with `hemlock.db-wal` and `hemlock.db-shm` while the server runs) and `covers/`. A deploy writes nothing here but the directories and the backups. |
+| `/var/lib/hemlock` | `hemlock` | `DATA_DIR`: `hemlock.db` (with `hemlock.db-wal` and `hemlock.db-shm` while the server runs), `covers/`, and `secrets.key` (mode 0600) when `SECRETS_KEY` is not set ([Admin § Secrets at rest](admin.md#secrets-at-rest)). A deploy writes nothing here but the directories and the backups. |
 | `/var/lib/hemlock/backups` | `hemlock`, mode 0700 | The deploy's backups (below). |
 | `/etc/hemlock/hemlock.env` | root, mode 0600 | The service's secrets, optional (below). |
 | `/etc/systemd/system/hemlock.service` | root | A copy of `deploy/hemlock.service`. |
@@ -83,8 +83,7 @@ nginx.
 
    The checkout belongs to root; the service only reads it.
 
-2. Create the secrets file when Google Books or the Open Library contact is
-   wanted ([Secrets](#secrets)).
+2. Create the secrets file with a `SECRETS_KEY` ([Secrets](#secrets)).
 
 3. Preview the deploy, on the box:
 
@@ -100,6 +99,10 @@ nginx.
    ```bash
    sudo /opt/hemlock/deploy/deploy.sh
    ```
+
+5. Set the admin password ([The admin password](#the-admin-password)), then
+   enter the Google Books and Anthropic keys on `/admin`
+   ([Admin](admin.md)).
 
 ## Redeploy
 
@@ -145,7 +148,7 @@ surfaces as an error.
    better-sqlite3 loads the prebuilt binary it ships, and its inferred
    `node-gyp rebuild` would need a compiler the box does not have. While Vite
    rewrites `client/dist`, nginx answers 404 for the client's pages.
-4. Backs up the database and the covers ([Backups](#backups)).
+4. Backs up the database, the covers and `secrets.key` ([Backups](#backups)).
 5. Installs the unit, enables and restarts it, and polls
    `http://127.0.0.1:5000/api/health` for 30 seconds until it answers 2xx.
    Pending migrations apply when the server starts.
@@ -154,7 +157,7 @@ surfaces as an error.
    runs `nginx -t`, reloads or starts nginx, and polls `/api/health` again
    through nginx on port 80.
 7. Prints the health answer, `200 {"ok":true,"version":…,"schema":…}`, then
-   deletes all but the newest 10 backup pairs ([Backups](#backups)).
+   deletes all but the newest 10 backup sets ([Backups](#backups)).
 
 ### When a deploy fails
 
@@ -198,18 +201,33 @@ before it starts the server as `hemlock`, so the file stays root-only. Secrets
 never go in an `Environment=` line or a drop-in: `systemctl show hemlock`
 prints those to every local user.
 
-The file holds one `NAME=value` line per variable, and both are optional:
+The file holds one `NAME=value` line per variable, and all are optional:
 
-- `GOOGLE_BOOKS_API_KEY`: the Google Books API key. Without it, Google Books is
-  not called.
+- `SECRETS_KEY`: 64 hexadecimal characters, the key that encrypts the
+  secrets saved on the admin page ([Admin § Secrets at rest](admin.md#secrets-at-rest)).
+  Recommended: without it the key is `/var/lib/hemlock/secrets.key`, beside
+  the database it protects, and every backup must carry it. Changing it
+  makes every saved secret, the admin password included, count as not set
+  until it is entered again.
+- `GOOGLE_BOOKS_API_KEY`: the Google Books API key. Without it, and without
+  one saved on the admin page, Google Books is not called.
+- `ANTHROPIC_API_KEY`: the Anthropic API key for the Claude lookup
+  ([Lookup § Claude](lookup.md#claude)). Without it, and without one saved
+  on the admin page, Claude is not asked.
 - `LOOKUP_CONTACT`: an email address sent in Open Library's `User-Agent`, which
   raises Open Library's limit from one request a second to three.
 
-Create the file once, on the box:
+A key or contact saved on the admin page wins over this file; the file is
+the fallback. Entering keys on the page keeps them out of this file
+altogether.
+
+Create the file once, with a new `SECRETS_KEY`, on the box (the key goes
+from `openssl` straight into the file, never onto a command line):
 
 ```bash
 sudo install -d -m 0755 /etc/hemlock
 sudo install -m 0600 /dev/null /etc/hemlock/hemlock.env
+{ printf 'SECRETS_KEY='; openssl rand -hex 32; } | sudo tee -a /etc/hemlock/hemlock.env > /dev/null
 ```
 
 Edit it and apply the change, on the box (`sudoedit` keeps the owner and mode):
@@ -218,6 +236,21 @@ Edit it and apply the change, on the box (`sudoedit` keeps the owner and mode):
 sudoedit /etc/hemlock/hemlock.env
 sudo systemctl restart hemlock
 ```
+
+### The admin password
+
+`/admin` asks for a password that is set only from the command line
+([Admin § The password](admin.md#the-password)). The script must run as
+`hemlock` and with the service's `SECRETS_KEY`, so on the box it reads
+`/etc/hemlock/hemlock.env` as root and then runs as `hemlock`; the key passes
+through the environment, never the command line:
+
+```bash
+sudo sh -c 'set -a; [ -f /etc/hemlock/hemlock.env ] && . /etc/hemlock/hemlock.env; cd /opt/hemlock && exec runuser -u hemlock -- env NODE_ENV=production DATA_DIR=/var/lib/hemlock node server/scripts/admin-password.js'
+```
+
+It prompts twice for the password, without echoing it, and signs every
+browser out. Running it again changes the password.
 
 ## Backups
 
@@ -235,9 +268,13 @@ restart, into `/var/lib/hemlock/backups/`:
   `saveCoverFromUrl()` in `server/src/covers.js` writes a temporary file and
   renames it.
 
+- `secrets-<stamp>.key`: a copy of `secrets.key`, when the box has one (no
+  `SECRETS_KEY`). The settings' secrets in the database decrypt only with
+  it.
+
 `<stamp>` is the UTC time as `YYYYMMDDTHHMMSSZ`, so the names sort by age.
 Once the new version answers its health checks, the deploy keeps the newest
-10 pairs and deletes the rest. A deploy that fails deletes none, so each rerun
+10 sets and deletes the rest. A deploy that fails deletes none, so each rerun
 of a failing deploy adds a backup and never pushes out the one taken before
 the failing version first started. Other names in the directory
 (`manual-*`, `pre-restore-*`) are never deleted.
@@ -293,6 +330,13 @@ lists them). On the box, in one shell session:
    sudo -u hemlock cp -al /var/lib/hemlock/backups/covers-<stamp> /var/lib/hemlock/covers
    ```
 
+   On a box without `SECRETS_KEY` whose `secrets.key` is gone, put the
+   copy taken with the backup back too:
+
+   ```bash
+   sudo install -o hemlock -g hemlock -m 0600 /var/lib/hemlock/backups/secrets-<stamp>.key /var/lib/hemlock/secrets.key
+   ```
+
 6. Start the service; pending migrations apply when it starts:
 
    ```bash
@@ -339,6 +383,11 @@ The owner's reverse proxy sits in front of nginx and needs:
 - **The body limit.** At least 12 MB a request. A cover upload is up to 10 MB
   plus the multipart framing, and a lower limit at the proxy answers 413
   before nginx sees the upload.
+- **The read timeout.** At least 5 minutes for
+  `POST /api/lookup/<isbn>/identify`. A Claude lookup makes up to three
+  requests of up to 90 seconds each before it answers; the nginx site gives
+  that path a 300-second `proxy_read_timeout`, and a shorter timeout at the
+  proxy answers 504 while Claude is still searching.
 - **Access control.** Hemlock has no login: anyone who reaches it can edit or
   delete the library. Keep it LAN-only, or authenticate at the proxy.
 - **The TV.** The TV's browser opens `/display` without an interactive login.

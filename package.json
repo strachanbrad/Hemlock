@@ -21,7 +21,8 @@
     "db:migrate": "node server/scripts/migrate.js",
     "db:new": "node server/scripts/new-migration.js",
     "db:reset": "node server/scripts/reset.js",
-    "lookup:record": "node server/scripts/lookup-record.js"
+    "lookup:record": "node server/scripts/lookup-record.js",
+    "admin:password": "node server/scripts/admin-password.js"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

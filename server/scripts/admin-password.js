@@ -1,0 +1,83 @@
+/*
+ * Copyright (c) 2023 Hemlock
+ * SPDX-License-Identifier: GPL-3.0-only
+ */
+
+import { MAX_PASSWORD, MIN_PASSWORD, endAllSessions, hashPassword } from '../src/auth.js'
+import { config } from '../src/config.js'
+import { databaseFile, openDb } from '../src/db.js'
+import { createSettings } from '../src/settings.js'
+
+// The password never comes from an argument: argv is visible to every local user in ps.
+if (process.argv.length > 2) {
+  console.error('usage: npm run admin:password   (type the password at the prompt, or pipe one line to it)')
+  process.exit(2)
+}
+
+function hiddenPrompt(question) {
+  return new Promise((resolve, reject) => {
+    const { stdin, stderr } = process
+    let input = ''
+    const finish = (err) => {
+      stdin.off('data', onData)
+      stdin.setRawMode(false)
+      stdin.pause()
+      stderr.write('\n')
+      if (err) reject(err)
+      else resolve(input)
+    }
+    const onData = (chunk) => {
+      for (const char of chunk) {
+        if (char === '\r' || char === '\n' || char === '\u0004') return finish()
+        if (char === '\u0003') return finish(new Error('Cancelled'))
+        if (char === '\u007f' || char === '\b') input = [...input].slice(0, -1).join('')
+        else input += char
+      }
+    }
+    stderr.write(question)
+    stdin.setRawMode(true)
+    stdin.setEncoding('utf8')
+    stdin.on('data', onData)
+    stdin.resume()
+  })
+}
+
+async function firstLine() {
+  const chunks = []
+  for await (const chunk of process.stdin) chunks.push(chunk)
+  return Buffer.concat(chunks).toString('utf8').split(/\r?\n/)[0]
+}
+
+async function readPassword() {
+  if (!process.stdin.isTTY) return firstLine()
+  const password = await hiddenPrompt('New admin password: ')
+  if ((await hiddenPrompt('Again: ')) !== password) throw new Error('The two passwords differ; nothing changed')
+  return password
+}
+
+let password
+try {
+  password = await readPassword()
+} catch (err) {
+  console.error(err.message)
+  process.exit(1)
+}
+if ([...password].length < MIN_PASSWORD) {
+  console.error(`The password needs at least ${MIN_PASSWORD} characters; nothing changed`)
+  process.exit(1)
+}
+if (password.length > MAX_PASSWORD) {
+  console.error(`The password is longer than ${MAX_PASSWORD} characters; nothing changed`)
+  process.exit(1)
+}
+
+const db = openDb()
+try {
+  const ended = db.transaction(() => {
+    createSettings(db).set('admin_password_hash', hashPassword(password))
+    return endAllSessions(db)
+  })()
+  console.log(`Admin password set in ${databaseFile(config.dataDir)}; ${ended === 1 ? '1 session' : `${ended} sessions`} ended`)
+} finally {
+  db.close()
+}

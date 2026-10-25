@@ -44,6 +44,14 @@ export function bookFromLookup(record, authors, options) {
 export const untouchedFields = (filled, current) =>
   Object.keys(filled).filter((key) => JSON.stringify(current[key]) === JSON.stringify(filled[key]))
 
+// The listing's host without "www.", as the credit and the found notice name it.
+export function sourceHost(url) {
+  if (typeof url !== 'string' || !URL.canParse(url)) return null
+  return new URL(url).hostname.replace(/^www\./, '') || null
+}
+
+export const fromClaude = (record) => record?.sources?.anthropic === 'ok'
+
 // The courtesy line names Google Books once a lookup shows it is configured.
 export const creditLine = (record) => {
   const google = record?.sources?.google

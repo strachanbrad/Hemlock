@@ -17,7 +17,7 @@ const head = (list) => (Array.isArray(list) ? list[0] : null)
 // Open Library sends some names decomposed (e + U+0308); NFC makes them match the same name typed.
 export const clean = (value) => (typeof value === 'string' ? value.normalize('NFC').replace(/\s+/g, ' ').trim() || null : null)
 
-function names(list) {
+export function names(list) {
   if (!Array.isArray(list)) return null
   const seen = new Set()
   const result = []
@@ -178,9 +178,14 @@ export function merge(isbn, google, openLibrary) {
   return { ...record, sources: { google: google.status, open_library: openLibrary.status, fields } }
 }
 
-export function answer(isbn, google, openLibrary) {
+// sources.anthropic says whether the page may ask Claude: only when no catalogue answered and a key is set.
+export function answer(isbn, google, openLibrary, { claude = false } = {}) {
   const statuses = [google.status, openLibrary.status]
-  if (statuses.includes('ok')) return { status: 200, body: merge(isbn, google, openLibrary) }
-  if (statuses.includes('failed')) return { status: 502, body: { error: 'No book source answered; try again later' } }
-  return { status: 404, body: { error: `No book source knows ISBN ${isbn}` } }
+  if (statuses.includes('ok')) {
+    const body = merge(isbn, google, openLibrary)
+    return { status: 200, body: { ...body, sources: { ...body.sources, anthropic: 'disabled' } } }
+  }
+  const sources = { google: google.status, open_library: openLibrary.status, anthropic: claude ? 'available' : 'disabled' }
+  if (statuses.includes('failed')) return { status: 502, body: { error: 'No book source answered; try again later', sources } }
+  return { status: 404, body: { error: `No book source knows ISBN ${isbn}`, sources } }
 }

@@ -25,11 +25,17 @@ const SPARSE = {
 const TITLE_CONFLICT = { error: '"Wuthering Heights" by Emily Brontë is already in the library', conflict: { book_id: 1 } }
 const ISBN_CONFLICT = { error: 'ISBN 9780553212587 is already in the library', conflict: { book_id: 1, edition_id: 1 } }
 
-function fakeServer({ lookups = {}, create = () => json({}, 201) } = {}) {
+function fakeServer({ lookups = {}, identified = {}, create = () => json({}, 201) } = {}) {
   const posts = []
   vi.stubGlobal('fetch', vi.fn(async (url, init = {}) => {
     if (url === '/api/authors') return json(AUTHORS)
+    if (url.endsWith('/identify') && init.method === 'POST') {
+      const record = identified[url.slice('/api/lookup/'.length, -'/identify'.length)]
+      return record ? json(record) : json({ error: 'Claude found no listing' }, 404)
+    }
     if (url.startsWith('/api/lookup/')) {
+      const isbn = url.slice('/api/lookup/'.length)
+      if (identified[isbn]) return json({ error: 'No book source knows it', sources: { google: 'disabled', open_library: 'not_found', anthropic: 'available' } }, 404)
       const record = lookups[url.slice('/api/lookup/'.length)]
       return record ? json(record) : json({ error: 'No book source knows it' }, 404)
     }
@@ -75,7 +81,30 @@ afterEach(() => {
   delete Element.prototype.scrollIntoView
 })
 
+const CLAUDE = {
+  isbn: '9781969253096', title: 'The Poison Garden', authors: ['Iris Vane'], publisher: 'Nightshade Press', published: '2025-09-16',
+  synopsis: 'Every flower here can kill.', format: 'paperback', cover_url: 'https://m.media-amazon.com/images/I/71PoisonGarden.jpg',
+  source_url: 'https://www.amazon.com/dp/1969253096', sources: { anthropic: 'ok', fields: { title: 'anthropic' } },
+}
+
 describe('AddBook', () => {
+  it("fills the form from Claude's record, credits the listing and saves with its cover", async () => {
+    const posts = fakeServer({ identified: { 9781969253096: CLAUDE }, create: () => json({ id: 9, title: CLAUDE.title, cover_url: '/covers/e9-0123abcd.jpg' }, 201) })
+    mount()
+    await lookUp('9781969253096', 'The Poison Garden')
+    expect(screen.getByText('Found “The Poison Garden” by Iris Vane, via Claude from amazon.com.')).toBeTruthy()
+    expect(synopsis().value).toBe('Every flower here can kill.')
+    expect(screen.getByAltText('The cover the lookup found').getAttribute('src')).toBe(CLAUDE.cover_url)
+    const credit = screen.getByRole('link', { name: 'amazon.com' })
+    expect(credit.getAttribute('href')).toBe(CLAUDE.source_url)
+    expect(credit.closest('p').textContent).toBe('Book data from amazon.com, found by Claude')
+    fireEvent.click(screen.getByRole('button', { name: 'Add book' }))
+    await screen.findByText('Book page')
+    expect(posts).toHaveLength(1)
+    expect(posts[0].author_name).toBe('Iris Vane')
+    expect(posts[0].edition).toMatchObject({ format: 'paperback', isbn: '9781969253096', publisher: 'Nightshade Press', published: '2025-09-16', cover_from_url: CLAUDE.cover_url })
+  })
+
   it('brings a title conflict into view and offers to add the copy as an edition', async () => {
     const posts = fakeServer({ lookups: { 9780553212587: WUTHERING }, create: () => json(TITLE_CONFLICT, 409) })
     mount()

@@ -53,8 +53,8 @@ describe('openDb', () => {
       assert.equal(db.pragma('journal_mode', { simple: true }), 'wal')
       assert.equal(db.pragma('busy_timeout', { simple: true }), 5000)
       assert.equal(db.pragma('synchronous', { simple: true }), 1)
-      assert.deepEqual(tables(db), ['authors', 'books', 'editions', 'schema_migrations'])
-      assert.deepEqual(db.prepare('SELECT version, name FROM schema_migrations').all(), [{ version: 1, name: '001_init.sql' }])
+      assert.deepEqual(tables(db), ['authors', 'books', 'editions', 'schema_migrations', 'sessions', 'settings'])
+      assert.deepEqual(db.prepare('SELECT version, name FROM schema_migrations').all(), [{ version: 1, name: '001_init.sql' }, { version: 2, name: '002_settings.sql' }])
     } finally {
       db.close()
     }
@@ -68,7 +68,7 @@ describe('openDb', () => {
 
     const second = openDb(dataDir)
     try {
-      assert.equal(second.prepare('SELECT COUNT(*) FROM schema_migrations').pluck().get(), 1)
+      assert.equal(second.prepare('SELECT COUNT(*) FROM schema_migrations').pluck().get(), 2)
       assert.equal(second.prepare('SELECT COUNT(*) FROM authors').pluck().get(), 1)
     } finally {
       second.close()

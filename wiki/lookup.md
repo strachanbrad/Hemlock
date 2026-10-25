@@ -2,15 +2,22 @@
 
 How Hemlock fills in a book from its ISBN. The server asks Open Library, and
 Google Books when a key is configured, and merges the answers into one
-record; the client reads the ISBN from the book's barcode with the phone
-camera. Every lookup and every cover download goes through the server; the
-only image the browser loads from another host is the preview of a lookup's
+record. When neither knows the ISBN and an Anthropic key is configured, the
+page can ask Claude, which searches the web for a listing of the edition.
+The client reads the ISBN from the book's barcode with the phone camera.
+Every lookup and every cover download goes through the server; the only
+image the browser loads from another host is the preview of a lookup's
 cover ([Library § Add a book](library.md#add-a-book)).
 
-Code: `server/src/lookup/` (the clients, the limiter and the merge),
-`server/src/routes/lookup.js`, `saveCoverFromUrl()` in
-`server/src/covers.js`, `client/src/components/BarcodeScanner.jsx` and
-`client/src/api/lookup.js`.
+Code: `server/src/lookup/` (the clients, the limiter, the merge and
+`anthropic.js`), `server/src/routes/lookup.js`, `saveCoverFromUrl()` in
+`server/src/covers.js`, `client/src/components/BarcodeScanner.jsx`,
+`client/src/components/IsbnField.jsx` and `client/src/api/lookup.js`.
+
+The keys, the Claude model and the Open Library contact are settings: saved
+on the admin page, or else taken from the environment
+([Admin § Settings](admin.md#settings)). Every lookup reads them when it
+starts, so a change applies without a restart.
 
 ## The endpoint
 
@@ -18,10 +25,10 @@ Code: `server/src/lookup/` (the clients, the limiter and the merge),
 GET /api/lookup/:isbn
   200 { isbn, title, authors: [name], publisher, published, synopsis,
         format: 'hardcover' | 'paperback' | 'ebook' | null, cover_url,
-        sources: { google, open_library, fields } }
-  400 { error }   not a valid ISBN-10 or ISBN-13
-  404 { error }   no source knows the ISBN
-  502 { error }   no source answered
+        sources: { google, open_library, fields, anthropic } }
+  400 { error }            not a valid ISBN-10 or ISBN-13
+  404 { error, sources }   no source knows the ISBN
+  502 { error, sources }   no source answered
 ```
 
 - `:isbn` is an ISBN-10 or ISBN-13; hyphens, spaces and an `ISBN` label are
@@ -38,6 +45,10 @@ GET /api/lookup/:isbn
   failed and no other source had one; the rest of the answer stands.
 - The status is 200 when any source is `ok`, even if the other failed; 502
   when none is `ok` and at least one `failed`; 404 otherwise.
+- `sources.anthropic` is `available` when no source answered `ok` and a
+  Claude key is set, and `disabled` otherwise. The 404 and 502 bodies carry
+  `sources` (`google`, `open_library`, `anthropic`) for this; the page asks
+  Claude after a 404 that says `available` ([Asking Claude](#asking-claude)).
 - A field no source has is `null`; `authors` is then `[]`.
 - `format` is a hint for the form. Open Library's `physical_format` is free
   text and sometimes wrong, and Google has no binding at all; a form never
@@ -69,28 +80,148 @@ missing.
 
 ### Google Books
 
-Asked only when `GOOGLE_BOOKS_API_KEY` is set
-([Development setup § Configuration](dev-setup.md#configuration)):
-`https://www.googleapis.com/books/v1/volumes?q=isbn:<isbn13>&key=…`. Without
+Asked only when a Google Books key is set, on the admin page or in
+`GOOGLE_BOOKS_API_KEY`
+([Development setup § Configuration](dev-setup.md#configuration)). Without
 the key `sources.google` is `disabled` and nothing is sent: Google refuses
 keyless requests with a 429 and a daily quota of zero, so Open Library alone
-is a fully supported mode. The query also returns other editions of the work;
-only a volume whose `industryIdentifiers` hold the ISBN-13 or its ISBN-10
-counts, and any other is ignored. The key is a query parameter, so no log
-line ever contains a Google request URL.
+is a fully supported mode. `createGoogle()` in `server/src/lookup/google.js`
+asks in up to three requests:
+
+1. **The search.**
+   `https://www.googleapis.com/books/v1/volumes?q=isbn:<isbn13>&key=…`. The
+   query also returns other editions of the work; only a volume whose
+   `industryIdentifiers` hold the ISBN-13 or its ISBN-10 counts, and any
+   other is ignored. An exact volume is the answer.
+2. **Google Books Dynamic Links**, when the search answered without an exact
+   volume. Google's search index misses many volumes it does hold (it
+   answers `totalItems: 0` for ISBNs whose volume exists), so the ISBN is
+   mapped to a volume id without the index:
+   `https://books.google.com/books?bibkeys=ISBN:<isbn13>&jscmd=viewapi`,
+   keyless. The answer is JavaScript, `var _GBSBookInfo = {...};`: the
+   object after the assignment is JSON, keyed `ISBN:<isbn13>`, and its
+   `info_url` carries the volume id as `id=`. An ISBN Google does not know
+   answers `var _GBSBookInfo = {};`. An id that is not
+   `[A-Za-z0-9_-]+` is never requested, and an answer that is not this
+   script counts as not found and logs one line.
+3. **The volume.** `https://www.googleapis.com/books/v1/volumes/<id>?key=…`,
+   kept only when its `industryIdentifiers` hold the ISBN-13 or its ISBN-10:
+   Dynamic Links also names volumes for ISBNs that are not theirs. Its
+   `volumeInfo` is used exactly as a search hit's; the small Dynamic Links
+   thumbnail is not.
+
+The source is `ok` when step 1 or step 3 found the volume. A failed search
+fails the source without asking further. After a search that answered, a
+failed or empty Dynamic Links answer leaves the search's `not_found`; a
+failed volume request after Dynamic Links named one fails the source, so the
+next lookup asks again. Every request goes through the same timeouts,
+retry and 403/429 pause as the search (Dynamic Links pauses on its own),
+with the Hemlock `User-Agent`. The key is a query parameter, so no log line
+ever contains a Google request URL.
+
+### Claude
+
+Asked only through its own endpoint, after the catalogues missed, and only
+when an Anthropic key is set, on the admin page or in `ANTHROPIC_API_KEY`.
+`createAnthropic()` in `server/src/lookup/anthropic.js` calls the Messages
+API through the official SDK (`@anthropic-ai/sdk`), with the key and the
+saved model (`claude-opus-5-5` by default), a 90-second timeout per request
+and no automatic retry.
+
+```
+POST /api/lookup/:isbn/identify
+  200 { isbn, title, authors, publisher, published, synopsis, format,
+        cover_url, source_url, sources: { anthropic: 'ok', fields } }
+  400 { error }   not a valid ISBN-10 or ISBN-13
+  404 { error }   Claude found no listing that shows the ISBN
+  502 { error }   the call failed; the message says why
+  503 { error }   'Claude is not configured': no key is set
+```
+
+It asks Claude only, never Open Library or Google again.
+`sources.fields.<field>` is `anthropic` for every field the answer has, and
+`source_url` is the listing the fields were copied from.
+
+**The request.** One request shape, sent at most three times per lookup:
+the web search tool (`web_search_20260209`, at most 5 searches) and a
+`report_book` tool, `tool_choice: auto`, `output_config: { effort: 'medium'
+}`, `max_tokens` 8000. `report_book` is a tool whose input is the
+answer (not a strict one: strict tools share structured outputs' limits,
+which reject citations, and web search answers carry citations; `verdict()`
+checks every field instead): `found`, `isbn_on_listing`, `title`, `authors`, `publisher`,
+`published`, `format`, `synopsis`, `cover_url` and `source_url`, each null
+when unknown. The request never sends `temperature`, `thinking` or a forced
+`tool_choice`: `claude-opus-5-5` rejects the first and the last and always
+thinks.
+
+**The loop.** A `report_book` call ends it, and no tool result is sent
+back. A turn that stops with `pause_turn` (the server-side search loop's
+limit) is sent again with the assistant's turn appended and nothing else,
+which resumes it. A turn that ends without the call gets one nudge, "Call
+report_book now with what you found, or with found false.", and a second
+such turn fails the lookup. A turn cut off by `max_tokens` or ended by a
+`refusal` fails it without reading any partial call.
+
+**The prompt.** The system prompt in `anthropic.js` tells Claude to
+identify the exact edition: to search the ISBN-13 and its ISBN-10 as quoted
+strings; to use the best listing (the publisher's page, Amazon, Goodreads,
+Bookshop.org, Google Books, WorldCat, Barnes & Noble, the author's site);
+to accept only a listing that shows this ISBN-13 or its ISBN-10 and report
+that ISBN; to copy each field as the listing shows it: the authors as
+printed, in order, without roles, the date as `YYYY`, `YYYY-MM` or
+`YYYY-MM-DD`, the format from the binding, the publisher's description
+rather than its own summary, trimmed to about 1,500 characters, and the
+cover only as an image URL that appears on the listing; and to report
+`found: false` when no listing matches, never guessing from a similar
+title.
+
+**What the server accepts.** The answer is checked whatever the model
+said (`verdict()`):
+
+- `found` false, or an `isbn_on_listing` that is not this ISBN-13 or its
+  ISBN-10 once hyphens and spaces are removed, answers 404.
+- `published` that is not a real `YYYY`, `YYYY-MM` or `YYYY-MM-DD` date
+  becomes null; a `format` other than the three becomes null.
+- Text is put in NFC and trimmed, and bounded: the title to 500
+  characters, the publisher to 200, the synopsis to 4,000, the authors to
+  10 names of 200.
+- `source_url` must be https, without a user name or password; `cover_url`
+  must pass `allowedCoverUrl()` ([Security § Downloads](security.md#downloads)),
+  which adds Amazon's and Goodreads' image hosts for these covers. Either
+  becomes null otherwise.
+
+**Cost.** Claude Opus 5.5 costs $4 per million input tokens and $20 per
+million output tokens, and each web search adds its own charge; a lookup
+with a few searches costs on the order of a few cents. The answer is cached
+like a source's (below), so scanning a book, saving it and reopening the
+form costs one call. A cheaper model can be chosen on the admin page.
+
+### Asking Claude
+
+`IsbnField` (`client/src/components/IsbnField.jsx`) asks Claude when the
+lookup answers 404 with `sources.anthropic: 'available'`. It shows "Not in
+the catalogues. Asking Claude…" with a spinner and posts to the identify
+endpoint (`identifyIsbn()` in `client/src/api/lookup.js`); then "Found
+“<title>” by <author>, via Claude from <host>." and the form fills in as for
+any lookup, or "No catalogue or search knows <isbn>; fill in the details by
+hand.", or the failure. A newer lookup, or leaving the page, drops the
+answer when it arrives. The person can type or look up another ISBN while
+Claude searches.
 
 ## Limits and courtesy
 
 - **Rate.** Open Library allows 1 request a second, or 3 when the
   `User-Agent` names a contact. `server/src/lookup/limiter.js` spaces the
   start of every Open Library request, retries included, 1000 ms apart, or
-  334 ms when `LOOKUP_CONTACT` is set, across all lookups in the process.
+  334 ms when a contact is set, across all lookups in the process.
   Google requests are not queued behind it.
 - **Identification.** Every request, cover downloads included, sends
-  `User-Agent: Hemlock/<version> (github.com/strachanbrad/hemlock[; <LOOKUP_CONTACT>])`.
-  A repository URL does not count as a contact; an email address does.
-  `LOOKUP_CONTACT` lives in the environment, never in the repository, and
-  the server refuses to start when it is not an email address.
+  `User-Agent: Hemlock/<version> (github.com/strachanbrad/hemlock[; <contact>])`.
+  A repository URL does not count as a contact; an email address does. The
+  contact is the one saved on the admin page, else `LOOKUP_CONTACT` from
+  the environment, never the repository; the server refuses to start when
+  `LOOKUP_CONTACT` is not an email address, and the admin page refuses one
+  that is not.
 - **Failures.** Each request has an 8 second timeout and one retry on a
   network error, a timeout or a 5xx; another 4xx is not retried. A 403 or
   429 pauses that source for its `Retry-After` (at most an hour) or for a
@@ -100,10 +231,13 @@ line ever contains a Google request URL.
   500 entries), so scanning, saving and reopening a book costs one lookup. A
   miss, a failure, or a partial Open Library answer (its work request
   failed) is not kept, so the next lookup asks again. Concurrent lookups of
-  one ISBN share their requests. A server restart empties the cache.
+  one ISBN share their requests. Claude's answers follow the same rules in
+  a cache of their own. A server restart empties both.
 - **Credit.** A page that shows lookup data carries the line "Book data from
   Open Library", extended with "and Google Books" when `sources.google` is
-  not `disabled`.
+  not `disabled`. A record from Claude is credited to its listing instead:
+  "Book data from <host>, found by Claude", the host linking to
+  `source_url` (`client/src/components/LookupCredit.jsx`).
 
 ## Merging
 
@@ -162,7 +296,7 @@ commit and points the row at the file in a second statement
   without the cover".
 - The URL comes from the client, so the download is bounded by the rules in
   [Security § Downloads](security.md#downloads): https only, the sources'
-  image hosts only, at most three redirects each re-checked, 10 seconds, and
+  image hosts only (Amazon's and Goodreads' included, for Claude's covers), at most three redirects each re-checked, 10 seconds, and
   10 MB counted while streaming.
 - The type comes from the magic bytes (`imageType()`), never from the URL or
   the `Content-Type`: an HTML error page behind a `.jpg` URL is refused.
@@ -242,10 +376,13 @@ loads the scanner the first time it is tapped and shows it in a dialog
 ## Tests
 
 The lookup and download tests never touch the network.
-`createLookup({ fetch, googleKey, contact, now, sleep, timeoutMs, log })` and
-`saveCoverFromUrl(url, base, { fetch, timeoutMs, log })` take their `fetch`,
-clock and logger from the caller, and `server/test/support/fixtures.js`
-answers each upstream URL from a file in `server/test/fixtures/lookup/`.
+`createLookup({ fetch, googleKey, contact, anthropicKey, now, sleep, timeoutMs, log })`,
+`createAnthropic({ apiKey, model, fetch, timeoutMs, log })` and
+`saveCoverFromUrl(url, base, { fetch, timeoutMs, userAgent, log })` take
+their `fetch`, clock and logger from the caller (a key or contact may be a
+value or a function read at each lookup), and
+`server/test/support/fixtures.js` answers each upstream URL from a file in
+`server/test/fixtures/lookup/`.
 
 - `openlibrary/` holds real answers, recorded and trimmed to the fields used.
   To record an ISBN, run on the dev machine, from the root of the checkout,
@@ -259,10 +396,19 @@ answers each upstream URL from a file in `server/test/fixtures/lookup/`.
   file per request (each says when it was recorded in `_source`) and prints
   the merged answer. With `GOOGLE_BOOKS_API_KEY` set it records Google's
   answer too.
-- `google/volumes-*.json` are written by hand from the documented volume
-  shape, since recording needs a key, and say so in `_source`.
+- `google/volumes-*.json` and `google/volume-<id>.json` are written by hand
+  from the documented volume shape, since recording needs a key, and say so
+  in `_source`. `google/dynamic-<isbn>.txt` are Dynamic Links answers
+  recorded without a key, as Google sends them (JavaScript, so they carry no
+  `_source`).
   `google/error-429.json` is Google's real keyless refusal and
   `google/placeholder.png` its real "image not available" image.
+- `server/test/fixtures/anthropic/` holds Messages API answers written by hand from the
+  documented shape (each says so in `_source`; the book in them is
+  invented): a paused search, a `report_book` call, a turn without one,
+  `found: false`, a refusal, a cut-off call and a 401.
+  `server/test/anthropic.test.js` replays them through the client's
+  injected `fetch` and checks each request it sends.
 - `client/test/BarcodeScanner.test.jsx` mounts the scanner under StrictMode
   with a fake `getUserMedia` whose streams the test releases, so a stream that
   arrives after cleanup is covered.

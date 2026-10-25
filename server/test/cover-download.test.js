@@ -26,14 +26,14 @@ const files = () => (fs.existsSync(covers.coversDir) ? fs.readdirSync(covers.cov
 const image = (bytes, type = 'image/jpeg') => new Response(bytes, { headers: { 'content-type': type } })
 const redirect = (location, status = 302) => new Response(null, { status, headers: { location } })
 
-async function save(url, respond, { base = 'e7', timeoutMs } = {}) {
+async function save(url, respond, { base = 'e7', timeoutMs, userAgent } = {}) {
   const calls = []
   const logs = []
   const fetch = async (target, init) => {
     calls.push({ url: target, init })
     return respond(target, init)
   }
-  const result = await covers.saveCoverFromUrl(url, base, { fetch, timeoutMs, log: (line) => logs.push(line) })
+  const result = await covers.saveCoverFromUrl(url, base, { fetch, timeoutMs, userAgent, log: (line) => logs.push(line) })
   return { result, calls, logs }
 }
 
@@ -171,6 +171,32 @@ describe('saveCoverFromUrl', () => {
     }
     assert.equal(covers.allowedCoverUrl('https://openlibrary.org/b/id/1-L.jpg'), null)
     assert.equal(covers.allowedCoverUrl('https://www.googleapis.com/books/v1/volumes'), null)
+  })
+
+  it("accepts Amazon's and Goodreads' image hosts and no other host of theirs", () => {
+    const allowed = [
+      'https://m.media-amazon.com/images/I/81abc.jpg',
+      'https://images-na.ssl-images-amazon.com/images/I/51abc.jpg',
+      'https://ecx.images-amazon.com/images/I/51abc.jpg',
+      'https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1/1.jpg',
+      'https://images.gr-assets.com/books/1/1.jpg',
+    ]
+    for (const url of allowed) assert.ok(covers.allowedCoverUrl(url), url)
+    const refused = [
+      'https://www.amazon.com/dp/1969253096',
+      'https://images-amazon.com/x.jpg',
+      'https://evilimages-amazon.com/x.jpg',
+      'https://m.media-amazon.com.evil.test/x.jpg',
+      'https://www.goodreads.com/book/show/1',
+      'https://s.gr-assets.com/x.jpg',
+      'http://m.media-amazon.com/images/I/81abc.jpg',
+    ]
+    for (const url of refused) assert.equal(covers.allowedCoverUrl(url), null, url)
+  })
+
+  it('sends the User-Agent it is given', async () => {
+    const { calls } = await save(OL_COVER, () => image(jpeg), { userAgent: 'Hemlock/test (contact@example.org)' })
+    assert.equal(calls[0].init.headers['User-Agent'], 'Hemlock/test (contact@example.org)')
   })
 
   it('gives up when the download takes longer than its timeout', async () => {

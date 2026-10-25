@@ -20,7 +20,7 @@ const FIFTY = '9780345803481'
 
 const SEARCH = 'https://openlibrary.org/search.json'
 const isSearch = (url) => url.startsWith(SEARCH)
-const isGoogle = (url) => url.startsWith('https://www.googleapis.com/')
+const isGoogle = (url) => url.startsWith('https://www.googleapis.com/') || url.startsWith('https://books.google.com/')
 const paths = (calls) => calls.map(({ url }) => (isGoogle(url) ? 'google' : new URL(url).pathname))
 
 function setup({ answer, googleKey = null, contact = null, timeoutMs } = {}) {
@@ -50,6 +50,7 @@ describe('lookup with Open Library only', () => {
         google: 'disabled',
         open_library: 'ok',
         fields: { title: 'open_library', authors: 'open_library', publisher: 'open_library', published: 'open_library', synopsis: 'open_library', format: 'open_library', cover_url: 'open_library' },
+        anthropic: 'disabled',
       },
     })
   })
@@ -124,7 +125,7 @@ describe('lookup with Open Library only', () => {
     const { lookup, calls } = setup({ answer: (url) => (isSearch(url) ? json({ numFound: 0, docs: [] }) : undefined) })
     const result = await lookup('9781501120688')
     assert.equal(result.status, 404)
-    assert.deepEqual(result.body, { error: 'No book source knows ISBN 9781501120688' })
+    assert.deepEqual(result.body, { error: 'No book source knows ISBN 9781501120688', sources: { google: 'disabled', open_library: 'not_found', anthropic: 'disabled' } })
     assert.equal(calls.length, 1)
   })
 })
@@ -153,7 +154,7 @@ describe('lookup failures', () => {
     })
     const result = await lookup(WUTHERING)
     assert.equal(result.status, 502)
-    assert.deepEqual(result.body, { error: 'No book source answered; try again later' })
+    assert.deepEqual(result.body, { error: 'No book source answered; try again later', sources: { google: 'disabled', open_library: 'failed', anthropic: 'disabled' } })
     assert.equal(calls.length, 2)
     assert.deepEqual(logs, ['Open Library /search.json: fetch failed'])
   })
@@ -289,6 +290,90 @@ describe('lookup with Google Books', () => {
   })
 })
 
+describe('Google Books by volume id (Dynamic Links)', () => {
+  const KEY = 'test-key-2'
+  const UNINDEXED = '9781969253096'
+  const UNKNOWN = '9799999999990'
+  const LINKS = 'https://books.google.com/books?'
+  const isLinks = (url) => url.startsWith(LINKS)
+  const isVolume = (url) => url.startsWith('https://www.googleapis.com/books/v1/volumes/')
+  const script = (body) => new Response(body, { headers: { 'content-type': 'application/javascript; charset=ISO-8859-1' } })
+  const googleCalls = (calls) => calls.filter(({ url }) => isGoogle(url)).map(({ url }) => new URL(url).pathname)
+
+  it('asks Dynamic Links after a search miss and takes the volume it names', async () => {
+    const { lookup, calls, logs } = setup({ googleKey: KEY })
+    const { status, body } = await lookup(UNINDEXED)
+    assert.equal(status, 200)
+    assert.equal(body.sources.google, 'ok')
+    assert.equal(body.title, 'The Unindexed Edition')
+    assert.deepEqual(body.authors, ['Ada Placeholder'])
+    assert.equal(body.synopsis, 'A volume the search index does not return.')
+    assert.equal(body.cover_url, 'https://books.google.com/books/content?id=cXnt0QEACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api')
+    assert.deepEqual(googleCalls(calls), ['/books/v1/volumes', '/books', '/books/v1/volumes/cXnt0QEACAAJ'])
+    const links = calls.find(({ url }) => isLinks(url))
+    assert.equal(links.url, `${LINKS}bibkeys=ISBN:${UNINDEXED}&jscmd=viewapi`)
+    assert.match(links.init.headers['User-Agent'], /^Hemlock\//)
+    assert.equal(calls.find(({ url }) => isVolume(url)).url, `https://www.googleapis.com/books/v1/volumes/cXnt0QEACAAJ?key=${KEY}`)
+    assert.deepEqual(logs, [])
+  })
+
+  it('never asks Dynamic Links when the search has the exact volume', async () => {
+    const { lookup, calls } = setup({ googleKey: KEY })
+    await lookup(WUTHERING)
+    assert.deepEqual(googleCalls(calls), ['/books/v1/volumes'])
+  })
+
+  it('answers not found when Dynamic Links knows nothing', async () => {
+    const { lookup, calls } = setup({ googleKey: KEY })
+    const { status, body } = await lookup(UNKNOWN)
+    assert.equal(status, 404)
+    assert.equal(body.sources.google, 'not_found')
+    assert.deepEqual(googleCalls(calls), ['/books/v1/volumes', '/books'])
+  })
+
+  it('refuses a volume that does not carry the ISBN', async () => {
+    const volume = readFixture('google/volume-cXnt0QEACAAJ.json')
+    volume.volumeInfo.industryIdentifiers = [{ type: 'ISBN_13', identifier: '9780000000019' }]
+    const { lookup } = setup({ googleKey: KEY, answer: (url) => (isVolume(url) ? json(volume) : undefined) })
+    const { body } = await lookup(UNINDEXED)
+    assert.equal(body.sources.google, 'not_found')
+  })
+
+  it('treats a malformed Dynamic Links answer as not found, in one log line', async () => {
+    for (const bad of ['<html>sorry</html>', 'var _GBSBookInfo = {"ISBN:', 'var _GBSBookInfo = [1];']) {
+      const { lookup, calls, logs } = setup({ googleKey: KEY, answer: (url) => (isLinks(url) ? script(bad) : undefined) })
+      const { body } = await lookup(UNINDEXED)
+      assert.equal(body.sources.google, 'not_found', bad)
+      assert.deepEqual(logs, ['Google Books Dynamic Links /books: the answer is not the _GBSBookInfo script'], bad)
+      assert.ok(!calls.some(({ url }) => isVolume(url)), bad)
+    }
+  })
+
+  it('never requests an id that is not a volume id', async () => {
+    for (const id of ['../../users', 'cXnt0QEACAAJ?key=x', 'a b', '']) {
+      const info = `https://books.google.com/books?id=${encodeURIComponent(id)}&source=gbs_ViewAPI`
+      const body = `var _GBSBookInfo = ${JSON.stringify({ [`ISBN:${UNINDEXED}`]: { bib_key: `ISBN:${UNINDEXED}`, info_url: info } })};`
+      const { lookup, calls } = setup({ googleKey: KEY, answer: (url) => (isLinks(url) ? script(body) : undefined) })
+      assert.equal((await lookup(UNINDEXED)).body.sources.google, 'not_found', id)
+      assert.ok(!calls.some(({ url }) => isVolume(url)), id)
+    }
+  })
+
+  it("keeps the search's answer when Dynamic Links fails, and fails when the named volume does", async () => {
+    const down = setup({ googleKey: KEY, answer: (url) => (isLinks(url) ? json({ error: 'busy' }, 503) : undefined) })
+    assert.equal((await down.lookup(UNINDEXED)).body.sources.google, 'not_found')
+    const volumeDown = setup({ googleKey: KEY, answer: (url) => (isVolume(url) ? json({ error: 'busy' }, 503) : undefined) })
+    assert.equal((await volumeDown.lookup(UNINDEXED)).body.sources.google, 'failed')
+    assert.ok(!volumeDown.logs.join('').includes(KEY))
+  })
+
+  it('does not ask Dynamic Links after a failed search', async () => {
+    const { lookup, calls } = setup({ googleKey: KEY, answer: (url) => (url.includes('/volumes?q=') ? json({ error: 'quota' }, 429) : undefined) })
+    assert.equal((await lookup(UNINDEXED)).body.sources.google, 'failed')
+    assert.ok(!calls.some(({ url }) => isLinks(url)))
+  })
+})
+
 describe('lookup cache', () => {
   it('keeps an answer for 24 hours', async () => {
     const { lookup, calls, clock } = setup()
@@ -380,7 +465,7 @@ describe('Open Library rate limit', () => {
   it('does not hold Google requests behind the Open Library queue', async () => {
     const calls = await startTimes({ contact: null, googleKey: 'k' })
     const google = calls.filter(({ url }) => isGoogle(url)).map(({ at }) => at)
-    assert.equal(google.length, 4)
+    assert.equal(calls.filter(({ url }) => url.includes('/volumes?q=isbn:')).length, 4)
     assert.deepEqual([...new Set(google)], [calls[0].at])
   })
 

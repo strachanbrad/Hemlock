@@ -5,15 +5,31 @@
 
 import { errorMessage } from './request.js'
 
-// Resolves to the lookup record, or to null when no source knows the ISBN (404).
-// Any other failure rejects with the server's message and the HTTP status.
+async function failure(response, fallback) {
+  const error = new Error(await errorMessage(response, fallback))
+  error.status = response.status
+  return error
+}
+
+// Resolves to { record, sources }: record is null when no source knows the ISBN (404), and sources
+// then says whether Claude may be asked (sources.anthropic === 'available'). Any other failure
+// rejects with the server's message and the HTTP status.
 export async function lookupIsbn(isbn) {
   const response = await fetch(`/api/lookup/${encodeURIComponent(isbn)}`)
-  if (response.status === 404) return null
-  if (!response.ok) {
-    const error = new Error(await errorMessage(response, 'The lookup failed'))
-    error.status = response.status
-    throw error
+  if (response.status === 404) {
+    const body = await response.json().catch(() => null)
+    return { record: null, sources: body?.sources ?? {} }
   }
+  if (!response.ok) throw await failure(response, 'The lookup failed')
+  const record = await response.json()
+  return { record, sources: record.sources ?? {} }
+}
+
+// Asks Claude to find the ISBN on the web. Resolves to the record, or to null when Claude found no
+// listing (404); any other failure rejects as lookupIsbn does.
+export async function identifyIsbn(isbn) {
+  const response = await fetch(`/api/lookup/${encodeURIComponent(isbn)}/identify`, { method: 'POST' })
+  if (response.status === 404) return null
+  if (!response.ok) throw await failure(response, 'The Claude lookup failed')
   return response.json()
 }

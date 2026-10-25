@@ -1,0 +1,5 @@
+{
+  "_source": "hand-written from the documented error shape (shared/error-codes.md)",
+  "type": "error",
+  "error": { "type": "authentication_error", "message": "invalid x-api-key" }
+}

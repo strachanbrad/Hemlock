@@ -195,10 +195,18 @@ describe('answer', () => {
     it(`answers ${status} when Google is ${google} and Open Library ${openLibrary}`, () => {
       const result = answer(ISBN, { ...googleExact(), status: google }, { ...olFull(), status: openLibrary })
       assert.equal(result.status, status)
-      if (status === 200) assert.deepEqual(result.body.sources, { ...result.body.sources, google, open_library: openLibrary })
-      else assert.deepEqual(Object.keys(result.body), ['error'])
+      if (status === 200) assert.deepEqual(result.body.sources, { ...result.body.sources, google, open_library: openLibrary, anthropic: 'disabled' })
+      else assert.deepEqual(result.body.sources, { google, open_library: openLibrary, anthropic: 'disabled' })
     })
   }
+
+  it('offers Claude only when no source answered ok and a Claude key is set', () => {
+    const claude = (google, openLibrary) => answer(ISBN, { ...googleExact(), status: google }, { ...olFull(), status: openLibrary }, { claude: true }).body.sources.anthropic
+    assert.equal(claude('disabled', 'not_found'), 'available')
+    assert.equal(claude('failed', 'failed'), 'available')
+    assert.equal(claude('disabled', 'ok'), 'disabled')
+    assert.equal(claude('ok', 'not_found'), 'disabled')
+  })
 })
 
 describe('normalizeDate', () => {

@@ -20,10 +20,13 @@ A newcomer starts with [Development setup](dev-setup.md) to run the app,
   and the ways to get the page onto a television.
 - [Migrations](migrations.md): numbered SQL files, how they are applied, and
   the rules for writing one.
-- [Lookup](lookup.md): ISBN lookup from Open Library and Google Books, cover
-  downloads and barcode scanning with the phone camera.
+- [Lookup](lookup.md): ISBN lookup from Open Library and Google Books, the
+  Claude lookup when both miss, cover downloads and barcode scanning with
+  the phone camera.
+- [Admin](admin.md): the hidden `/admin` page, its password and sessions,
+  the lookup keys and settings, and how their secrets are encrypted.
 - [Security](security.md): bind address, error bodies, upload bounds,
-  generated cover names, downloads and SQL.
+  generated cover names, downloads, SQL, admin sessions and secrets.
 - [Style](style.md): comments, license headers, wiki pages, commits, Ant
   Design usage and responsive layout.
 - [Theme](theme.md): the look of The Hemlock: palette and contrast, fonts,

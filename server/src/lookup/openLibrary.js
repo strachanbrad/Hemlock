@@ -33,11 +33,12 @@ function matchEdition(docs, isbn) {
   return docs.length > 0 ? { doc: docs[0], edition: null } : null
 }
 
+// userAgent and interval are read at each request, so a contact saved on the admin page applies at once.
 export function createOpenLibrary({ fetch, userAgent, interval, now, sleep, timeoutMs, log }) {
   const getJson = createJsonSource({
     name: 'Open Library',
     fetch,
-    headers: { 'User-Agent': userAgent, Accept: 'application/json' },
+    headers: () => ({ 'User-Agent': userAgent(), Accept: 'application/json' }),
     schedule: createLimiter({ interval, now, sleep }),
     now,
     sleep,

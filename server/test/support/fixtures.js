@@ -19,6 +19,11 @@ export function fixtureName(url) {
   const record = /^\/(books|works)\/(OL\d+[MW])\.json$/.exec(pathname)
   if (hostname === 'openlibrary.org' && record) return `openlibrary/${record[1]}-${record[2]}.json`
   if (hostname === 'www.googleapis.com' && pathname === '/books/v1/volumes') return `google/volumes-${isbn}.json`
+  const volume = /^\/books\/v1\/volumes\/([A-Za-z0-9_-]+)$/.exec(pathname)
+  if (hostname === 'www.googleapis.com' && volume) return `google/volume-${volume[1]}.json`
+  if (hostname === 'books.google.com' && pathname === '/books' && searchParams.get('jscmd') === 'viewapi') {
+    return `google/dynamic-${(searchParams.get('bibkeys') ?? '').replace(/^ISBN:/, '')}.txt`
+  }
   return null
 }
 
@@ -34,6 +39,7 @@ export function trimFixture(name, body) {
   }
   if (name.startsWith('openlibrary/books-')) return pick(body, ['type', ...EDITION_FIELDS])
   if (name.startsWith('openlibrary/works-')) return pick(body, ['type', ...WORK_FIELDS])
+  if (name.startsWith('google/volume-')) return { kind: body.kind, id: body.id, volumeInfo: pick(body.volumeInfo, VOLUME_FIELDS) }
   return {
     kind: body.kind,
     totalItems: body.totalItems,
@@ -56,6 +62,8 @@ export function fixtureFetch({ answer = () => undefined, now = () => 0 } = {}) {
     if (special) return special
     const name = fixtureName(url)
     if (!name || !fs.existsSync(path.join(fixturesDir, name))) return json({ error: 'not found' }, 404)
+    // Dynamic Links answers JavaScript, so its fixtures are the script as Google sends it.
+    if (name.endsWith('.txt')) return new Response(fs.readFileSync(path.join(fixturesDir, name), 'utf8'), { headers: { 'content-type': 'application/javascript; charset=ISO-8859-1' } })
     return json(readFixture(name))
   }
   return { fetch, calls }

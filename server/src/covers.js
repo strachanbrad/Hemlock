@@ -38,7 +38,12 @@ const COVER_STEM = /^[eb][1-9]\d*$/
 
 class DownloadError extends Error {}
 
-// A cover URL comes from the client, so the server fetches only the lookup sources' image hosts.
+// A cover URL comes from the client, so the server fetches only the lookup sources' image hosts:
+// Open Library (redirecting to archive.org), Google Books, and the Amazon and Goodreads images a
+// Claude lookup finds on a listing.
+const COVER_HOSTS = new Set(['covers.openlibrary.org', 'archive.org', 'books.google.com', 'm.media-amazon.com', 'images-na.ssl-images-amazon.com', 'i.gr-assets.com', 'images.gr-assets.com'])
+const COVER_DOMAINS = ['.archive.org', '.images-amazon.com']
+
 export function allowedCoverUrl(input) {
   let url
   try {
@@ -48,8 +53,7 @@ export function allowedCoverUrl(input) {
   }
   if (url.protocol !== 'https:' || url.username || url.password || url.port) return null
   const host = url.hostname
-  const allowed = host === 'covers.openlibrary.org' || host === 'books.google.com' || host === 'archive.org' || host.endsWith('.archive.org')
-  return allowed ? url : null
+  return COVER_HOSTS.has(host) || COVER_DOMAINS.some((domain) => host.endsWith(domain)) ? url : null
 }
 
 // archive.org sends no Content-Length, so the cap is counted while the body streams.
@@ -67,7 +71,7 @@ async function readCapped(body) {
 const discard = (response) => response.body?.cancel().catch(() => {})
 
 // Redirects are followed by hand so that every hop is checked against the allow-list.
-async function download(start, { fetch, timeoutMs }) {
+async function download(start, { fetch, timeoutMs, userAgent }) {
   const signal = AbortSignal.timeout(timeoutMs)
   let url = allowedCoverUrl(start)
   if (!url) throw new DownloadError('not an https URL on an allowed host')
@@ -75,7 +79,7 @@ async function download(start, { fetch, timeoutMs }) {
     const response = await fetch(url.href, {
       redirect: 'manual',
       signal,
-      headers: { 'User-Agent': config.userAgent, Accept: 'image/jpeg, image/png, image/webp' },
+      headers: { 'User-Agent': userAgent, Accept: 'image/jpeg, image/png, image/webp' },
     })
     if (response.status >= 300 && response.status < 400) {
       await discard(response)
@@ -122,11 +126,11 @@ function hostOf(url) {
 
 // `base` is 'e<edition id>' or 'b<book id>', as for writeCover() in coverFiles.js. Resolves to the file
 // name, or to null after logging one line when anything fails; never rejects for an upstream problem.
-export async function saveCoverFromUrl(url, base, { fetch = globalThis.fetch, timeoutMs = DOWNLOAD_TIMEOUT_MS, log = console.warn } = {}) {
+export async function saveCoverFromUrl(url, base, { fetch = globalThis.fetch, timeoutMs = DOWNLOAD_TIMEOUT_MS, userAgent = config.userAgent, log = console.warn } = {}) {
   if (typeof base !== 'string' || !COVER_STEM.test(base)) throw new TypeError(`A cover needs 'e<edition id>' or 'b<book id>', not ${JSON.stringify(base)}`)
 
   try {
-    const buffer = await download(url, { fetch, timeoutMs })
+    const buffer = await download(url, { fetch, timeoutMs, userAgent })
     const type = imageType(buffer)
     if (!type) throw new DownloadError('not a JPEG, PNG or WebP image')
     if (crypto.createHash('sha256').update(buffer).digest('hex') === GOOGLE_PLACEHOLDER_SHA256) throw new DownloadError("Google's image-not-available placeholder")

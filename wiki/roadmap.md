@@ -8,8 +8,8 @@ file layout without a compatibility path.
 
 ## Later
 
-- An admin page for theming and preferences, and the choice of which ratings
-  to show.
+- Theming and preferences on the admin page ([Admin](admin.md)), and the
+  choice of which ratings to show.
 
 ## Decided against
 
@@ -24,4 +24,5 @@ file layout without a compatibility path.
   owned and what is wanted; a copies table is added only if purchase dates,
   prices or loans are wanted.
 - **User accounts.** The app sits behind the owner's reverse proxy for one
-  household; access control belongs to the proxy.
+  household; access control belongs to the proxy. The admin page's one
+  password guards only the settings.

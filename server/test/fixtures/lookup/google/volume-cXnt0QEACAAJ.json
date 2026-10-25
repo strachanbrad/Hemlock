@@ -1,0 +1,20 @@
+{
+  "_source": "hand-written from the documented volume shape (developers.google.com/books/docs/v1/reference/volumes/get); the id and the two identifiers are the real ones Dynamic Links and the volume request gave on 2026-10-25, the other fields are invented",
+  "kind": "books#volume",
+  "id": "cXnt0QEACAAJ",
+  "volumeInfo": {
+    "title": "The Unindexed Edition",
+    "authors": ["Ada Placeholder"],
+    "publisher": "Fixture House",
+    "publishedDate": "2025-09-16",
+    "description": "<p>A volume the search index does not return.</p>",
+    "industryIdentifiers": [
+      { "type": "ISBN_10", "identifier": "1969253096" },
+      { "type": "ISBN_13", "identifier": "9781969253096" }
+    ],
+    "imageLinks": {
+      "smallThumbnail": "http://books.google.com/books/content?id=cXnt0QEACAAJ&printsec=frontcover&img=1&zoom=5&source=gbs_api",
+      "thumbnail": "http://books.google.com/books/content?id=cXnt0QEACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api"
+    }
+  }
+}

@@ -355,6 +355,11 @@ buttons:
 - **Look up** (or Enter) sends a typed ISBN to `GET /api/lookup/:isbn`
   through `client/src/api/lookup.js`.
 
+When no catalogue knows the ISBN and a Claude key is set, the field then
+asks Claude, which searches the web for a listing of the edition ("Not in
+the catalogues. Asking Claude…"); its answer fills the form the same way
+([Lookup § Asking Claude](lookup.md#asking-claude)).
+
 The answer fills the form (`client/src/lib/prefill.js`): title; author,
 matched to an existing author without regard to case, else offered as a new
 one (co-authors joined with " & "); synopsis; publisher and date; and the
@@ -374,7 +379,8 @@ Google Books). It is sent as
 is tapped; if the server cannot download it, the book is saved without it
 and the page says so. The page ends with the credit "Book data from Open
 Library", which names Google Books too once a lookup shows a Google key is
-set.
+set, or, for a book Claude found, "Book data from <host>, found by Claude"
+with the listing linked.
 
 ### Authors
 

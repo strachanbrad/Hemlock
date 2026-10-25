@@ -30,7 +30,6 @@ const FramedCover = ({ book }) => (
   </div>
 )
 
-// The detail of one book: view, the edit form, or the edition form (add, purchase or edit).
 const BookDetail = ({ book, loaded, initialMode, onSave, onReplace, onDeleted }) => {
   const { message, modal } = App.useApp()
   const [mode, setMode] = useState(initialMode === 'purchase' && book.wishlist ? { form: 'purchase' } : { form: null })

@@ -56,7 +56,6 @@ export const WishlistToggle = ({ book, onSave, size }) => (
   />
 )
 
-// The compact, read-only form for a card: one filled icon and the number.
 export const RatingSummary = ({ book }) => (
   <span className="rating-summary">
     {RATINGS.map(({ field, kind, label, filledIcon: Icon }) => (

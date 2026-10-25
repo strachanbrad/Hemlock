@@ -25,7 +25,7 @@ function Notice({ state }) {
 }
 
 // Controlled by Form (value, onChange). onFound(record, { scanned }) receives each lookup answer.
-const IsbnField = ({ id, value, onChange, onFound }) => {
+const IsbnField = ({ id, value, onChange, onFound, size, prominent = false, placeholder }) => {
   const [scanning, setScanning] = useState(false)
   const [state, setState] = useState({ phase: 'idle' })
   const latest = useRef(0)
@@ -59,6 +59,8 @@ const IsbnField = ({ id, value, onChange, onFound }) => {
         <Input
           id={id}
           value={value}
+          size={size}
+          placeholder={placeholder}
           inputMode="numeric"
           autoComplete="off"
           onChange={(event) => onChange?.(event.target.value)}
@@ -67,8 +69,8 @@ const IsbnField = ({ id, value, onChange, onFound }) => {
             lookup(value, false)
           }}
         />
-        <Button onClick={() => lookup(value, false)} loading={state.phase === 'loading'}>Look up</Button>
-        <Button icon={<CameraOutlined aria-hidden="true" />} onClick={() => setScanning(true)}>Scan</Button>
+        <Button size={size} onClick={() => lookup(value, false)} loading={state.phase === 'loading'}>Look up</Button>
+        <Button size={size} type={prominent ? 'primary' : 'default'} icon={<CameraOutlined aria-hidden="true" />} onClick={() => setScanning(true)}>Scan</Button>
       </Space.Compact>
       <Notice state={state} />
       <Modal title="Scan the barcode" open={scanning} footer={null} destroyOnHidden onCancel={() => setScanning(false)}>

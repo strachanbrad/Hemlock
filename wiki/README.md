@@ -26,6 +26,8 @@ A newcomer starts with [Development setup](dev-setup.md) to run the app,
   generated cover names, downloads and SQL.
 - [Style](style.md): comments, license headers, wiki pages, commits, Ant
   Design usage and responsive layout.
+- [Theme](theme.md): the look of The Hemlock: palette and contrast, fonts,
+  ornaments, texture, covers without an image, and the rules for a new page.
 - [Deployment](deployment.md): the box, install and redeploy, the paths,
   secrets, backups and restore, logs, the reverse proxy's requirements, and
   retiring the old pm2 install.

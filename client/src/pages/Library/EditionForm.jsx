@@ -6,6 +6,7 @@
 import { useState } from 'react'
 import { App, Button, Form, Input, Radio } from 'antd'
 import { CoverPicker } from '../../components/CoverPicker.jsx'
+import { SectionHeading } from '../../components/Headings.jsx'
 import { FORMAT_LABELS } from '../../components/FormatTags.jsx'
 import IsbnField from '../../components/IsbnField.jsx'
 import LookupCover from '../../components/LookupCover.jsx'
@@ -89,7 +90,7 @@ const EditionForm = ({ mode, edition, onSubmit, onCancel }) => {
       }}
       onFinish={submit}
     >
-      <h4 className="section-title">{TITLES[mode]}</h4>
+      <SectionHeading>{TITLES[mode]}</SectionHeading>
       <Form.Item name="format" label="Format" rules={[{ required: true, message: 'Choose a format' }]}>
         <Radio.Group options={formatOptions(formats)} optionType="button" buttonStyle="solid" />
       </Form.Item>

@@ -11,6 +11,8 @@ import FilledKnife from './filledknife.svg?react'
 import UnfilledKnife from './unfilledknife.svg?react'
 import BookOpen from './bookopen.svg?react'
 import BookClosed from './bookclosed.svg?react'
+import BookmarkFilled from './bookmarkfilled.svg?react'
+import BookmarkOutline from './bookmarkoutline.svg?react'
 
 export {
   FilledChili,
@@ -21,4 +23,6 @@ export {
   UnfilledKnife,
   BookOpen,
   BookClosed,
+  BookmarkFilled,
+  BookmarkOutline,
 }

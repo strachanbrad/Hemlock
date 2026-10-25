@@ -6,7 +6,7 @@
 import { Button } from 'antd'
 import { Link } from 'react-router'
 import BookCover from '../../components/BookCover.jsx'
-import { RatingSummary, ReadToggle } from '../../components/BookRatings.jsx'
+import { RatingSummary, ReadToggle, WishlistToggle } from '../../components/BookRatings.jsx'
 import FormatTags from '../../components/FormatTags.jsx'
 
 const stop = (event) => event.stopPropagation()
@@ -22,7 +22,10 @@ const LibraryCards = ({ books, linkTo, onOpen, onSave, onPurchase }) => (
           <span className="book-card-author">{book.author.name}</span>
           <div className="book-card-row">
             <FormatTags book={book} />
-            <ReadToggle book={book} onSave={onSave} size="large" />
+            <span className="book-card-toggles">
+              <WishlistToggle book={book} onSave={onSave} size="large" />
+              <ReadToggle book={book} onSave={onSave} size="large" />
+            </span>
           </div>
           <div className="book-card-row">
             <RatingSummary book={book} />

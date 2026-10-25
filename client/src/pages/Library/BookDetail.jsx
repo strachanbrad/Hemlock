@@ -12,12 +12,23 @@ import BookCover from '../../components/BookCover.jsx'
 import { BookRating, RATINGS, ReadToggle } from '../../components/BookRatings.jsx'
 import { ChangeCoverButton } from '../../components/CoverPicker.jsx'
 import FormatTags from '../../components/FormatTags.jsx'
+import { SectionHeading } from '../../components/Headings.jsx'
+import { Corner } from '../../images/ornaments/index.js'
 import { resizeCover } from '../../lib/resizeImage.js'
 import BookEditForm from './BookEditForm.jsx'
 import EditionForm from './EditionForm.jsx'
 import EditionList from './EditionList.jsx'
 
 const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`
+
+const CORNERS = ['tl', 'tr', 'bl', 'br']
+
+const FramedCover = ({ book }) => (
+  <div className="cover-frame">
+    {CORNERS.map((corner) => <Corner key={corner} className={`frame-corner frame-corner-${corner}`} aria-hidden="true" />)}
+    <BookCover url={book.cover_url} title={book.title} size="large" />
+  </div>
+)
 
 // The detail of one book: view, the edit form, or the edition form (add, purchase or edit).
 const BookDetail = ({ book, loaded, initialMode, onSave, onReplace, onDeleted }) => {
@@ -76,8 +87,9 @@ const BookDetail = ({ book, loaded, initialMode, onSave, onReplace, onDeleted })
   return (
     <div className="book-detail">
       <div className="book-detail-head">
-        <BookCover url={book.cover_url} title={book.title} size="large" />
+        <FramedCover book={book} />
         <div className="book-detail-heading">
+          <span className="book-detail-by">by</span>
           <Link to={{ pathname: '/library', search: `?author_id=${book.author.id}` }} className="book-detail-author">{book.author.name}</Link>
           <FormatTags book={book} />
           <div className="book-detail-buttons">
@@ -87,7 +99,7 @@ const BookDetail = ({ book, loaded, initialMode, onSave, onReplace, onDeleted })
         </div>
       </div>
 
-      <dl className="book-detail-ratings">
+      <dl className="book-detail-ratings" aria-label="Your take">
         <div className="detail-rating-row">
           <dt>Read</dt>
           <dd><ReadToggle book={book} onSave={onSave} size="large" /></dd>
@@ -101,12 +113,12 @@ const BookDetail = ({ book, loaded, initialMode, onSave, onReplace, onDeleted })
       </dl>
 
       <section className="book-detail-section">
-        <h4 className="section-title">Synopsis</h4>
-        {!loaded ? <Skeleton active title={false} paragraph={{ rows: 3 }} /> : book.synopsis ? <p className="book-detail-synopsis">{book.synopsis}</p> : <p className="secondary">No synopsis.</p>}
+        <SectionHeading>Synopsis</SectionHeading>
+        {!loaded ? <Skeleton active title={false} paragraph={{ rows: 3 }} /> : book.synopsis ? <p className="book-detail-synopsis reading">{book.synopsis}</p> : <p className="secondary reading">No synopsis.</p>}
       </section>
 
       <section className="book-detail-section">
-        <h4 className="section-title">Editions</h4>
+        <SectionHeading>Editions</SectionHeading>
         <EditionList book={book} onReplace={onReplace} onEdit={(edition) => setMode({ form: 'edit', edition })} />
         <div className="book-detail-buttons">
           <Button onClick={() => setMode({ form: 'add' })}>Add edition</Button>

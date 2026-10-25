@@ -3,45 +3,74 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 
-import { useState } from 'react'
-import { Alert, App, Button, Form, Input, Radio, Switch } from 'antd'
+import { useEffect, useState } from 'react'
+import { Alert, App, Button, Form, Input, Radio, Segmented, Switch } from 'antd'
 import { Link, useNavigate } from 'react-router'
 import { listAuthors } from '../../api/authors.js'
 import { createBook } from '../../api/books.js'
 import { addEdition } from '../../api/editions.js'
 import AuthorSelect from '../../components/AuthorSelect.jsx'
+import BookCover from '../../components/BookCover.jsx'
 import { RATINGS } from '../../components/BookRatings.jsx'
 import { CoverPicker } from '../../components/CoverPicker.jsx'
+import { PageHeading, SectionHeading } from '../../components/Headings.jsx'
 import IsbnField from '../../components/IsbnField.jsx'
-import LookupCover from '../../components/LookupCover.jsx'
 import Rating from '../../components/Rating.jsx'
 import ToggleIcon from '../../components/ToggleIcon.jsx'
-import { BookClosed, BookOpen } from '../../images/index.js'
-import { authorPayload, collapse } from '../../lib/authors.js'
-import { toIsbn13 } from '../../lib/isbn.js'
+import { BookClosed, BookmarkFilled, BookOpen } from '../../images/index.js'
 import { bookFromLookup, creditLine } from '../../lib/prefill.js'
 import { resizeCover } from '../../lib/resizeImage.js'
 import { useIsPhone } from '../../lib/viewport.js'
 import { isbnRule, publishedRule } from '../Library/EditionForm.jsx'
+import { OWNED, WISHLIST, bookPayload } from './payload.js'
 import '../../styles/forms.css'
 
-const NOT_OWNED = 'none'
+const OWNERSHIP = [
+  { value: OWNED, label: 'I own it' },
+  { value: WISHLIST, label: 'On my wishlist' },
+]
 const FORMATS = [
   { value: 'hardcover', label: 'Hardcover' },
   { value: 'paperback', label: 'Paperback' },
   { value: 'ebook', label: 'Ebook' },
-  { value: NOT_OWNED, label: 'Not owned yet' },
 ]
 const INITIAL = {
-  isbn: '', title: '', author: undefined, format: undefined, wishlist: false, read: false,
+  isbn: '', title: '', author: undefined, ownership: OWNED, format: undefined, wishlist: false, read: false,
   star_rating: 0, spice_rating: 0, gore_rating: 0, synopsis: '', publisher: '', published: '', cover: null,
+}
+
+// Aborting on cleanup keeps a slow read from landing after the file has changed.
+const FilePreview = ({ file }) => {
+  const [url, setUrl] = useState(null)
+  useEffect(() => {
+    const reader = new FileReader()
+    reader.onload = () => setUrl(reader.result)
+    reader.readAsDataURL(file)
+    return () => reader.abort()
+  }, [file])
+  return url ? <img src={url} alt="The chosen cover" /> : null
+}
+
+// What the book will be saved with: the chosen file, else the lookup's cover, else a cloth cover.
+const CoverPreview = ({ file, lookupUrl, title }) => {
+  if (file) return <div className="cover-preview"><FilePreview key={`${file.name}-${file.size}-${file.lastModified}`} file={file} /></div>
+  if (lookupUrl) {
+    return (
+      <div className="cover-preview">
+        <img src={lookupUrl} alt="The cover the lookup found" referrerPolicy="no-referrer" />
+      </div>
+    )
+  }
+  return <div className="cover-preview" aria-hidden="true"><BookCover title={title?.trim() ?? ''} size="large" /></div>
 }
 
 const AddBook = () => {
   const { message } = App.useApp()
   const [form] = Form.useForm()
+  const ownership = Form.useWatch('ownership', form)
   const format = Form.useWatch('format', form)
   const cover = Form.useWatch('cover', form)
+  const title = Form.useWatch('title', form)
   const navigate = useNavigate()
   const isPhone = useIsPhone()
   const [saving, setSaving] = useState(false)
@@ -49,7 +78,7 @@ const AddBook = () => {
   const [found, setFound] = useState(null)
   const [lookupCover, setLookupCover] = useState(null)
   const [more, setMore] = useState(false)
-  const notOwned = format === NOT_OWNED
+  const wished = ownership === WISHLIST
 
   const prefill = async (record, { scanned }) => {
     let authors = []
@@ -71,29 +100,9 @@ const AddBook = () => {
   }
 
   const submit = async (values) => {
-    const owned = values.format !== NOT_OWNED
     const coverUrl = !values.cover && lookupCover ? lookupCover : null
-    const edition = owned
-      ? {
-          format: values.format,
-          isbn: values.isbn?.trim() ? toIsbn13(values.isbn) : null,
-          publisher: values.publisher?.trim() || null,
-          published: values.published?.trim() || null,
-          ...(coverUrl && { cover_from_url: coverUrl }),
-        }
-      : null
-    const payload = {
-      title: collapse(values.title),
-      ...authorPayload(values.author),
-      synopsis: values.synopsis.trim(),
-      star_rating: values.star_rating,
-      spice_rating: values.spice_rating,
-      gore_rating: values.gore_rating,
-      read: values.read,
-      wishlist: !owned || (values.format === 'ebook' && values.wishlist),
-      ...(edition && { edition }),
-      ...(!owned && coverUrl && { cover_from_url: coverUrl }),
-    }
+    const payload = bookPayload(values, coverUrl)
+    const { edition = null } = payload
 
     setSaving(true)
     setConflict(null)
@@ -138,66 +147,96 @@ const AddBook = () => {
 
   return (
     <section className="add-book">
-      <h2 className="page-title">Add a book</h2>
+      <PageHeading>Add a book</PageHeading>
       <Form form={form} layout="vertical" initialValues={INITIAL} onFinish={submit} disabled={saving} onValuesChange={() => setConflict(null)}>
-        <div className="add-book-grid">
-          <div className="add-book-column">
-            <Form.Item
-              name="isbn"
-              label="ISBN"
-              rules={[isbnRule]}
-              extra={notOwned ? 'Used to look the book up; a book not owned yet has no edition to keep it.' : 'ISBN-10 or ISBN-13; scan the barcode or type it and look it up'}
-            >
-              <IsbnField onFound={prefill} />
-            </Form.Item>
-            <Form.Item name="title" label="Title" rules={[{ required: true, whitespace: true, message: 'Enter a title' }]}>
-              <Input maxLength={500} />
-            </Form.Item>
-            <Form.Item name="author" label="Author" rules={[{ required: true, message: 'Choose an author or type a new name' }]}>
-              <AuthorSelect />
-            </Form.Item>
-            <Form.Item name="format" label="Format" rules={[{ required: true, message: 'Choose a format' }]}>
-              {isPhone
-                ? <Radio.Group className="format-choice" options={FORMATS} orientation="vertical" />
-                : <Radio.Group className="format-choice" options={FORMATS} optionType="button" buttonStyle="solid" />}
-            </Form.Item>
-            {format === 'ebook' && (
-              <Form.Item name="wishlist" label="Want a physical copy" valuePropName="checked">
-                <Switch />
+        <section className="add-section add-find" aria-labelledby="add-find-title">
+          <SectionHeading id="add-find-title">Find it</SectionHeading>
+          <p className="add-helper reading">Scan the barcode on the back cover, or type the ISBN and look it up; the details fill themselves in.</p>
+          <Form.Item
+            name="isbn"
+            label="ISBN"
+            rules={[isbnRule]}
+            extra={wished ? 'Only used for the lookup: a book on the wishlist keeps no ISBN.' : undefined}
+          >
+            <IsbnField onFound={prefill} size="large" prominent placeholder="ISBN-10 or ISBN-13" />
+          </Form.Item>
+        </section>
+
+        <section className="add-section" aria-labelledby="add-book-title">
+          <SectionHeading id="add-book-title">The book</SectionHeading>
+          <div className="add-book-layout">
+            <div className="add-cover">
+              <CoverPreview file={cover} lookupUrl={lookupCover} title={title} />
+              {lookupCover && !cover && (
+                <div className="lookup-cover-text">
+                  <span className="secondary reading">Found by the lookup; saved with the book unless you choose a file.</span>
+                  <Button size="small" type="text" onClick={() => setLookupCover(null)}>Don’t use this cover</Button>
+                </div>
+              )}
+              <Form.Item name="cover" className="add-cover-picker" extra={wished ? 'Kept on the book until a copy with a cover is added.' : undefined}>
+                <CoverPicker listType="text" label={cover ? 'Choose another' : 'Choose a cover'} />
               </Form.Item>
-            )}
-            {notOwned && (
-              <Form.Item label="Want a physical copy" extra="A book not owned yet goes on the buy list.">
-                <Switch checked disabled />
+            </div>
+            <div className="add-fields">
+              <Form.Item name="title" label="Title" rules={[{ required: true, whitespace: true, message: 'Enter a title' }]}>
+                <Input maxLength={500} className="add-title-input" />
               </Form.Item>
-            )}
-            {!notOwned && (more ? (
-              <>
-                <Form.Item name="publisher" label="Publisher"><Input maxLength={200} /></Form.Item>
-                <Form.Item name="published" label="Published" rules={[publishedRule]}><Input placeholder="YYYY-MM-DD" inputMode="numeric" /></Form.Item>
-              </>
-            ) : (
-              <Button type="link" className="more-toggle" onClick={() => setMore(true)}>More: publisher and date</Button>
-            ))}
-            <Form.Item name="cover" label="Cover" extra={notOwned ? 'Kept on the book until an edition with a cover is added.' : undefined}>
-              <CoverPicker />
-            </Form.Item>
-            {lookupCover && !cover && <LookupCover url={lookupCover} onRemove={() => setLookupCover(null)} />}
+              <Form.Item name="author" label="Author" rules={[{ required: true, message: 'Choose an author or type a new name' }]}>
+                <AuthorSelect />
+              </Form.Item>
+              <Form.Item name="ownership" label="Ownership">
+                <Segmented block options={OWNERSHIP} className="ownership-choice" />
+              </Form.Item>
+              {wished ? (
+                <p className="wishlist-note reading">
+                  <BookmarkFilled aria-hidden="true" className="wishlist-note-icon" />
+                  It goes on the wishlist until you add a copy.
+                </p>
+              ) : (
+                <>
+                  <Form.Item name="format" label="Format" rules={[{ required: true, message: 'Choose a format' }]}>
+                    <Radio.Group className="format-choice" block={isPhone} options={FORMATS} optionType="button" buttonStyle="solid" />
+                  </Form.Item>
+                  {format === 'ebook' && (
+                    <Form.Item name="wishlist" label="Want a physical copy" valuePropName="checked" extra="A physical copy wanted puts the book on the wishlist too.">
+                      <Switch />
+                    </Form.Item>
+                  )}
+                  {more ? (
+                    <div className="add-more">
+                      <Form.Item name="publisher" label="Publisher"><Input maxLength={200} /></Form.Item>
+                      <Form.Item name="published" label="Published" rules={[publishedRule]}><Input placeholder="YYYY-MM-DD" inputMode="numeric" /></Form.Item>
+                    </div>
+                  ) : (
+                    <Button type="link" className="more-toggle" onClick={() => setMore(true)}>More: publisher and date</Button>
+                  )}
+                </>
+              )}
+            </div>
           </div>
-          <div className="add-book-column">
-            <Form.Item name="read" label="Read">
-              <ToggleIcon trueIcon={BookOpen} falseIcon={BookClosed} trueLabel="Read" falseLabel="Not read" size="large" />
+        </section>
+
+        <section className="add-section" aria-labelledby="add-take-title">
+          <SectionHeading id="add-take-title">Your take</SectionHeading>
+          <div className="take-row">
+            <Form.Item name="read" label="Read" className="take-item">
+              <ToggleIcon trueIcon={BookOpen} falseIcon={BookClosed} trueLabel="Read" falseLabel="Not read" size="large" className="toggle-read" />
             </Form.Item>
-            {RATINGS.map(({ field, label, filledIcon, unfilledIcon }) => (
-              <Form.Item key={field} name={field} label={label}>
-                <Rating label={label} filledIcon={filledIcon} unfilledIcon={unfilledIcon} size="large" />
+            {RATINGS.map(({ field, kind, label, filledIcon, unfilledIcon }) => (
+              <Form.Item key={field} name={field} label={label} className="take-item">
+                <Rating label={label} kind={kind} filledIcon={filledIcon} unfilledIcon={unfilledIcon} size="large" />
               </Form.Item>
             ))}
-            <Form.Item name="synopsis" label="Synopsis">
-              <Input.TextArea autoSize={{ minRows: 4, maxRows: 14 }} />
-            </Form.Item>
           </div>
-        </div>
+        </section>
+
+        <section className="add-section" aria-labelledby="add-synopsis-title">
+          <SectionHeading id="add-synopsis-title">Synopsis</SectionHeading>
+          <Form.Item name="synopsis" className="add-synopsis">
+            <Input.TextArea autoSize={{ minRows: 4, maxRows: 14 }} aria-labelledby="add-synopsis-title" placeholder="What is it about?" />
+          </Form.Item>
+        </section>
+
         {conflict && (
           <Alert
             className="add-book-conflict"
@@ -212,9 +251,9 @@ const AddBook = () => {
             )}
           />
         )}
-        <div className="form-actions">
-          <Button htmlType="button" onClick={reset}>Reset</Button>
-          <Button type="primary" htmlType="submit" loading={saving}>Add book</Button>
+        <div className="add-actions">
+          <Button htmlType="button" type="text" onClick={reset}>Reset</Button>
+          <Button type="primary" htmlType="submit" size="large" loading={saving} className="add-submit">Add book</Button>
         </div>
       </Form>
       <p className="credit secondary">{creditLine(found)}</p>

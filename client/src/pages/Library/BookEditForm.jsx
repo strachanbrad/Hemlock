@@ -7,6 +7,7 @@ import { useState } from 'react'
 import { App, Button, Form, Input } from 'antd'
 import { updateBook } from '../../api/books.js'
 import AuthorSelect from '../../components/AuthorSelect.jsx'
+import { SectionHeading } from '../../components/Headings.jsx'
 import { authorPayload, collapse } from '../../lib/authors.js'
 
 // Sends only the fields that changed; the view comes back only once the save succeeds.
@@ -40,7 +41,7 @@ const BookEditForm = ({ book, onSaved, onCancel }) => {
       initialValues={{ title: book.title, author: book.author, synopsis: book.synopsis }}
       onFinish={submit}
     >
-      <h4 className="section-title">Edit the book</h4>
+      <SectionHeading>Edit the book</SectionHeading>
       <Form.Item name="title" label="Title" rules={[{ required: true, whitespace: true, message: 'Enter a title' }]}>
         <Input maxLength={500} />
       </Form.Item>

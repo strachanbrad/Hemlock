@@ -52,7 +52,7 @@ true, and no test fails when a comment lies.
   `previously`, `used to`, dates or decision attributions. Commit messages hold
   history.
 - **Ancestry.** Not where code was copied or adapted from, or what it resembles.
-- **Callers, tasks and tickets.** "Used by the buy list" and "fix for #12"
+- **Callers, tasks and tickets.** "Used by the wishlist" and "fix for #12"
   belong in commit messages. A grep finds callers.
 - **The interface again in prose.** No restated signatures, option lists or
   return values. Keep only a requirement the code cannot show.
@@ -232,7 +232,8 @@ need it to understand what changed? If not, remove it.
 - **Styling lives in CSS and theme tokens.** Colours, spacing and type come
   from the `ConfigProvider` theme tokens; layout rules live in a stylesheet
   with class names. An inline `style` object is for a value computed at
-  runtime, not for layout.
+  runtime, not for layout. The theme's palette, fonts and ornaments:
+  [theme.md](theme.md).
 - **No JavaScript measurement for layout.** Heights fill with CSS flex;
   `ResizeObserver` is only for computing a number.
 

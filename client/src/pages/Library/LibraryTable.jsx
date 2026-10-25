@@ -6,7 +6,7 @@
 import { Table } from 'antd'
 import { Link } from 'react-router'
 import BookCover from '../../components/BookCover.jsx'
-import { BookRating, ReadToggle } from '../../components/BookRatings.jsx'
+import { BookRating, ReadToggle, WishlistToggle } from '../../components/BookRatings.jsx'
 import FormatTags from '../../components/FormatTags.jsx'
 import { byAuthor, byTitle } from './filters.js'
 
@@ -35,8 +35,18 @@ const LibraryTable = ({ books, linkTo, onOpen, onSave, loading }) => {
       defaultSortOrder: 'ascend',
       render: (_, book) => <Link to={linkTo(book.id)} state={{ fromList: true }} onClick={stop} className="table-title">{book.title}</Link>,
     },
-    { key: 'author', title: 'Author', sorter: byAuthor, render: (_, book) => book.author.name },
-    { key: 'formats', title: 'Formats', sorter: (a, b) => formatsText(a).localeCompare(formatsText(b)) || byTitle(a, b), render: (_, book) => <FormatTags book={book} /> },
+    { key: 'author', title: 'Author', sorter: byAuthor, render: (_, book) => <span className="table-author">{book.author.name}</span> },
+    {
+      key: 'formats',
+      title: 'Formats',
+      sorter: (a, b) => formatsText(a).localeCompare(formatsText(b)) || byTitle(a, b),
+      render: (_, book) => (
+        <span className="table-formats">
+          <WishlistToggle book={book} onSave={onSave} size="small" />
+          <FormatTags book={book} />
+        </span>
+      ),
+    },
     { key: 'read', title: 'Read', sorter: (a, b) => a.read - b.read || byTitle(a, b), render: (_, book) => <ReadToggle book={book} onSave={onSave} size="small" /> },
     rating('star_rating', 'Stars', onSave),
     rating('spice_rating', 'Spice', onSave),

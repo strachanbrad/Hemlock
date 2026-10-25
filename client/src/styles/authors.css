@@ -8,11 +8,20 @@
 }
 
 .authors-search {
-  margin-bottom: 16px;
+  max-width: 360px;
+  margin-bottom: 18px;
 }
 
 .author-name {
-  font-weight: 500;
+  color: var(--cream);
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.author-name:hover {
+  color: var(--brass-light);
 }
 
 .author-actions {
@@ -44,13 +53,14 @@
 
 .rename-error {
   flex-basis: 100%;
-  color: var(--ant-color-error, #d4380d);
+  color: var(--danger);
 }
 
 .author-list {
   margin: 0;
   padding: 0;
   list-style: none;
+  border-top: 1px solid var(--hairline-faint);
 }
 
 .author-row {
@@ -59,7 +69,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 10px 0;
-  border-bottom: 1px solid var(--ant-color-border-secondary, #f0e6e9);
+  border-bottom: 1px solid var(--hairline-faint);
 }
 
 .author-row-main {
@@ -68,4 +78,14 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+}
+
+.author-row-main .secondary {
+  font-size: 12.5px;
+}
+
+@media (max-width: 767.98px) {
+  .authors-search {
+    max-width: none;
+  }
 }

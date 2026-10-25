@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { EMPTY_FILTERS, activeFilterCount, apiQuery, filtersFromSearch, isBuyList, searchFromFilters, sortBooks } from '../src/pages/Library/filters.js'
+import { EMPTY_FILTERS, activeFilterCount, apiQuery, filtersFromSearch, isWishlist, searchFromFilters, sortBooks } from '../src/pages/Library/filters.js'
 
 const parse = (search) => filtersFromSearch(new URLSearchParams(search))
 
@@ -23,9 +23,9 @@ describe('filters from the address', () => {
     expect(parse('format=audio&owned=yes&wishlist=0&read=2&author_id=0&sort=price&view=grid')).toEqual(EMPTY_FILTERS)
   })
 
-  it('make the buy list the wishlist view', () => {
-    expect(isBuyList(parse('wishlist=1'))).toBe(true)
-    expect(isBuyList(parse('format=ebook'))).toBe(false)
+  it('make wishlist=1 the wishlist view', () => {
+    expect(isWishlist(parse('wishlist=1'))).toBe(true)
+    expect(isWishlist(parse('format=ebook'))).toBe(false)
   })
 })
 

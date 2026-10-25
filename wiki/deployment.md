@@ -384,8 +384,8 @@ The owner's reverse proxy sits in front of nginx and needs:
   plus the multipart framing, and a lower limit at the proxy answers 413
   before nginx sees the upload.
 - **The read timeout.** At least 5 minutes for
-  `POST /api/lookup/<isbn>/identify`. A Claude lookup makes up to four
-  requests of up to a minute each before it answers; the nginx site gives
+  `POST /api/lookup/<isbn>/identify`. A Claude lookup makes up to three
+  requests of up to 90 seconds each before it answers; the nginx site gives
   that path a 300-second `proxy_read_timeout`, and a shorter timeout at the
   proxy answers 504 while Claude is still searching.
 - **Access control.** Hemlock has no login: anyone who reaches it can edit or

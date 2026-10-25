@@ -63,7 +63,7 @@ describe('createAnthropic identify', () => {
     assert.deepEqual(second.messages[1], { role: 'assistant', content: fixture('pause-turn').content })
   })
 
-  it('sends one request shape: web search, a strict report_book, auto tool choice, medium effort, nothing the model rejects', async () => {
+  it('sends one request shape: web search, a report_book tool that is not strict, auto tool choice, medium effort, nothing the model rejects', async () => {
     const { claude, requests } = replay('report-book')
     await claude.identify(ISBN)
     const [{ url, body }] = requests
@@ -75,7 +75,7 @@ describe('createAnthropic identify', () => {
     assert.deepEqual(body.tools[0], { type: 'web_search_20260209', name: 'web_search', max_uses: 5 })
     const report = body.tools[1]
     assert.equal(report.name, 'report_book')
-    assert.equal(report.strict, true)
+    assert.equal(report.strict, undefined)
     assert.equal(report.input_schema.additionalProperties, false)
     assert.deepEqual(report.input_schema.required, Object.keys(report.input_schema.properties))
     assert.deepEqual(report.input_schema.properties.found, { type: 'boolean', description: report.input_schema.properties.found.description })

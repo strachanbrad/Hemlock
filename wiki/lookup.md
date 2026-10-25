@@ -125,7 +125,7 @@ Asked only through its own endpoint, after the catalogues missed, and only
 when an Anthropic key is set, on the admin page or in `ANTHROPIC_API_KEY`.
 `createAnthropic()` in `server/src/lookup/anthropic.js` calls the Messages
 API through the official SDK (`@anthropic-ai/sdk`), with the key and the
-saved model (`claude-opus-5-5` by default), a 60-second timeout per request
+saved model (`claude-opus-5-5` by default), a 90-second timeout per request
 and no automatic retry.
 
 ```
@@ -142,11 +142,13 @@ It asks Claude only, never Open Library or Google again.
 `sources.fields.<field>` is `anthropic` for every field the answer has, and
 `source_url` is the listing the fields were copied from.
 
-**The request.** One request shape, sent at most four times per lookup:
+**The request.** One request shape, sent at most three times per lookup:
 the web search tool (`web_search_20260209`, at most 5 searches) and a
 `report_book` tool, `tool_choice: auto`, `output_config: { effort: 'medium'
-}`, `max_tokens` 8000. `report_book` is a strict tool whose input is the
-answer: `found`, `isbn_on_listing`, `title`, `authors`, `publisher`,
+}`, `max_tokens` 8000. `report_book` is a tool whose input is the
+answer (not a strict one: strict tools share structured outputs' limits,
+which reject citations, and web search answers carry citations; `verdict()`
+checks every field instead): `found`, `isbn_on_listing`, `title`, `authors`, `publisher`,
 `published`, `format`, `synopsis`, `cover_url` and `source_url`, each null
 when unknown. The request never sends `temperature`, `thinking` or a forced
 `tool_choice`: `claude-opus-5-5` rejects the first and the last and always

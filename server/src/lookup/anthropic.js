@@ -10,7 +10,7 @@ import { FORMATS, isPublished } from '../validate.js'
 import { clean, names, normalizeText } from './merge.js'
 
 export const DEFAULT_MODEL = 'claude-opus-5-5'
-export const MAX_REQUESTS = 4
+export const MAX_REQUESTS = 3
 const MAX_TOKENS = 8000
 const MAX_URL = 2048
 export const NUDGE = 'Call report_book now with what you found, or with found false.'
@@ -38,7 +38,8 @@ const nullable = (schema, description) => ({ anyOf: [schema, { type: 'null' }], 
 const REPORT_BOOK = {
   name: 'report_book',
   description: 'Report the edition this ISBN identifies. Call it exactly once, as the last step: with the fields copied from a listing that shows this ISBN, or with found false and every other field null when no listing does.',
-  strict: true,
+  // Not strict: strict tools share structured outputs' limits, which reject citations, and web search
+  // answers carry citations. verdict() checks every field anyway.
   input_schema: {
     type: 'object',
     properties: {
@@ -106,7 +107,7 @@ export function verdict(isbn, input, log = () => {}) {
 
 // Resolves identify(isbn13) to { status: 'ok', record } | { status: 'not_found' } |
 // { status: 'failed', message }, and probe() to { ok, detail | error }; neither rejects for an upstream problem.
-export function createAnthropic({ apiKey, model = DEFAULT_MODEL, fetch = globalThis.fetch, timeoutMs = 60000, log = console.warn }) {
+export function createAnthropic({ apiKey, model = DEFAULT_MODEL, fetch = globalThis.fetch, timeoutMs = 90000, log = console.warn }) {
   const client = new Anthropic({ apiKey, fetch, timeout: timeoutMs, maxRetries: 0, logLevel: 'off' })
   const redact = (text) => (apiKey ? String(text).split(apiKey).join('[redacted]') : String(text))
   const describe = (err) => {

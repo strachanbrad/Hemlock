@@ -216,6 +216,55 @@ A rating or read change shows at once, is saved with `PATCH`, reverts with an
 error message if the save fails, and of overlapping saves to one book only
 the newest answer is applied (`useLibrary.js`, `client/src/lib/latest.js`).
 
+### Cover flow view
+
+`/library?view=flow` shows the same books (search, filters and sort
+applied) as a row of covers in 3D instead of the table or the cards
+(`pages/Library/CoverFlow.jsx`, its geometry and step logic in
+`pages/Library/coverflow.js`, styles in `styles/coverflow.css`).
+
+- **The toggle.** List and Flow sit at the end of the toolbar on a desktop
+  and beside Filters on a phone (icons only there). Choosing one writes
+  `view=flow` to the address, or removes `view` for the list, and remembers
+  the choice in `localStorage` (`hemlock.library.view`). An address without
+  `view` shows the remembered view, the list when there is none; `view=list`
+  or `view=flow` in a shared link wins over it. Clear filters keeps the view.
+- **What it shows.** The centre cover faces the viewer at full size; the
+  covers either side stand turned about 60° toward it, smaller and pushed
+  back, overlapping, each with a faded mirror image beneath (a flipped copy
+  under a `mask-image` gradient, since Firefox has no `-webkit-box-reflect`).
+  A book without a cover shows `BookCover`'s placeholder in the same 2:3 box.
+  Under the row: the centre book's title (a link to it), author, format tags
+  (with Wishlist when set) and its position, "12 of 23". An empty result
+  shows the list's "No books match".
+- **Moving.** The wheel steps one book per notch, either axis; a stream of
+  small trackpad deltas adds up to steps, at most one per 70 ms. A drag with
+  the mouse or a swipe follows the pointer and settles on the nearest book,
+  plus up to three more for a flick. With the row focused (Tab; it shows a
+  focus ring), ArrowLeft and ArrowRight step, Home and End jump to the ends,
+  and Enter opens the centre book. A click or tap on a side cover centres
+  it; on the centre cover it opens the book as the list does
+  (`/library/:id`, Back closes it). The wheel over the row never scrolls the
+  page; a vertical swipe on a phone still does (`touch-action: pan-y`).
+- **Keeping its place.** When the list changes (a search, a filter, a saved
+  rating), the centred book stays centred if it is still listed; otherwise
+  the same position is kept, clamped to the new list.
+- **Rendering.** Each cover is absolutely placed and moved only by a
+  `transform` computed in JavaScript (`coverPose()`), so motion stays on the
+  GPU with no layout reads. The stage's width and the window's height are
+  read only on mount and on a resize (a `ResizeObserver` and the window's
+  `resize` event). From them `flowGeometry()` sizes the centre cover (at
+  most 240px, about 55% of a phone's width, smaller in a short window so the
+  caption stays in view) and counts the side covers whose projected edge
+  still fits inside the stage: two a side on a phone, up to seven on a wide
+  desktop. Only those covers and one invisible cover parked on each end slot
+  are mounted, at most 17 nodes however long the list, so a library of
+  thousands stays smooth; the parked cover fades in as the row steps. Covers
+  load lazily and the stage has a fixed height, so nothing shifts while the
+  list loads.
+- `prefers-reduced-motion` turns the transitions off: covers move straight
+  to their places.
+
 ### The book
 
 `/library/:id` opens a drawer over the list (640px; the full screen on a

@@ -81,10 +81,12 @@ A client wrapper never assumes an error body is JSON: nginx answers 413 and
 ## Downloads
 
 Book lookups go through the server, which calls only Open Library, Google
-Books and, through its SDK, the Anthropic API ([Lookup](lookup.md)). The one
-request the browser makes to another host is the preview of a lookup's cover
-on the add and edition forms: an `<img>` from that source's image host (Open
-Library's cover server redirects to archive.org), sent with
+Books, the Barnes & Noble and Amazon cover probes (one `HEAD` request each,
+to fixed URLs built from the ISBN) and, through its SDK, the Anthropic API
+([Lookup](lookup.md)). The one request the browser makes to another host is
+the preview of a lookup's cover on the add and edition forms: an `<img>`
+from that source's image host (Open Library's cover server redirects to
+archive.org; Barnes & Noble's is `cdn.shopify.com`), sent with
 `referrerpolicy="no-referrer"` so the page address is not passed on.
 A cover chosen from a lookup reaches the server as a URL from the client, so
 without bounds the server would fetch whatever a request names, a loopback or
@@ -92,13 +94,16 @@ LAN address included. `saveCoverFromUrl()` (`server/src/covers.js`) fetches
 a cover only:
 
 - over https, from `covers.openlibrary.org`, `archive.org` or any subdomain
-  of it, or `books.google.com`, and, for the covers a Claude lookup or cover
-  search finds on a listing, from Amazon's image hosts (`m.media-amazon.com`,
-  `images-na.ssl-images-amazon.com` and any subdomain of
-  `images-amazon.com`) and Goodreads' (`i.gr-assets.com`,
-  `images.gr-assets.com`), with no user name, password or explicit port in
-  the URL (`allowedCoverUrl()`); the validator answers 400 for anything
-  else, before the row is saved or a request is sent;
+  of it, `books.google.com`, Barnes & Noble's image hosts
+  (`cdn.shopify.com`, its Shopify CDN, and `prodimage.images-bn.com`),
+  Amazon's (`m.media-amazon.com`, `images-na.ssl-images-amazon.com` and any
+  subdomain of `images-amazon.com`), AbeBooks' (`pictures.abebooks.com`) and
+  Goodreads' (`i.gr-assets.com`, `images.gr-assets.com`), with no user name,
+  password or explicit port in the URL (`allowedCoverUrl()`); the validator
+  answers 400 for anything else, before the row is saved or a request is
+  sent. `cdn.shopify.com` serves every Shopify store's images, not only
+  Barnes & Noble's; that is harmless, since anything fetched from it is
+  sniffed, capped, decoded and re-encoded like any cover;
 - following at most three redirects by hand, each one checked against the
   same list before it is requested;
 - within 10 seconds for the whole download, and up to 10 MB, checked against

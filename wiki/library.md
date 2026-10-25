@@ -118,7 +118,7 @@ JSON in and out; lists are arrays. Every route is in `server/src/routes/`.
 | `POST /api/books` | 201, the book |
 | `PATCH /api/books/:id` | 200, the book |
 | `DELETE /api/books/:id` | 204; its editions and every cover file go with it |
-| `POST /api/books/:id/cover/find` | 200, `{ replaced, book, source_url, width, height }`: one Claude search for a wider cover ([Lookup § Finding a better cover](lookup.md#finding-a-better-cover)) |
+| `POST /api/books/:id/cover/find` | 200, `{ replaced, book, source, source_url, width, height }`: a wider cover from the free covers by ISBN, else one Claude search ([Lookup § Finding a better cover](lookup.md#finding-a-better-cover)) |
 | `POST /api/books/:id/editions` | 201, the whole book |
 | `PATCH /api/editions/:id` | 200, the whole book |
 | `DELETE /api/editions/:id` | 200, the whole book; the edition's cover file goes with it |
@@ -402,8 +402,10 @@ phone); Back closes it.
   edition** opens the edition form; **Mark as purchased**, shown while
   `wishlist` is set, opens it with Hardcover and Paperback only.
 - A book with no editions has Change cover for its own cover.
-- **Find a better cover**, for every book, asks Claude for a wider cover of
-  the edition the book shows and replaces the cover only when it finds one
+- **Find a better cover**, for every book, looks for a wider cover of the
+  edition the book shows, first among the free covers by ISBN (Barnes &
+  Noble, Amazon, Open Library), then by asking Claude, and replaces the
+  cover only when it finds one
   ([Lookup § Finding a better cover](lookup.md#finding-a-better-cover)).
 - **Delete book** asks first, naming how many editions and covers go with it.
 

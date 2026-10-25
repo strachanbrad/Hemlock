@@ -9,6 +9,7 @@ import { errorHandler } from './errors.js'
 import authorRoutes from './routes/authors.js'
 import bookRoutes from './routes/books.js'
 import dataRoutes from './routes/data.js'
+import displayRoutes from './routes/display.js'
 import healthRoutes from './routes/health.js'
 
 export function createApp({ db }) {
@@ -16,7 +17,7 @@ export function createApp({ db }) {
   app.disable('x-powered-by')
   app.use(express.json())
 
-  app.use('/api', healthRoutes(db), authorRoutes(db), dataRoutes(db), bookRoutes(db))
+  app.use('/api', healthRoutes(db), authorRoutes(db), dataRoutes(db), displayRoutes(db), bookRoutes(db))
   app.use('/covers', express.static(coversDir, { index: false }))
 
   app.use((req, res) => res.status(404).json({ error: 'Not found' }))

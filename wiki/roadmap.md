@@ -1,25 +1,11 @@
 # Roadmap
 
-The work planned for Hemlock. Deployment comes first; lookup and the TV
-display follow, and the library (books, editions and the phone layout, which
-land together) comes last. This page describes work that does not exist yet,
-in the present-tense voice of the rest of the wiki; a step leaves this page
-when it is built and is described on its own page. Nothing is deployed, so a
-step may change the schema, the API or the file layout without a
-compatibility path.
-
-## 2. Deployment
-
-- nginx serves the built client and the covers directory and proxies `/api`
-  to the Express server, which runs under a systemd unit as its own user.
-- The database and covers live under `/var/lib/hemlock`; a redeploy rebuilds
-  the code and never touches them. The deploy script takes an online SQLite
-  backup and a hardlink snapshot of the covers before restarting.
-- `deploy/deploy.sh` is idempotent: build, back up, install the unit and the
-  nginx site, restart, check `/api/health`, report.
-- The owner's reverse proxy terminates TLS in front of nginx. HTTPS is a
-  requirement, not an option: a phone browser grants camera access for
-  barcode scanning only on a secure origin.
+The work planned for Hemlock. Lookup and the TV display come first, and the
+library (books, editions and the phone layout, which land together) comes
+last. This page describes work that does not exist yet, in the present-tense
+voice of the rest of the wiki; a step leaves this page when it is built and is
+described on its own page. Nothing is deployed, so a step may change the
+schema, the API or the file layout without a compatibility path.
 
 ## 3. Books and editions
 

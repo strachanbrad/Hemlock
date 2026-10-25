@@ -192,7 +192,7 @@ All run on the dev machine from the root of the checkout.
 |---|---|
 | `npm run roku:build` | Copies `roku/` to `dist/roku/`, writes `HEMLOCK_BASE_URL` (an `http` or `https` address, checked) into the manifest when it is set, renders the images, and zips the package to `dist/hemlock-roku.zip` with the manifest at its root. |
 | `npm run roku:install` | Sideloads `dist/hemlock-roku.zip` to the TV with `roku-deploy`, reading `ROKU_IP`, `ROKU_USERNAME` (default `rokudev`) and `ROKU_PASSWORD` from the environment only. A compile error on the TV fails it. |
-| `npm run roku:check` | BrighterScript's validation of the manifest, `source/` and `components/` (`roku/bsconfig.json`), with no output files. |
+| `npm run roku:check` | BrighterScript's validation of the manifest, `source/` and `components/` (`roku/bsconfig.json`), with no output files; `npm run lint` runs it after ESLint. |
 
 To try the channel against a dev server instead of the box, bind the
 server to the LAN on a port of its own and build the channel for it:

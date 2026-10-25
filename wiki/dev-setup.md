@@ -75,7 +75,7 @@ All run from the root of the checkout.
 | `npm run dev` | Starts Express with `node --watch` (it restarts when a file under `server/src/` or `server/migrations/` changes) and the Vite dev server, through `concurrently`. |
 | `npm run build` | Builds the client into `client/dist/`. |
 | `npm start` | Starts the server alone, without watching (`node server/src/index.js`). |
-| `npm run lint` | ESLint over every first-party file (`eslint.config.js`); any warning fails it. |
+| `npm run lint` | ESLint over every first-party file (`eslint.config.js`), where any warning fails it, then `npm run roku:check`. |
 | `npm test` | The server suite (`node:test`) and the client suite (Vitest); fails if either fails. |
 | `npm run db:migrate` | Applies pending migrations to `DATA_DIR/hemlock.db` and prints the schema version. |
 | `npm run db:new <name>` | Writes the next empty migration file ([Migrations](migrations.md)). |

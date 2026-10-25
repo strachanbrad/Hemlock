@@ -16,7 +16,7 @@
     "dev": "concurrently --kill-others-on-fail -n server,client -c blue,magenta \"npm run dev -w server\" \"npm run dev -w client\"",
     "build": "npm run build -w client",
     "start": "node server/src/index.js",
-    "lint": "eslint . --max-warnings=0",
+    "lint": "eslint . --max-warnings=0 && npm run roku:check -- --log-level error",
     "test": "npm test --workspaces",
     "db:migrate": "node server/scripts/migrate.js",
     "db:new": "node server/scripts/new-migration.js",

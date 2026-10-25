@@ -20,7 +20,7 @@ const recorded = []
 async function recordingFetch(url, init) {
   const response = await fetch(url, init)
   const name = fixtureName(url)
-  if (name && response.ok) recorded.push({ name, body: await response.clone().json() })
+  if (name && response.ok) recorded.push({ name, body: name.endsWith('.txt') ? await response.clone().text() : await response.clone().json() })
   return response
 }
 
@@ -32,8 +32,8 @@ const today = new Date().toISOString().slice(0, 10)
 for (const { name, body: raw } of recorded) {
   const file = path.join(fixturesDir, name)
   fs.mkdirSync(path.dirname(file), { recursive: true })
-  const fixture = { _source: `recorded ${today} by npm run lookup:record -- ${isbn}`, ...trimFixture(name, raw) }
-  fs.writeFileSync(file, `${JSON.stringify(fixture, null, 2)}\n`)
+  if (name.endsWith('.txt')) fs.writeFileSync(file, raw.endsWith('\n') ? raw : `${raw}\n`)
+  else fs.writeFileSync(file, `${JSON.stringify({ _source: `recorded ${today} by npm run lookup:record -- ${isbn}`, ...trimFixture(name, raw) }, null, 2)}\n`)
   console.log(`wrote ${path.relative(process.cwd(), file)}`)
 }
 console.log(`HTTP ${status}`)

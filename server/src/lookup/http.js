@@ -16,6 +16,7 @@ function pauseAfter(response) {
 }
 
 // Resolves to { status: 'ok', body } | { status: 'not_found' } | { status: 'failed' }; never rejects.
+// With { text: true } the body is the answer's text rather than its JSON.
 // One retry on a network error, a timeout or a 5xx; none on a 4xx. A 403 or 429 pauses the source,
 // and while it is paused every request fails without being sent.
 // `headers` is an object, or a function read at each request.
@@ -23,20 +24,20 @@ export function createJsonSource({ name, fetch, headers, schedule = (task) => ta
   const headersNow = typeof headers === 'function' ? headers : () => headers
   let pausedUntil = -Infinity
 
-  async function attempt(url) {
+  async function attempt(url, text) {
     try {
       const response = await schedule(() => fetch(url, { headers: headersNow(), redirect: 'manual', signal: AbortSignal.timeout(timeoutMs) }))
       if (!response.ok) {
         await response.body?.cancel().catch(() => {})
         return { response }
       }
-      return { response, body: await response.json() }
+      return { response, body: text ? await response.text() : await response.json() }
     } catch (error) {
       return { error }
     }
   }
 
-  return async function getJson(url) {
+  return async function getJson(url, { text = false } = {}) {
     const where = `${name} ${new URL(url).pathname}`
     if (now() < pausedUntil) {
       log(`${where}: not sent, paused after a refusal`)
@@ -44,7 +45,7 @@ export function createJsonSource({ name, fetch, headers, schedule = (task) => ta
     }
 
     for (let tries = 1; ; tries++) {
-      const { response, body, error } = await attempt(url)
+      const { response, body, error } = await attempt(url, text)
       const retryable = error || response.status >= 500
       if (retryable && tries < 2) {
         if (retryDelay > 0) await sleep(retryDelay)

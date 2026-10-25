@@ -82,14 +82,42 @@ missing.
 
 Asked only when a Google Books key is set, on the admin page or in
 `GOOGLE_BOOKS_API_KEY`
-([Development setup § Configuration](dev-setup.md#configuration)):
-`https://www.googleapis.com/books/v1/volumes?q=isbn:<isbn13>&key=…`. Without
+([Development setup § Configuration](dev-setup.md#configuration)). Without
 the key `sources.google` is `disabled` and nothing is sent: Google refuses
 keyless requests with a 429 and a daily quota of zero, so Open Library alone
-is a fully supported mode. The query also returns other editions of the work;
-only a volume whose `industryIdentifiers` hold the ISBN-13 or its ISBN-10
-counts, and any other is ignored. The key is a query parameter, so no log
-line ever contains a Google request URL.
+is a fully supported mode. `createGoogle()` in `server/src/lookup/google.js`
+asks in up to three requests:
+
+1. **The search.**
+   `https://www.googleapis.com/books/v1/volumes?q=isbn:<isbn13>&key=…`. The
+   query also returns other editions of the work; only a volume whose
+   `industryIdentifiers` hold the ISBN-13 or its ISBN-10 counts, and any
+   other is ignored. An exact volume is the answer.
+2. **Google Books Dynamic Links**, when the search answered without an exact
+   volume. Google's search index misses many volumes it does hold (it
+   answers `totalItems: 0` for ISBNs whose volume exists), so the ISBN is
+   mapped to a volume id without the index:
+   `https://books.google.com/books?bibkeys=ISBN:<isbn13>&jscmd=viewapi`,
+   keyless. The answer is JavaScript, `var _GBSBookInfo = {...};`: the
+   object after the assignment is JSON, keyed `ISBN:<isbn13>`, and its
+   `info_url` carries the volume id as `id=`. An ISBN Google does not know
+   answers `var _GBSBookInfo = {};`. An id that is not
+   `[A-Za-z0-9_-]+` is never requested, and an answer that is not this
+   script counts as not found and logs one line.
+3. **The volume.** `https://www.googleapis.com/books/v1/volumes/<id>?key=…`,
+   kept only when its `industryIdentifiers` hold the ISBN-13 or its ISBN-10:
+   Dynamic Links also names volumes for ISBNs that are not theirs. Its
+   `volumeInfo` is used exactly as a search hit's; the small Dynamic Links
+   thumbnail is not.
+
+The source is `ok` when step 1 or step 3 found the volume. A failed search
+fails the source without asking further. After a search that answered, a
+failed or empty Dynamic Links answer leaves the search's `not_found`; a
+failed volume request after Dynamic Links named one fails the source, so the
+next lookup asks again. Every request goes through the same timeouts,
+retry and 403/429 pause as the search (Dynamic Links pauses on its own),
+with the Hemlock `User-Agent`. The key is a query parameter, so no log line
+ever contains a Google request URL.
 
 ### Claude
 
@@ -366,8 +394,11 @@ value or a function read at each lookup), and
   file per request (each says when it was recorded in `_source`) and prints
   the merged answer. With `GOOGLE_BOOKS_API_KEY` set it records Google's
   answer too.
-- `google/volumes-*.json` are written by hand from the documented volume
-  shape, since recording needs a key, and say so in `_source`.
+- `google/volumes-*.json` and `google/volume-<id>.json` are written by hand
+  from the documented volume shape, since recording needs a key, and say so
+  in `_source`. `google/dynamic-<isbn>.txt` are Dynamic Links answers
+  recorded without a key, as Google sends them (JavaScript, so they carry no
+  `_source`).
   `google/error-429.json` is Google's real keyless refusal and
   `google/placeholder.png` its real "image not available" image.
 - `server/test/fixtures/anthropic/` holds Messages API answers written by hand from the

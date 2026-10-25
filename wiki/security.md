@@ -69,11 +69,11 @@ A client wrapper never assumes an error body is JSON: nginx answers 413 and
 ## Downloads
 
 Book lookups go through the server, which calls only Open Library, Google
-Books and, through its SDK, the Anthropic API ([Lookup](lookup.md)). The one request the browser makes to another
-host is the preview of a lookup's cover on the add and edition forms: an
-`<img>` from that source's image host (Open Library's cover server redirects
-to archive.org), sent with `referrerpolicy="no-referrer"` so the page address
-is not passed on.
+Books and, through its SDK, the Anthropic API ([Lookup](lookup.md)). The one
+request the browser makes to another host is the preview of a lookup's cover
+on the add and edition forms: an `<img>` from that source's image host (Open
+Library's cover server redirects to archive.org), sent with
+`referrerpolicy="no-referrer"` so the page address is not passed on.
 A cover chosen from a lookup reaches the server as a URL from the client, so
 without bounds the server would fetch whatever a request names, a loopback or
 LAN address included. `saveCoverFromUrl()` (`server/src/covers.js`) fetches

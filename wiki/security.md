@@ -148,6 +148,15 @@ the same way, and its image replaces a cover only after it has been
 downloaded, decoded and found wider
 ([Lookup § Finding a better cover](lookup.md#finding-a-better-cover)).
 
+## Raw markup
+
+The display's blood and chilli are the one place the site renders markup as
+it is: `CoverEffects.jsx` hands the SVG that `bloodMarkup` and `chilliMarkup`
+in `client/src/pages/Display/effects.js` build to `dangerouslySetInnerHTML`,
+and that markup is made from numbers and the page's own ids only, never from
+a book's text. Nothing else on the site renders raw markup; every title,
+author and synopsis reaches the page as text.
+
 ## Admin sessions
 
 `/admin` and `/api/admin/*` ([Admin](admin.md)):

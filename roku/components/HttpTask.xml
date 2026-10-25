@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+Copyright (c) 2023 Hemlock
+SPDX-License-Identifier: GPL-3.0-only
+-->
+<component name="HttpTask" extends="Task">
+  <interface>
+    <field id="base" type="string" />
+    <field id="request" type="assocarray" alwaysNotify="true" />
+    <field id="response" type="assocarray" alwaysNotify="true" />
+    <field id="changed" type="integer" alwaysNotify="true" />
+    <!-- A request set before the thread observes `request` is lost, so requests wait for `ready`. -->
+    <field id="ready" type="boolean" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/common.brs" />
+  <script type="text/brightscript" uri="pkg:/components/HttpTask.brs" />
+</component>

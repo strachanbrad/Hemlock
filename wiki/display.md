@@ -3,8 +3,7 @@
 `/display` shows the library on a television as a slideshow, one book at a
 time. It is the one page outside the shell: no navigation, no Ant Design
 components, its own stylesheet, and its own timer. Its data comes from
-`GET /api/display`, an endpoint shaped so that a later Roku channel can use it
-too.
+`GET /api/display`, which the [Roku channel](roku.md) reads too.
 
 ## The endpoint
 
@@ -20,7 +19,7 @@ joins anything:
 
 | Field | Value |
 |---|---|
-| `id` | Opaque, unique within the response. Clients only compare it. |
+| `id` | The book's id (`books.id`). The page only compares it; the [Roku channel](roku.md) also sends its rating edits to `PATCH /api/books/:id`. |
 | `title` | A string. |
 | `author` | The author's name, or null. |
 | `synopsis` | A string, `''` when there is none. |
@@ -60,8 +59,8 @@ tables ([Library § The model](library.md#the-model)):
 |---|---|
 | `client/src/pages/Display/Display.jsx` | The page, loaded lazily by the `/display` route in `client/src/App.jsx`. |
 | `client/src/pages/Display/slideshow.js` | The timing functions (`createShow`, `currentIndex`, `applyBooks`, `step`, `togglePause`) and `readOptions` for the address parameters. Pure: every function takes the time as an argument. |
-| `client/src/pages/Display/effects.js` | The geometry of the cover effects: `bloodOf(gore, seed, height)` lays out the blood for a level, `seedOf(id)` seeds it per book, `faceHeight` sizes the cover's face, the path builders draw it, and `CHILLI` holds the chilli's paths and level lines. Pure. |
-| `client/src/pages/Display/CoverEffects.jsx` | The blood and the chilli as inline SVG over the cover. |
+| `client/src/pages/Display/effects.js` | The geometry of the cover effects: `bloodOf(gore, seed, height)` lays out the blood for a level, `seedOf(id)` seeds it per book, `faceHeight` sizes the cover's face, the path builders draw it, and `CHILLI` holds the chilli's paths and level lines. `bloodMarkup` and `chilliMarkup` build the SVG of each effect, with the class names `display.css` styles; the [Roku channel](roku.md) draws the same markup. Pure. |
+| `client/src/pages/Display/CoverEffects.jsx` | The blood and the chilli: the markup of `effects.js` in an svg over the cover. |
 | `client/src/pages/Display/display.css` | The stage, the slide layout, the effects' colours and motion, and the palette. |
 | `client/src/api/display.js` | `fetchDisplayBooks(filter)`, the page's only request besides the live updates stream it holds through `useChanges()` ([Library § Live updates](library.md#live-updates)). |
 
@@ -201,7 +200,8 @@ where it is refused or unsupported, the page carries on without it.
 
 ## Getting the page onto a television
 
-A Roku TV has no web browser, so the page reaches the screen in one of three
+A Roku TV has no web browser; the [Roku channel](roku.md) shows the same
+slideshow natively. The page itself reaches a television in one of three
 ways:
 
 1. **HDMI from a laptop or mini PC.** Plug it into one of the TV's inputs,
@@ -231,15 +231,8 @@ the whole picture shows.
 
 ## A Roku channel
 
-A native Roku channel is a possible later client of the same endpoint: a
-SceneGraph channel sideloaded in developer mode (one sideloaded channel per
-device). It prefixes each `cover_url` with its configured base URL, and Roku's
-image node loads the JPEG, PNG and WebP covers the server stores. It cannot
-hold an event stream, so it learns of changes from the long poll
-`GET /api/changes` ([Library § Live updates](library.md#live-updates)). It
-needs `/api/display`, `/api/changes` and `/covers/` reachable without an
-interactive login, as the television's browser does
-([Deployment § The reverse proxy](deployment.md#the-reverse-proxy)).
+The same slideshow runs as a native Roku channel, with pause, step and rating
+edits from the remote: [Roku channel](roku.md).
 
 ## Tests
 
@@ -249,9 +242,10 @@ interactive login, as the television's browser does
   (wrap, catch-up, refetch, deletion, keys, pause, a backward clock, an empty
   list) and the address parameters.
 - `client/test/displayEffects.test.js`: the rating levels, the chilli's
-  level line, the face height, the seed, and the blood at every level over
-  many seeds: which corners, how many drips, how far they run, the heavier
-  runs, the pools, and the 12-unit edge.
+  level line, the face height, the seed, the blood at every level over many
+  seeds (which corners, how many drips, how far they run, the heavier runs,
+  the pools, and the 12-unit edge), and the markup: every shape in the rim
+  and the body, the glints, the chilli's ids and level line.
 - `client/test/Display.test.jsx`: the page under `StrictMode` with fake
   timers: the schedule, catch-up on `visibilitychange`, the refetch on a
   change and on a reconnect with no poll beside it (with `EventSource`

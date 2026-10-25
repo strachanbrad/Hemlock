@@ -16,19 +16,25 @@
     "dev": "concurrently --kill-others-on-fail -n server,client -c blue,magenta \"npm run dev -w server\" \"npm run dev -w client\"",
     "build": "npm run build -w client",
     "start": "node server/src/index.js",
-    "lint": "eslint . --max-warnings=0",
+    "lint": "eslint . --max-warnings=0 && npm run roku:check -- --log-level error",
     "test": "npm test --workspaces",
     "db:migrate": "node server/scripts/migrate.js",
     "db:new": "node server/scripts/new-migration.js",
     "db:reset": "node server/scripts/reset.js",
     "lookup:record": "node server/scripts/lookup-record.js",
-    "admin:password": "node server/scripts/admin-password.js"
+    "admin:password": "node server/scripts/admin-password.js",
+    "roku:build": "node roku/scripts/build.js",
+    "roku:install": "node roku/scripts/install.js",
+    "roku:check": "bsc --project roku/bsconfig.json"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "brighterscript": "^0.73.8",
     "concurrently": "^10.0.6",
     "eslint": "^10.13.0",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "globals": "^17.13.0"
+    "globals": "^17.13.0",
+    "roku-deploy": "^3.18.4",
+    "sharp": "^0.35.5"
   }
 }

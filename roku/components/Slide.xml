@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+Copyright (c) 2023 Hemlock
+SPDX-License-Identifier: GPL-3.0-only
+-->
+<component name="Slide" extends="Group">
+  <interface>
+    <field id="base" type="string" />
+    <field id="book" type="assocarray" onChange="onBook" />
+    <field id="current" type="boolean" onChange="onCurrent" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/common.brs" />
+  <script type="text/brightscript" uri="pkg:/components/Slide.brs" />
+  <children>
+    <Group id="body" opacity="0">
+      <!-- The cover box is 2:3 and sized before the image loads, so a slide never reflows. -->
+      <Group id="cover" translation="[115, 86]">
+        <Group id="cloth" visible="false">
+          <Poster uri="pkg:/images/cloth.jpg" width="605" height="907" />
+          <Label id="clothTitle" width="489" wrap="true" maxLines="6" ellipsizeOnBoundary="true" horizAlign="center" color="0xEFE6DAFF" lineSpacing="-6">
+            <Font role="font" uri="pkg:/fonts/CormorantGaramond-SemiBold.otf" size="58" />
+          </Label>
+          <Poster id="clothUmbel" uri="pkg:/images/umbel.png" width="58" height="58" blendColor="0xC9A86AFF" />
+        </Group>
+        <!-- The load size is set before uri, or the image decodes at full size. -->
+        <Poster id="poster" width="605" height="907" loadWidth="605" loadHeight="907" loadDisplayMode="scaleToFit" />
+        <!-- Blood and the chilli lie on the cover's face: the image as it is shown, or the cloth cover, whose
+             brass frame draws over the blood and under the chilli. -->
+        <Poster id="blood" visible="false" />
+        <Group id="frame" visible="false">
+          <Rectangle translation="[27, 19]" width="559" height="2" color="0xC9A86A66" />
+          <Rectangle translation="[27, 886]" width="559" height="2" color="0xC9A86A66" />
+          <Rectangle translation="[27, 19]" width="2" height="869" color="0xC9A86A66" />
+          <Rectangle translation="[584, 19]" width="2" height="869" color="0xC9A86A66" />
+        </Group>
+        <Poster id="chilli" visible="false" />
+      </Group>
+      <Group id="text" translation="[816, 86]">
+        <Label id="title" width="989" wrap="true" maxLines="3" ellipsizeOnBoundary="true" color="0xEFE6DAFF" lineSpacing="-14">
+          <Font role="font" uri="pkg:/fonts/CormorantGaramond-SemiBold.otf" size="81" />
+        </Label>
+        <Label id="author" width="989" wrap="true" maxLines="2" ellipsizeOnBoundary="true" color="0xC98B8BFF">
+          <Font role="font" uri="pkg:/fonts/Lora-Italic.ttf" size="38" />
+        </Label>
+        <!-- The format, and a read mark when the book is read; the stars below it show the rating only. -->
+        <Group id="metaLine">
+          <Label id="meta" color="0xB8A9A0FF">
+            <Font role="font" uri="pkg:/fonts/Inter-Regular.ttf" size="25" />
+          </Label>
+          <Poster id="readIcon" uri="pkg:/images/book-open.png" width="28" height="28" blendColor="0x7F9B7AFF" />
+          <Label id="readText" color="0x7F9B7AFF" text="READ">
+            <Font role="font" uri="pkg:/fonts/Inter-Regular.ttf" size="25" />
+          </Label>
+        </Group>
+        <Group id="stars" />
+        <Label id="synopsis" width="989" wrap="true" ellipsizeOnBoundary="true" color="0xEFE6DAFF" lineSpacing="8">
+          <Font role="font" uri="pkg:/fonts/Lora-Regular.ttf" size="30" />
+        </Label>
+        <Label id="probe" visible="false" width="989" wrap="true" lineSpacing="8">
+          <Font role="font" uri="pkg:/fonts/Lora-Regular.ttf" size="30" />
+        </Label>
+      </Group>
+    </Group>
+    <Animation id="fade" duration="1" easeFunction="linear">
+      <FloatFieldInterpolator id="fadeTo" key="[0.0, 1.0]" keyValue="[0.0, 1.0]" fieldToInterp="body.opacity" />
+    </Animation>
+    <Animation id="bloodFade" duration="1" easeFunction="linear">
+      <FloatFieldInterpolator key="[0.0, 1.0]" keyValue="[0.0, 1.0]" fieldToInterp="blood.opacity" />
+    </Animation>
+    <Animation id="chilliFade" duration="1" easeFunction="linear">
+      <FloatFieldInterpolator key="[0.0, 1.0]" keyValue="[0.0, 1.0]" fieldToInterp="chilli.opacity" />
+    </Animation>
+  </children>
+</component>

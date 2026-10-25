@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { BOX_HEIGHT, CHILLI, EDGE, bloodOf, bulbOf, chilliLine, faceHeight, randomFrom, ratingLevel, seedOf } from '../src/pages/Display/effects.js'
+import { BOX_HEIGHT, CHILLI, EDGE, bloodMarkup, bloodOf, bulbOf, chilliLine, chilliMarkup, faceHeight, randomFrom, ratingLevel, seedOf } from '../src/pages/Display/effects.js'
 
 const H = BOX_HEIGHT
 const SEEDS = Array.from({ length: 40 }, (_, i) => seedOf(i + 1))
@@ -146,5 +146,36 @@ describe('bloodOf', () => {
     const tall = bloodOf(3, SEEDS[5], 150)
     const square = bloodOf(3, SEEDS[5], 100)
     expect(longest(square, 'left') / 100).toBeCloseTo(longest(tall, 'left') / 150, 6)
+  })
+})
+
+describe('bloodMarkup and chilliMarkup', () => {
+  const count = (markup, text) => markup.split(text).length - 1
+
+  it('draw nothing at level 0', () => {
+    expect(bloodMarkup(7, 0, H)).toBeNull()
+    expect(chilliMarkup(0, H, 'c')).toBeNull()
+  })
+
+  it('draws every band, drip and pool in the rim and the body, and a glint on each drip that does not pool', () => {
+    for (const level of [1, 3, 5]) {
+      const blood = bloodOf(level, seedOf(7), H)
+      const { markup } = bloodMarkup(7, level, H)
+      const drawn = blood.bands.length + 2 * blood.drips.length + blood.pools.length
+      const [rim, body] = markup.split('class="display-blood-body"')
+      expect(count(rim, '<path')).toBe(drawn)
+      expect(count(body.split('class="display-blood-shine"')[0], '<path')).toBe(drawn)
+      expect(count(markup, 'display-blood-glint')).toBe(blood.drips.filter((drip) => !drip.pooled).length)
+      expect(count(markup, 'class="display-blood-pool"')).toBe(2 * blood.pools.length)
+    }
+  })
+
+  it('names the chilli gradient and clips with the ids given, and draws the level line below spice 5', () => {
+    const { level, markup } = chilliMarkup(3, H, 'x1')
+    expect(level).toBe(3)
+    expect(markup).toContain('id="x1-heat"')
+    expect(markup).toContain('clip-path="url(#x1-fill)"')
+    expect(markup).toContain(`y1="${chilliLine(3)}"`)
+    expect(chilliMarkup(5, H, 'x1').markup).not.toContain('display-chilli-level')
   })
 })

@@ -1,0 +1,7 @@
+{
+  "rootDir": ".",
+  "files": ["manifest", "source/**/*.brs", "components/**/*.{brs,xml}"],
+  "createPackage": false,
+  "copyToStaging": false,
+  "diagnosticLevel": "hint"
+}

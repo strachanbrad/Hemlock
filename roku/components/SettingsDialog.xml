@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+Copyright (c) 2023 Hemlock
+SPDX-License-Identifier: GPL-3.0-only
+-->
+<component name="SettingsDialog" extends="Group">
+  <interface>
+    <!-- { base, filter, seconds } in, and out on `result` when the dialog closes. -->
+    <field id="values" type="assocarray" onChange="onValues" />
+    <field id="result" type="assocarray" alwaysNotify="true" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/common.brs" />
+  <script type="text/brightscript" uri="pkg:/components/SettingsDialog.brs" />
+  <children>
+    <Rectangle width="1920" height="1080" color="0x0F0D12D9" />
+    <Group translation="[440, 250]">
+      <Rectangle width="1040" height="580" color="0x262030FF" />
+      <Rectangle width="1040" height="2" color="0xC9A86A4D" />
+      <Rectangle translation="[0, 578]" width="1040" height="2" color="0xC9A86A4D" />
+      <Rectangle width="2" height="580" color="0xC9A86A4D" />
+      <Rectangle translation="[1038, 0]" width="2" height="580" color="0xC9A86A4D" />
+      <Label translation="[60, 44]" width="920" color="0xEFE6DAFF" text="Settings">
+        <Font role="font" uri="pkg:/fonts/CormorantGaramond-SemiBold.otf" size="56" />
+      </Label>
+      <Group id="rows" translation="[40, 150]" />
+      <Label id="hint" translation="[60, 470]" width="920" wrap="true" maxLines="2" color="0xB8A9A0FF">
+        <Font role="font" uri="pkg:/fonts/Lora-Italic.ttf" size="26" />
+      </Label>
+    </Group>
+  </children>
+</component>

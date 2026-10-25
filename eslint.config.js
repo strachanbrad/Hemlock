@@ -25,7 +25,7 @@ export default defineConfig([
     },
   },
   {
-    files: ['client/vite.config.js', 'server/**/*.js', 'eslint.config.js'],
+    files: ['client/vite.config.js', 'server/**/*.js', 'roku/scripts/**/*.js', 'eslint.config.js'],
     languageOptions: { globals: globals.node },
   },
 ])

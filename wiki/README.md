@@ -19,6 +19,9 @@ A newcomer starts with [Development setup](dev-setup.md) to run the app,
   dev seed.
 - [TV display](display.md): the `/display` slideshow, `GET /api/display`,
   and the ways to get the page onto a television.
+- [Roku channel](roku.md): the slideshow as a sideloaded Roku channel, its
+  keys and rating edits, its settings, building and installing it, and the
+  screensaver.
 - [Migrations](migrations.md): numbered SQL files, how they are applied, and
   the rules for writing one.
 - [Lookup](lookup.md): ISBN lookup from Open Library and Google Books, the
@@ -27,8 +30,8 @@ A newcomer starts with [Development setup](dev-setup.md) to run the app,
 - [Admin](admin.md): the hidden `/admin` page, its password and sessions,
   the lookup keys and settings, and how their secrets are encrypted.
 - [Security](security.md): bind address, error bodies, upload bounds,
-  generated cover names, downloads, the live updates stream, SQL, admin
-  sessions and secrets.
+  generated cover names, downloads, the live updates stream, SQL, raw
+  markup, admin sessions and secrets.
 - [Style](style.md): comments, license headers, wiki pages, commits, Ant
   Design usage and responsive layout.
 - [Theme](theme.md): the look of Hemlock: palette and contrast, fonts,

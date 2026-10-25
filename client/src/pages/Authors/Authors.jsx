@@ -11,6 +11,7 @@ import { deleteAuthor, listAuthors, renameAuthor } from '../../api/authors.js'
 import { PageHeading } from '../../components/Headings.jsx'
 import ShelfEmpty from '../../components/ShelfEmpty.jsx'
 import { collapse } from '../../lib/authors.js'
+import { useChanges } from '../../lib/useChanges.js'
 import { useIsPhone } from '../../lib/viewport.js'
 import '../../styles/authors.css'
 
@@ -80,16 +81,20 @@ const Authors = () => {
   const [state, setState] = useState({ authors: null, error: null })
   const [search, setSearch] = useState('')
   const [editingId, setEditingId] = useState(null)
+  const [changes, setChanges] = useState(0)
+  useChanges(() => setChanges((n) => n + 1))
 
   useEffect(() => {
     const controller = new AbortController()
     listAuthors({ signal: controller.signal })
       .then((authors) => setState({ authors, error: null }))
       .catch((err) => {
-        if (!controller.signal.aborted) setState({ authors: [], error: err.message })
+        if (controller.signal.aborted) return
+        // A failed fetch after a change keeps the list it would have refreshed.
+        setState((prev) => (prev.authors && !prev.error ? prev : { authors: [], error: err.message }))
       })
     return () => controller.abort()
-  }, [])
+  }, [changes])
 
   const shown = useMemo(() => {
     const needle = collapse(search).toLocaleLowerCase()

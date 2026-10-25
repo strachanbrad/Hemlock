@@ -14,8 +14,9 @@ export function createFieldSaves() {
     start(book, fields) {
       const started = Object.keys(fields).map((field) => {
         const key = `${book.id}:${field}`
-        const entry = entries.get(key) ?? { value: book[field], valueSeq: 0, seq: 0, pending: 0, settled: false }
+        const entry = entries.get(key) ?? { bookId: book.id, field, value: book[field], valueSeq: 0, seq: 0, pending: 0, settled: false }
         entries.set(key, entry)
+        entry.started = fields[field]
         entry.seq += 1
         entry.pending += 1
         entry.settled = false
@@ -39,6 +40,16 @@ export function createFieldSaves() {
         }
         return { show, failed }
       }
+    },
+
+    // The fields of a book whose newest save is unsettled, with the values those saves show, for
+    // laying over a fetched copy of the book that may predate them.
+    pending(bookId) {
+      const shown = {}
+      for (const entry of entries.values()) {
+        if (entry.bookId === bookId && !entry.settled) shown[entry.field] = entry.started
+      }
+      return shown
     },
   }
 }

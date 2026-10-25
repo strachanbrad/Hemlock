@@ -7,12 +7,14 @@ import { useCallback, useEffect, useState } from 'react'
 import { fetchDisplayBooks } from '../../api/display.js'
 import config from '../../config/config.json'
 import { Umbel } from '../../images/ornaments/index.js'
+import { useChanges } from '../../lib/useChanges.js'
 import CoverEffects from './CoverEffects.jsx'
 import { BOX_HEIGHT, faceHeight } from './effects.js'
 import { applyBooks, createShow, currentIndex, readOptions, step, togglePause } from './slideshow.js'
 import './display.css'
 
 const TICK_MS = 500
+// Only for a browser without EventSource; every other one fetches when the library changes.
 const REFRESH_MS = 5 * 60 * 1000
 const RETRY_MS = 30 * 1000
 const IDLE_MS = 3000
@@ -106,6 +108,8 @@ export default function Display() {
   const [idle, setIdle] = useState(false)
   const [canFullscreen] = useState(fullscreenAvailable)
   const [fullscreen, setFullscreen] = useState(() => document.fullscreenElement != null)
+  const [changes, setChanges] = useState(0)
+  const live = useChanges(() => setChanges((n) => n + 1))
 
   const present = useCallback((t) => {
     const index = currentIndex(show, t)
@@ -140,7 +144,7 @@ export default function Display() {
         applyBooks(show, books, t)
         present(t)
         setStatus('ready')
-        timer = setTimeout(load, REFRESH_MS)
+        if (!live) timer = setTimeout(load, REFRESH_MS)
       } catch {
         if (controller.signal.aborted) return
         setStatus((current) => (current === 'ready' ? current : 'failed'))
@@ -152,7 +156,7 @@ export default function Display() {
       controller.abort()
       clearTimeout(timer)
     }
-  }, [options.filter, show, present])
+  }, [options.filter, show, present, live, changes])
 
   useEffect(() => {
     const onKey = (event) => {

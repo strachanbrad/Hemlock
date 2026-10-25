@@ -11,6 +11,7 @@ import { httpError } from './errors.js'
 import { EDITION_ORDER, bookCover, createLibrary, pickedEdition } from './library.js'
 import { DEFAULT_MODEL, createAnthropic } from './lookup/anthropic.js'
 import { reader, shared } from './lookup/index.js'
+import { ISBN_COVERS } from './lookup/isbnCovers.js'
 
 // The slot a found cover goes to is the one bookCover() reads first: the picked edition, else the book.
 const STATE = `
@@ -29,9 +30,11 @@ async function dimensions(filename) {
   return (await sharp(path.join(coversDir, filename)).metadata()).autoOrient
 }
 
-// Resolves findCover(bookId) to { status, body }: 200 { replaced, book, source_url, width, height }, 404, 502
-// or 503; an unknown book, or one deleted or given another cover during the search, rejects with a 404 or
-// 409. Each call is one Claude search, never cached; concurrent calls for one book share it.
+// Resolves findCover(bookId) to { status, body }: 200 { replaced, book, source, source_url, width, height },
+// 404, 502 or 503; an unknown book, or one deleted or given another cover meanwhile, rejects with a 404 or
+// 409. Stage one, free, downloads the covers addressed by the ISBN; stage two, only when that found
+// nothing wider, is one Claude search and needs the key. Nothing is cached; concurrent calls for one book
+// share one run.
 export function createCoverFinder({ db, apiKey = null, model = null, saveCover, fetch = globalThis.fetch, timeoutMs, log = console.warn, anthropic = createAnthropic }) {
   const library = createLibrary(db)
   const readKey = reader(apiKey)
@@ -58,37 +61,65 @@ export function createCoverFinder({ db, apiKey = null, model = null, saveCover, 
     }
   }
 
+  const widest = (candidates) => candidates.reduce((best, next) => (next.width > (best?.width ?? 0) ? next : best), null)
+
   const find = shared(async (id) => {
     const before = state(id)
-    const result = await search(before.subject)
-    if (result.status === 'not_found') return { status: 404, body: { error: 'No cover found for this book' } }
-    if (result.status !== 'ok') return { status: 502, body: { error: `The cover search failed: ${result.message ?? 'no answer'}` } }
-    const { slot } = before
-    const filename = await saveCover(result.cover_url, `${slot.table === 'books' ? 'b' : 'e'}${slot.id}`)
-    if (!filename) return { status: 502, body: { error: `The cover Claude found could not be downloaded from ${new URL(result.cover_url).host}` } }
+    const { slot, subject } = before
+    const base = `${slot.table === 'books' ? 'b' : 'e'}${slot.id}`
+    const current = before.shown ? await dimensions(before.shown).catch(() => NONE) : NONE
+    // Every file downloaded in this run; all but the one kept are removed at the end.
+    const saved = []
+    let kept = null
+    const download = async (url, source, sourceUrl) => {
+      const filename = url ? await saveCover(url, base) : null
+      if (!filename) return null
+      saved.push(filename)
+      const size = await dimensions(filename).catch(() => null)
+      return size && { source, source_url: sourceUrl, filename, width: size.width, height: size.height }
+    }
 
-    let kept = false
-    try {
-      const found = await dimensions(filename)
-      const current = before.shown ? await dimensions(before.shown).catch(() => NONE) : NONE
-      const answer = (replaced) => ({ status: 200, body: { replaced, book: library.getBook(id), source_url: result.source_url, width: found.width, height: found.height } })
-      if (found.width <= current.width) return answer(false)
+    const answer = (replaced, cover) => ({
+      status: 200,
+      body: { replaced, book: library.getBook(id), source: cover.source, source_url: cover.source_url, width: cover.width, height: cover.height },
+    })
+    const replace = (cover) => {
       withCoverFiles(db, (files) => {
         const now = state(id)
         if (JSON.stringify([now.slot, now.shown]) !== JSON.stringify([slot, before.shown])) throw httpError(409, 'The cover changed during the search; try again')
         files.discard(slot.cover)
-        if (slot.table === 'books') library.updateBook(id, { cover: filename })
-        else library.updateEdition(slot.id, { cover: filename })
+        if (slot.table === 'books') library.updateBook(id, { cover: cover.filename })
+        else library.updateEdition(slot.id, { cover: cover.filename })
       })
-      kept = true
-      return answer(true)
+      kept = cover.filename
+      return answer(true, cover)
+    }
+
+    try {
+      const candidates = []
+      if (subject.isbn) {
+        const free = await Promise.all(Object.entries(ISBN_COVERS).map(([source, urlOf]) => download(urlOf(subject.isbn), source, null)))
+        candidates.push(...free.filter(Boolean))
+        const best = widest(candidates)
+        if (best && best.width > current.width) return replace(best)
+      }
+      if (!readKey()) return { status: 503, body: { error: 'Claude is not configured' } }
+
+      const result = await search(subject)
+      if (result.status === 'ok') {
+        const found = await download(result.cover_url, 'claude', result.source_url)
+        if (!found) return { status: 502, body: { error: `The cover Claude found could not be downloaded from ${new URL(result.cover_url).host}` } }
+        candidates.push(found)
+      } else if (result.status !== 'not_found') {
+        return { status: 502, body: { error: `The cover search failed: ${result.message ?? 'no answer'}` } }
+      }
+      const best = widest(candidates)
+      if (!best) return { status: 404, body: { error: 'No cover found for this book' } }
+      return best.width > current.width ? replace(best) : answer(false, best)
     } finally {
-      if (!kept) removeCover(filename)
+      for (const filename of saved) if (filename !== kept) removeCover(filename)
     }
   })
 
-  return async function findCover(id) {
-    if (!readKey()) return { status: 503, body: { error: 'Claude is not configured' } }
-    return find(id)
-  }
+  return find
 }

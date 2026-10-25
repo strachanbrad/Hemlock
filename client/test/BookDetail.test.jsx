@@ -50,7 +50,7 @@ afterEach(() => vi.unstubAllGlobals())
 
 describe('BookDetail Find a better cover', () => {
   it('asks once, shows the busy state, then reports the replaced cover with its host and size and shows the new record', async () => {
-    const { fetch, release } = answerWith(json({ replaced: true, book: REPLACED, source_url: 'https://www.amazon.com/dp/1969253096', width: 1200, height: 1800 }))
+    const { fetch, release } = answerWith(json({ replaced: true, book: REPLACED, source: 'claude', source_url: 'https://www.amazon.com/dp/1969253096', width: 1200, height: 1800 }))
     const { onReplace } = mount()
     fireEvent.click(screen.getByRole('button', { name: 'Find a better cover' }))
     const busy = await screen.findByRole('button', { name: /Asking Claude…/ })
@@ -66,9 +66,17 @@ describe('BookDetail Find a better cover', () => {
     await waitFor(() => expect(findButton().className).not.toMatch(/ant-btn-loading/))
   })
 
+  it('names the free source a cover came from', async () => {
+    const { release } = answerWith(json({ replaced: true, book: REPLACED, source: 'barnes_noble', source_url: null, width: 876, height: 1356 }))
+    mount()
+    fireEvent.click(screen.getByRole('button', { name: 'Find a better cover' }))
+    release()
+    expect(await screen.findByText('Cover replaced, from Barnes & Noble (876 × 1356)')).toBeTruthy()
+  })
+
   it('says the current cover stays when nothing wider was found, for a book without editions too', async () => {
     const plain = { ...BOOK, cover_url: '/covers/b7-0000000b.jpg', editions: [] }
-    const { release } = answerWith(json({ replaced: false, book: plain, source_url: 'https://www.goodreads.com/book/show/1', width: 300, height: 450 }))
+    const { release } = answerWith(json({ replaced: false, book: plain, source: 'claude', source_url: 'https://www.goodreads.com/book/show/1', width: 300, height: 450 }))
     const { onReplace } = mount(plain)
     expect(screen.getByRole('button', { name: 'Change cover' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Find a better cover' }))

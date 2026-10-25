@@ -14,20 +14,13 @@ import { ChangeCoverButton } from '../../components/CoverPicker.jsx'
 import FormatTags from '../../components/FormatTags.jsx'
 import { SectionHeading } from '../../components/Headings.jsx'
 import { Corner } from '../../images/ornaments/index.js'
+import { COVER_SOURCES, sourceHost } from '../../lib/prefill.js'
 import { resizeCover } from '../../lib/resizeImage.js'
 import BookEditForm from './BookEditForm.jsx'
 import EditionForm from './EditionForm.jsx'
 import EditionList from './EditionList.jsx'
 
 const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`
-
-const hostOf = (url) => {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '')
-  } catch {
-    return null
-  }
-}
 
 const CORNERS = ['tl', 'tr', 'bl', 'br']
 
@@ -83,11 +76,11 @@ const BookDetail = ({ book, loaded, initialMode, onSave, onReplace, onDeleted })
   const findCover = async () => {
     setFinding(true)
     try {
-      const { replaced, book: next, source_url, width, height } = await findBetterCover(book.id)
+      const { replaced, book: next, source, source_url, width, height } = await findBetterCover(book.id)
       onReplace(next)
       if (replaced) {
-        const host = hostOf(source_url)
-        message.success(`Cover replaced${host ? `, from ${host}` : ''} (${width} × ${height})`)
+        const from = COVER_SOURCES[source] ?? sourceHost(source_url)
+        message.success(`Cover replaced${from ? `, from ${from}` : ''} (${width} × ${height})`)
       } else {
         message.info('The current cover is already the largest found')
       }

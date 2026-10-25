@@ -13,6 +13,13 @@ import { client, coverFiles, emptyLibrary, placeCover } from './support/http.js'
 
 const KEY = 'sk-ant-test-SECRET-0123456789abcdef'
 const AMAZON = 'https://m.media-amazon.com/images/I/71PoisonGardenL.jpg'
+// Stage one's three covers by ISBN, for book 1's ISBN.
+const FREE = {
+  barnes_noble: 'https://cdn.shopify.com/s/files/1/0674/5433/7265/files/9781969253096_p0.jpg',
+  amazon: 'https://images-na.ssl-images-amazon.com/images/P/1969253096.01.LZZZZZZZ.jpg',
+  open_library: 'https://covers.openlibrary.org/b/isbn/9781969253096-L.jpg',
+}
+const GIF = Buffer.from('R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==', 'base64')
 const dir = path.join(import.meta.dirname, 'fixtures/anthropic')
 const fixture = (name) => JSON.parse(fs.readFileSync(path.join(dir, `${name}.json`), 'utf8'))
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'request-id': 'req_test' } })
@@ -31,6 +38,7 @@ let key
 let beforeAnswer
 const claudeRequests = []
 const downloads = []
+const stageTwo = () => downloads.filter((url) => !Object.values(FREE).includes(url))
 const logs = []
 
 async function claudeFetch(url, init) {
@@ -84,29 +92,99 @@ const size = async (url) => {
   return { width, height }
 }
 
+describe('POST /api/books/:id/cover/find, stage one', () => {
+  it("keeps the widest free cover by ISBN when it is wider, deletes the others and asks Claude nothing, even without a key", async () => {
+    key = null
+    images[FREE.barnes_noble] = await jpeg(876, 1356)
+    images[FREE.amazon] = await jpeg(324, 500)
+    images[FREE.open_library] = await jpeg(333, 500)
+    const { status, body } = await find(1)
+    assert.equal(status, 200)
+    assert.deepEqual({ ...body, book: undefined }, { replaced: true, book: undefined, source: 'barnes_noble', source_url: null, width: 876, height: 1356 })
+    const edition = body.book.editions.find((e) => e.id === 11)
+    assert.match(edition.cover_url, /^\/covers\/e11-[0-9a-f]{8}\.jpg$/)
+    assert.deepEqual(await size(edition.cover_url), { width: 876, height: 1356 })
+    assert.deepEqual(coverFiles(coversDir), [path.basename(edition.cover_url)])
+    assert.deepEqual(downloads.sort(), Object.values(FREE).sort())
+    assert.equal(claudeRequests.length, 0)
+  })
+
+  it("ignores Amazon's 1x1 GIF and a source without the book, and takes what is left", async () => {
+    images[FREE.amazon] = GIF
+    images[FREE.open_library] = await jpeg(333, 500)
+    const { body } = await find(1)
+    assert.deepEqual([body.replaced, body.source, body.width], [true, 'open_library', 333])
+    assert.equal(coverFiles(coversDir).length, 1)
+    assert.ok(logs.some((line) => /images-na\.ssl-images-amazon\.com: not a JPEG, PNG or WebP image/.test(line)), logs.join('\n'))
+    assert.equal(claudeRequests.length, 0)
+  })
+
+  it('goes on to Claude when nothing free is wider, and deletes the free downloads', async () => {
+    placeCover(coversDir, 'e11-0000000a.jpg', await jpeg(500, 750))
+    images[FREE.amazon] = await jpeg(324, 500)
+    images[FREE.open_library] = await jpeg(333, 500)
+    script = ['report-cover']
+    images[AMAZON] = await jpeg(900, 1350)
+    const { body } = await find(1)
+    assert.deepEqual([body.replaced, body.source, body.width], [true, 'claude', 900])
+    assert.equal(claudeRequests.length, 1)
+    assert.deepEqual(coverFiles(coversDir), [path.basename(body.book.cover_url)])
+  })
+
+  it('answers 503 without a key when nothing free is wider, leaving no file', async () => {
+    key = null
+    placeCover(coversDir, 'e11-0000000a.jpg', await jpeg(500, 750))
+    images[FREE.open_library] = await jpeg(333, 500)
+    assert.deepEqual(await find(1), { status: 503, body: { error: 'Claude is not configured' } })
+    assert.deepEqual(coverFiles(coversDir), ['e11-0000000a.jpg'])
+  })
+
+  it('keeps the cover when neither stage finds a wider one, naming the widest found', async () => {
+    placeCover(coversDir, 'e11-0000000a.jpg', await jpeg(500, 750))
+    images[FREE.open_library] = await jpeg(333, 500)
+    script = ['cover-not-found']
+    const { status, body } = await find(1)
+    assert.equal(status, 200)
+    assert.deepEqual({ ...body, book: undefined }, { replaced: false, book: undefined, source: 'open_library', source_url: null, width: 333, height: 500 })
+    assert.deepEqual(coverFiles(coversDir), ['e11-0000000a.jpg'])
+  })
+
+  it('skips stage one for a book without an ISBN', async () => {
+    script = ['cover-not-found']
+    assert.deepEqual(await find(2), { status: 404, body: { error: 'No cover found for this book' } })
+    assert.deepEqual(downloads, [])
+  })
+})
+
 describe('POST /api/books/:id/cover/find', () => {
   it("replaces a narrower cover on the picked edition, from the Amazon original, and deletes the old file", async () => {
     script = ['report-cover']
     images[AMAZON] = await jpeg(600, 900)
     const { status, body } = await find(1)
     assert.equal(status, 200)
-    assert.deepEqual({ ...body, book: undefined }, { replaced: true, book: undefined, source_url: 'https://www.amazon.com/dp/1969253096', width: 600, height: 900 })
+    assert.deepEqual({ ...body, book: undefined }, { replaced: true, book: undefined, source: 'claude', source_url: 'https://www.amazon.com/dp/1969253096', width: 600, height: 900 })
     const edition = body.book.editions.find((e) => e.id === 11)
     assert.match(edition.cover_url, /^\/covers\/e11-[0-9a-f]{8}\.jpg$/)
     assert.equal(body.book.cover_url, edition.cover_url)
     assert.deepEqual(await size(edition.cover_url), { width: 600, height: 900 })
     assert.deepEqual(coverFiles(coversDir), [path.basename(edition.cover_url)])
-    assert.deepEqual(downloads, [AMAZON])
+    assert.deepEqual(downloads.sort(), [...Object.values(FREE), AMAZON].sort())
 
     const [request] = claudeRequests
     assert.equal(claudeRequests.length, 1)
     assert.deepEqual(request.messages, [{ role: 'user', content: 'Find the largest cover image of the book with ISBN-13 9781969253096 (ISBN-10 1969253096) and report it with report_cover.' }])
-    assert.deepEqual(request.tools.map((tool) => tool.name), ['web_search', 'report_cover'])
-    assert.equal(request.tools[0].max_uses, 5)
-    assert.deepEqual(request.tools[1].input_schema.required, ['found', 'cover_url', 'source_url', 'isbn_on_listing'])
-    assert.match(request.system, /largest cover image/)
-    assert.match(request.system, /without its size modifier/)
-    assert.match(request.system, /Never report the cover of another edition/)
+    assert.deepEqual(request.tools.slice(0, 2), [{ type: 'web_search_20260209', name: 'web_search', max_uses: 3 }, { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: 5 }])
+    assert.equal(request.tools[2].name, 'report_cover')
+    assert.deepEqual(request.tools[2].input_schema.required, ['found', 'cover_url', 'source_url', 'isbn_on_listing'])
+    for (const rule of [
+      /Search once for the ISBN-13 as a quoted string/,
+      /once for the exact title and author only when that finds no listing/,
+      /Open a listing of this exact edition with web_fetch, and only at a URL that appeared in a search result/,
+      /Amazon, Goodreads and Bookshop\.org pages cannot be opened, so do not try them/,
+      /Barnes & Noble, AbeBooks, Google Books, the publisher's and the author's pages can be opened/,
+      /og:image or its main cover image, exactly as the page gives it/,
+      /Never report the cover of another edition/,
+    ]) assert.match(request.system, rule)
   })
 
   it('keeps a cover at least as wide as the one found and leaves no file behind', async () => {
@@ -176,7 +254,7 @@ describe('POST /api/books/:id/cover/find', () => {
   it('answers 404 when Claude finds no cover, and downloads nothing', async () => {
     script = ['cover-not-found']
     assert.deepEqual(await find(1), { status: 404, body: { error: 'No cover found for this book' } })
-    assert.deepEqual(downloads, [])
+    assert.deepEqual(stageTwo(), [])
   })
 
   it('answers 404 for a cover off the allow-list or a listing of another ISBN, and downloads nothing', async () => {
@@ -184,7 +262,7 @@ describe('POST /api/books/:id/cover/find', () => {
       script = [reportWith(input)]
       assert.deepEqual(await find(1), { status: 404, body: { error: 'No cover found for this book' } }, JSON.stringify(input))
     }
-    assert.deepEqual(downloads, [])
+    assert.deepEqual(stageTwo(), [])
     assert.deepEqual(coverFiles(coversDir), ['e11-0000000a.jpg'])
   })
 
@@ -210,7 +288,8 @@ describe('POST /api/books/:id/cover/find', () => {
     images[AMAZON] = await jpeg(600, 900)
     const [first, second] = await Promise.all([find(1), find(1)])
     assert.equal(claudeRequests.length, 1)
-    assert.deepEqual(downloads, [AMAZON])
+    assert.deepEqual(stageTwo(), [AMAZON])
+    assert.equal(downloads.length, 4)
     assert.deepEqual(first, second)
     assert.equal(first.body.replaced, true)
     assert.equal(coverFiles(coversDir).length, 1)

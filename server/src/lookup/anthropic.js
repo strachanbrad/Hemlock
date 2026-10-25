@@ -74,10 +74,10 @@ export function question(isbn) {
 
 const COVER_SYSTEM = `You find the cover image of one book edition for a household's library catalogue, at the largest size the web offers.
 
-1. Search for the edition: its ISBN-13 and, when it has one, its ISBN-10, each as a quoted string; when no ISBN is given, its exact title and author.
-2. Look for a listing of this exact edition on Amazon, Goodreads, the publisher's page, Bookshop.org or Barnes & Noble.
+1. Search once for the ISBN-13 as a quoted string (for example "9781969253096"), and once for the exact title and author only when that finds no listing. When no ISBN is given, search for the exact title and author.
+2. Open a listing of this exact edition with web_fetch, and only at a URL that appeared in a search result. Amazon, Goodreads and Bookshop.org pages cannot be opened, so do not try them. Barnes & Noble, AbeBooks, Google Books, the publisher's and the author's pages can be opened.
 3. When an ISBN is given, accept a listing only when it shows that ISBN-13 or its ISBN-10, and report that ISBN, as the listing prints it, in isbn_on_listing. When no ISBN is given, accept a listing only when it shows the exact title and author, and report isbn_on_listing null.
-4. Report in cover_url the direct URL of the largest cover image the listing offers: the page's og:image or its main product image. Give an Amazon image without its size modifier (https://m.media-amazon.com/images/I/81abcXYZL.jpg, not https://m.media-amazon.com/images/I/81abcXYZL._SY466_.jpg). Report the listing's address in source_url.
+4. Report in cover_url the page's og:image or its main cover image, exactly as the page gives it; never build or change an image URL. Report the listing's address in source_url.
 5. When no listing of this exact edition shows a cover, report found false with every other field null. Never report the cover of another edition, format or printing, however similar.
 
 Finish by calling report_cover exactly once. Never write the answer as text.`
@@ -98,7 +98,8 @@ const REPORT_COVER = {
   },
 }
 
-export const COVER_TOOLS = [WEB_SEARCH, REPORT_COVER]
+// Search results carry no image URLs, so the cover search opens the listing itself.
+export const COVER_TOOLS = [{ ...WEB_SEARCH, max_uses: 3 }, { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: 5 }, REPORT_COVER]
 
 // `subject` is { isbn } (an ISBN-13) or { title, author } for a book without one.
 export function coverQuestion(subject) {

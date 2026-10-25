@@ -228,9 +228,14 @@ updates stays in the box (`SearchBox.jsx`).
   empty Wishlist "Nothing on the wishlist"; any other empty result "No books
   match" with Clear filters (`components/ShelfEmpty.jsx`).
 
-A wishlist, rating or read change shows at once, is saved with `PATCH`, reverts with an
-error message if the save fails, and of overlapping saves to one book only
-the newest answer is applied (`useLibrary.js`, `client/src/lib/latest.js`).
+A wishlist, rating or read change shows at once and is saved with `PATCH`
+(`useLibrary.js`, `client/src/lib/fieldSaves.js`). Each field of a book
+settles on its own, so overlapping saves of the stars and the read toggle
+never undo each other: while a field's newest save is pending it shows that
+save's value; once that save settles it shows what the server stored, the
+value of the newest save that succeeded, or the value from before the
+overlapping saves when none did. A failed newest save reverts its field with
+an error message.
 
 ### Cover flow view
 

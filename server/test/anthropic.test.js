@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { describe, it } from 'node:test'
-import { MAX_REQUESTS, NUDGE, createAnthropic, question, verdict } from '../src/lookup/anthropic.js'
+import { COVER_TOOLS, MAX_REQUESTS, NUDGE, coverQuestion, coverVerdict, createAnthropic, question, verdict } from '../src/lookup/anthropic.js'
 
 const ISBN = '9781969253096'
 const KEY = 'sk-ant-test-SECRET-0123456789abcdef'
@@ -72,16 +72,23 @@ describe('createAnthropic identify', () => {
     assert.equal(body.max_tokens, 8000)
     assert.deepEqual(body.tool_choice, { type: 'auto' })
     assert.deepEqual(body.output_config, { effort: 'medium' })
-    assert.deepEqual(body.tools[0], { type: 'web_search_20260209', name: 'web_search', max_uses: 5 })
-    const report = body.tools[1]
+    assert.deepEqual(body.tools.slice(0, 2), [{ type: 'web_search_20260209', name: 'web_search', max_uses: 4 }, { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: 3 }])
+    const report = body.tools[2]
     assert.equal(report.name, 'report_book')
     assert.equal(report.strict, undefined)
     assert.equal(report.input_schema.additionalProperties, false)
     assert.deepEqual(report.input_schema.required, Object.keys(report.input_schema.properties))
     assert.deepEqual(report.input_schema.properties.found, { type: 'boolean', description: report.input_schema.properties.found.description })
     for (const absent of ['temperature', 'top_p', 'top_k', 'thinking']) assert.equal(body[absent], undefined, absent)
-    assert.match(body.system, /quoted string/)
-    assert.match(body.system, /never your own summary/i)
+    for (const rule of [
+      /Search once for the ISBN-13 as a quoted string .*, then once for its ISBN-10 the same way/,
+      /Open one listing of this exact edition with web_fetch, and only at a URL that appeared in a search result/,
+      /Barnes & Noble and Google Books pages open and carry the title, authors, publisher, date, binding and the publisher's description; AbeBooks pages open too/,
+      /Amazon, Goodreads and Bookshop\.org pages cannot be opened, so use their search results only to confirm the ISBN/,
+      /Copy every field from the opened page/,
+      /never your own summary/i,
+      /cover_url: a direct image URL from the opened page \(its og:image\), else null/,
+    ]) assert.match(body.system, rule)
     assert.match(body.messages[0].content, /ISBN-13 9781969253096 \(ISBN-10 1969253096\)/)
   })
 
@@ -178,6 +185,54 @@ describe('createAnthropic identify', () => {
   })
 })
 
+describe('createAnthropic findCover', () => {
+  const SUBJECT = { isbn: ISBN }
+
+  it('sends the cover search with its own tool and takes the report_cover call, without the size modifier', async () => {
+    const { claude, requests } = replay('report-cover')
+    assert.deepEqual(await claude.findCover(SUBJECT), { status: 'ok', cover_url: 'https://m.media-amazon.com/images/I/71PoisonGardenL.jpg', source_url: 'https://www.amazon.com/dp/1969253096' })
+    const [{ body }] = requests
+    assert.deepEqual(body.tools, COVER_TOOLS)
+    assert.equal(body.tools[1].strict, undefined)
+    assert.deepEqual(body.messages, [{ role: 'user', content: coverQuestion(SUBJECT) }])
+    assert.deepEqual([body.max_tokens, body.output_config, body.tool_choice], [8000, { effort: 'medium' }, { type: 'auto' }])
+  })
+
+  it('nudges with report_cover, and fails with its own words on a refusal or a second turn without the call', async () => {
+    const nudged = replay('end-turn', 'report-cover')
+    assert.equal((await nudged.claude.findCover(SUBJECT)).status, 'ok')
+    assert.deepEqual(nudged.requests[1].body.messages.at(-1), { role: 'user', content: 'Call report_cover now with what you found, or with found false.' })
+    const refused = replay('refusal')
+    assert.deepEqual(await refused.claude.findCover(SUBJECT), { status: 'failed', message: 'Claude declined to look for the cover' })
+    const silent = replay('end-turn', 'end-turn')
+    assert.deepEqual(await silent.claude.findCover(SUBJECT), { status: 'failed', message: 'Claude stopped (end_turn) without reporting a cover' })
+    assert.deepEqual(silent.logs, [`Claude cover search for ISBN ${ISBN} failed: Claude stopped (end_turn) without reporting a cover`])
+  })
+
+  it('asks a book without an ISBN by its title and author and takes any listing Claude accepts', async () => {
+    const subject = { title: 'Ledger of the Dead', author: 'Iris Vane' }
+    assert.equal(coverQuestion(subject), 'Find the largest cover image of “Ledger of the Dead” by Iris Vane, which has no ISBN in the catalogue, and report it with report_cover.')
+    assert.equal(coverVerdict(subject, { found: true, cover_url: 'https://i.gr-assets.com/images/S/1.jpg', source_url: null, isbn_on_listing: null }).status, 'ok')
+  })
+})
+
+describe('coverVerdict', () => {
+  const report = (input) => coverVerdict({ isbn: ISBN }, { found: true, cover_url: 'https://m.media-amazon.com/images/I/1.jpg', source_url: 'https://www.amazon.com/dp/1', isbn_on_listing: ISBN, ...input })
+
+  it('accepts the ISBN-13 or its ISBN-10 and nothing else', () => {
+    assert.equal(report({ isbn_on_listing: 'ISBN-10: 1-969253-09-6' }).status, 'ok')
+    for (const isbn_on_listing of ['9781969253102', null, '']) assert.deepEqual(report({ isbn_on_listing }), { status: 'not_found' }, String(isbn_on_listing))
+  })
+
+  it('counts a cover off the allow-list as not found and drops a source that is not https', () => {
+    for (const cover_url of ['https://www.amazon.com/images/cover.jpg', 'http://m.media-amazon.com/images/I/1.jpg', null, 7, `https://m.media-amazon.com/${'x'.repeat(2100)}.jpg`]) {
+      assert.deepEqual(report({ cover_url }), { status: 'not_found' }, String(cover_url).slice(0, 60))
+    }
+    assert.equal(report({ source_url: 'http://www.amazon.com/dp/1' }).source_url, null)
+    assert.deepEqual(report({ found: 'true' }), { status: 'not_found' })
+  })
+})
+
 describe('verdict', () => {
   const base = fixture('report-book').content.find((block) => block.type === 'tool_use').input
   const check = (input) => verdict(ISBN, { ...base, ...input })
@@ -208,6 +263,21 @@ describe('verdict', () => {
     }
     assert.equal(check({ cover_url: 'https://i.gr-assets.com/images/S/1.jpg' }).record.cover_url, 'https://i.gr-assets.com/images/S/1.jpg')
   })
+
+  it("drops the size modifier from an Amazon image, so the CDN serves the original, and leaves other hosts alone", () => {
+    const cases = [
+      ['https://m.media-amazon.com/images/I/81abcXYZL._SY466_.jpg', 'https://m.media-amazon.com/images/I/81abcXYZL.jpg'],
+      ['https://m.media-amazon.com/images/I/71x9+aB-cL._AC_UF1000,1000_QL80_.jpg', 'https://m.media-amazon.com/images/I/71x9+aB-cL.jpg'],
+      ['https://images-na.ssl-images-amazon.com/images/I/51abc._SX331_BO1,204,203,200_.jpg', 'https://images-na.ssl-images-amazon.com/images/I/51abc.jpg'],
+      ['https://ecx.images-amazon.com/images/I/51abc._SL500_._AA300_.png', 'https://ecx.images-amazon.com/images/I/51abc.png'],
+      ['https://m.media-amazon.com/images/I/81abcXYZL.jpg', 'https://m.media-amazon.com/images/I/81abcXYZL.jpg'],
+      ['https://m.media-amazon.com/images/I/._SY466_.jpg', 'https://m.media-amazon.com/images/I/._SY466_.jpg'],
+      ['https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1/1._SY475_.jpg', 'https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1/1._SY475_.jpg'],
+      ['https://covers.openlibrary.org/b/id/1._SY466_.jpg', 'https://covers.openlibrary.org/b/id/1._SY466_.jpg'],
+    ]
+    for (const [cover_url, expected] of cases) assert.equal(check({ cover_url }).record.cover_url, expected, cover_url)
+  })
+
 
   it('counts a missing or wrong found flag and a missing ISBN as not found', () => {
     for (const input of [{ found: false }, { found: 'true' }, { isbn_on_listing: null }, { isbn_on_listing: '' }, { isbn_on_listing: '9781969253096 and 9781969253102' }]) {

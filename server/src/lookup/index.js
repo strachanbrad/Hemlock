@@ -6,6 +6,7 @@
 import { config, userAgent } from '../config.js'
 import { DEFAULT_MODEL, createAnthropic } from './anthropic.js'
 import { createGoogle } from './google.js'
+import { probeIsbnCovers, retailCover } from './isbnCovers.js'
 import { answer } from './merge.js'
 import { createOpenLibrary } from './openLibrary.js'
 
@@ -19,7 +20,7 @@ const realSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 // A key, contact or model is a value or a getter; a getter is read at each lookup, so a setting
 // saved on the admin page applies without a restart.
-const reader = (value) => (typeof value === 'function' ? () => value() ?? null : () => value ?? null)
+export const reader = (value) => (typeof value === 'function' ? () => value() ?? null : () => value ?? null)
 
 function createCache(now) {
   const entries = new Map()
@@ -38,7 +39,7 @@ function createCache(now) {
 }
 
 // Concurrent calls with one key share one request.
-function shared(run) {
+export function shared(run) {
   const pending = new Map()
   return (key) => {
     if (!pending.has(key)) pending.set(key, run(key).finally(() => pending.delete(key)))
@@ -76,6 +77,7 @@ export function createLookup({ fetch = globalThis.fetch, googleKey = null, conta
   }
 
   const askOpenLibrary = cached('Open Library', openLibrary)
+  const probeCovers = cached('Cover probe', (isbn) => probeIsbnCovers(isbn, { fetch, timeoutMs, userAgent: agent() }))
   const askGoogleWith = cached('Google Books', (isbn, key) => googleWith(key)(isbn))
   const askGoogle = async (isbn) => {
     const key = readGoogleKey()
@@ -83,17 +85,20 @@ export function createLookup({ fetch = globalThis.fetch, googleKey = null, conta
   }
 
   return shared((isbn) =>
-    Promise.all([askGoogle(isbn), askOpenLibrary(isbn)]).then(([fromGoogle, fromOpenLibrary]) =>
-      answer(isbn, fromGoogle, fromOpenLibrary, { claude: Boolean(readAnthropicKey()) })))
+    Promise.all([askGoogle(isbn), askOpenLibrary(isbn), probeCovers(isbn)]).then(([fromGoogle, fromOpenLibrary, covers]) =>
+      answer(isbn, fromGoogle, fromOpenLibrary, { claude: Boolean(readAnthropicKey()), covers })))
 }
 
 const RECORD_FIELDS = ['title', 'authors', 'publisher', 'published', 'synopsis', 'format', 'cover_url']
 
-export function identifyAnswer(isbn, result) {
+// `covers` is probeIsbnCovers()'s answer: a Barnes & Noble or Amazon cover beats the page's.
+export function identifyAnswer(isbn, result, covers = {}) {
   if (result.status === 'ok') {
-    const { record } = result
+    const retail = retailCover(covers)
+    const record = retail ? { ...result.record, cover_url: retail.url } : result.record
     const has = (field) => (Array.isArray(record[field]) ? record[field].length > 0 : record[field] !== null && record[field] !== undefined)
     const fields = Object.fromEntries(RECORD_FIELDS.filter(has).map((field) => [field, 'anthropic']))
+    if (retail) fields.cover_url = retail.source
     return { status: 200, body: { ...record, sources: { anthropic: 'ok', fields } } }
   }
   if (result.status === 'not_found') return { status: 404, body: { error: `Claude found no listing that shows ISBN ${isbn}` } }
@@ -101,13 +106,16 @@ export function identifyAnswer(isbn, result) {
 }
 
 // Resolves identify(isbn13) to { status: 200 | 404 | 502 | 503, body }; never rejects for an upstream
-// problem. Asks Claude only, never the catalogues; an 'ok' answer is kept as long as a source's.
-export function createIdentify({ fetch = globalThis.fetch, apiKey = null, model = null, now = Date.now, timeoutMs, log = console.warn, anthropic = createAnthropic } = {}) {
+// problem. Asks Claude, never the catalogues, with the Barnes & Noble and Amazon cover probes beside it;
+// Claude's 'ok' answer is kept as long as a source's, the probes are asked each time.
+export function createIdentify({ fetch = globalThis.fetch, apiKey = null, model = null, contact = null, now = Date.now, timeoutMs, log = console.warn, anthropic = createAnthropic, probeCovers } = {}) {
   const readKey = reader(apiKey)
   const readModel = reader(model)
+  const readContact = reader(contact)
   const cache = createCache(now)
+  probeCovers ??= (isbn) => probeIsbnCovers(isbn, { fetch, userAgent: userAgent(config.version, readContact()) })
 
-  const ask = shared((isbn) =>
+  const claude = (isbn) =>
     Promise.resolve()
       .then(() => anthropic({ apiKey: readKey(), model: readModel() ?? DEFAULT_MODEL, fetch, timeoutMs, log }).identify(isbn))
       .catch((err) => {
@@ -117,12 +125,14 @@ export function createIdentify({ fetch = globalThis.fetch, apiKey = null, model 
       })
       .then((result) => {
         if (result.status === 'ok') cache.set(isbn, result)
-        return identifyAnswer(isbn, result)
-      }))
+        return result
+      })
+
+  const ask = shared((isbn) =>
+    Promise.all([cache.get(isbn) ?? claude(isbn), probeCovers(isbn).catch(() => ({}))]).then(([result, covers]) => identifyAnswer(isbn, result, covers)))
 
   return async function identify(isbn) {
     if (!readKey()) return { status: 503, body: { error: 'Claude is not configured' } }
-    const hit = cache.get(isbn)
-    return hit ? identifyAnswer(isbn, hit) : ask(isbn)
+    return ask(isbn)
   }
 }

@@ -56,15 +56,36 @@ cover shares it.
 ### Cover files
 
 Covers live in `DATA_DIR/covers/` (served at `/covers/<file>`), named by the
-server: `e<edition id>-<8 hex>.<ext>` for an edition, `b<book id>-<8 hex>.<ext>`
-for a book, with `jpg`, `png` or `webp` from the file's magic bytes. A
-replaced cover gets a new name, so a long browser cache is safe.
+server: `e<edition id>-<8 hex>.jpg` for an edition, `b<book id>-<8 hex>.jpg`
+for a book. A replaced cover gets a new name, so a long browser cache is
+safe. Files stored before every cover became a JPEG keep their `.png` or
+`.webp` names, which the server still serves and deletes.
+
+Every cover stored, uploaded or downloaded, goes through `prepareCover()` in
+`server/src/covers.js` (sharp, on libvips):
+
+- The file must be a JPEG, PNG or WebP by its magic bytes, and decode
+  (limits in [Security § Uploads](security.md#uploads)).
+- It is turned upright by its EXIF orientation, scaled to fit 1600 by 1600
+  px (`MAX_COVER_SIDE`; never enlarged), put on white where it is
+  transparent, and encoded as a JPEG at quality 85 (mozjpeg). Nothing of
+  its metadata is kept: no EXIF, XMP, IPTC or ICC profile; colours are
+  converted to sRGB.
+- A JPEG that already fits in 1600 px and carries no EXIF, XMP or IPTC is
+  stored byte for byte, so a cover is never re-encoded for nothing.
+
+1600 px keeps full detail on the TV display at 1080p, where a cover is about
+900 px tall ([TV display](display.md)). Covers stored before this rule are
+left as they are.
 
 `withCoverFiles()` in `server/src/coverFiles.js` runs every write that touches
 a cover in one transaction:
 
-1. An uploaded cover is written (`writeCover()`, flag `wx`) inside the
-   transaction, after the row it belongs to exists; its name is stored.
+1. An uploaded cover is prepared first (`prepareUpload()`, which also
+   refuses a second cover source), since decoding is asynchronous and the
+   transaction cannot wait; then it is written (`writeCover()`, flag `wx`)
+   inside the transaction, after the row it belongs to exists, and its name
+   is stored.
 2. A cover that is replaced or removed, and every cover of a deleted edition
    or book, is collected while the transaction runs.
 3. If the transaction throws, the files it wrote are removed and the
@@ -97,6 +118,7 @@ JSON in and out; lists are arrays. Every route is in `server/src/routes/`.
 | `POST /api/books` | 201, the book |
 | `PATCH /api/books/:id` | 200, the book |
 | `DELETE /api/books/:id` | 204; its editions and every cover file go with it |
+| `POST /api/books/:id/cover/find` | 200, `{ replaced, book, source, source_url, width, height }`: a wider cover from the free covers by ISBN, else one Claude search ([Lookup § Finding a better cover](lookup.md#finding-a-better-cover)) |
 | `POST /api/books/:id/editions` | 201, the whole book |
 | `PATCH /api/editions/:id` | 200, the whole book |
 | `DELETE /api/editions/:id` | 200, the whole book; the edition's cover file goes with it |
@@ -380,14 +402,22 @@ phone); Back closes it.
   edition** opens the edition form; **Mark as purchased**, shown while
   `wishlist` is set, opens it with Hardcover and Paperback only.
 - A book with no editions has Change cover for its own cover.
+- **Find a better cover**, for every book, looks for a wider cover of the
+  edition the book shows, first among the free covers by ISBN (Barnes &
+  Noble, Amazon, Open Library), then by asking Claude, and replaces the
+  cover only when it finds one
+  ([Lookup § Finding a better cover](lookup.md#finding-a-better-cover)).
 - **Delete book** asks first, naming how many editions and covers go with it.
 
 The edition form (`EditionForm.jsx`): format, ISBN with Look up and Scan
 (below), cover, and Publisher and Published behind "More". A lookup fills
 publisher, date, the format (physical only when marking a purchase) and the
 cover, replaces what an earlier lookup filled the way the add page does
-(below), and adds the same credit line under the form. A chosen cover file is scaled in the browser to at most 1200px on its
-long side (`client/src/lib/resizeImage.js`) before it is sent.
+(below), and adds the same credit line under the form. A chosen cover file
+larger than 1600 px on its long side is scaled to 1600 px in the browser,
+on white, as a JPEG at quality 0.9 (`client/src/lib/resizeImage.js`), before
+it is sent, which keeps a phone photo's upload small; the server applies its
+own rule to whatever arrives.
 
 ### Add a book
 

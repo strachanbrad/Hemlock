@@ -4,6 +4,7 @@
  */
 
 import fs from 'node:fs'
+import sharp from 'sharp'
 import { tempDir } from './temp.js'
 
 // config.js reads DATA_DIR once, when first imported, so a test file reaches the
@@ -37,6 +38,8 @@ export async function startServer(options = {}) {
   }
 }
 
-export const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01])
-export const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d])
-export const WEBP = Buffer.from('RIFF\x24\x00\x00\x00WEBPVP8 ', 'latin1')
+// Real images, since every upload and download is decoded before it is stored.
+export const image = ({ width = 4, height = 6, channels = 3, background = '#7a5c3e' } = {}) => sharp({ create: { width, height, channels, background } })
+export const JPEG = await image().jpeg().toBuffer()
+export const PNG = await image().png().toBuffer()
+export const WEBP = await image().webp().toBuffer()

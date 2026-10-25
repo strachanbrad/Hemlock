@@ -53,12 +53,12 @@ describe('POST /api/books/:id/editions', () => {
     assert.equal(body.wishlist, true)
   })
 
-  it('saves the cover as e<edition id> with the sniffed extension', async () => {
+  it('saves the cover as e<edition id>, a WebP stored as a JPEG', async () => {
     seed()
     const { status, body } = await api.post('/api/books/2/editions', multipart({ format: 'paperback' }, WEBP, { type: 'image/png', filename: 'c.png' }))
     assert.equal(status, 201)
     const edition = body.editions[0]
-    assert.match(edition.cover_url, new RegExp(`^/covers/e${edition.id}-[0-9a-f]{8}\\.webp$`))
+    assert.match(edition.cover_url, new RegExp(`^/covers/e${edition.id}-[0-9a-f]{8}\\.jpg$`))
     assert.ok(coverFiles(coversDir).includes(path.basename(edition.cover_url)))
   })
 
@@ -103,7 +103,7 @@ describe('PATCH /api/editions/:id', () => {
     const { status, body } = await api.patch('/api/editions/2', multipart({}, PNG))
     assert.equal(status, 200)
     const cover = body.editions.find((e) => e.id === 2).cover_url
-    assert.match(cover, /^\/covers\/e2-[0-9a-f]{8}\.png$/)
+    assert.match(cover, /^\/covers\/e2-[0-9a-f]{8}\.jpg$/)
     assert.deepEqual(coverFiles(coversDir), ['e1-0000000a.png', path.basename(cover)])
     assert.equal(body.cover_url, cover)
   })

@@ -146,7 +146,11 @@ surfaces as an error.
    and Vite (which empties `client/dist`) remove files and write new ones,
    never into an existing file. No dependency's install script runs as root:
    better-sqlite3 loads the prebuilt binary it ships, and its inferred
-   `node-gyp rebuild` would need a compiler the box does not have. While Vite
+   `node-gyp rebuild` would need a compiler the box does not have. sharp,
+   which resizes covers, has no install script: `npm ci` installs its
+   prebuilt build for the box's platform from the lockfile's optional
+   dependencies (`@img/sharp-linux-x64` and `@img/sharp-libvips-linux-x64`,
+   for x86_64 with glibc), so nothing is installed by hand. While Vite
    rewrites `client/dist`, nginx answers 404 for the client's pages.
 4. Backs up the database, the covers and `secrets.key` ([Backups](#backups)).
 5. Installs the unit, enables and restarts it, and polls
@@ -384,10 +388,11 @@ The owner's reverse proxy sits in front of nginx and needs:
   plus the multipart framing, and a lower limit at the proxy answers 413
   before nginx sees the upload.
 - **The read timeout.** At least 5 minutes for
-  `POST /api/lookup/<isbn>/identify`. A Claude lookup makes up to three
-  requests of up to 90 seconds each before it answers; the nginx site gives
-  that path a 300-second `proxy_read_timeout`, and a shorter timeout at the
-  proxy answers 504 while Claude is still searching.
+  `POST /api/lookup/<isbn>/identify` and `POST /api/books/<id>/cover/find`.
+  A Claude lookup or cover search makes up to three requests of up to 90
+  seconds each before it answers; the nginx site gives both paths a
+  300-second `proxy_read_timeout` (one regex location), and a shorter
+  timeout at the proxy answers 504 while Claude is still searching.
 - **The event stream.** `GET /api/events` stays open for as long as a page
   that shows the library is open
   ([Library § Live updates](library.md#live-updates)). The proxy passes it

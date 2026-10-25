@@ -88,6 +88,19 @@ const CLAUDE = {
 }
 
 describe('AddBook', () => {
+  it("credits Barnes & Noble for the cover a lookup took from it, and saves that cover", async () => {
+    const bn = 'https://cdn.shopify.com/s/files/1/0674/5433/7265/files/9780553212587_p0.jpg'
+    const record = { ...WUTHERING, cover_url: bn, sources: { ...WUTHERING.sources, fields: { title: 'open_library', cover_url: 'barnes_noble' } } }
+    const posts = fakeServer({ lookups: { 9780553212587: record }, create: () => json({ id: 9, title: record.title, cover_url: '/covers/e9-0123abcd.jpg' }, 201) })
+    mount()
+    await lookUp('9780553212587', 'Wuthering Heights')
+    expect(screen.getByText('Book data from Open Library; cover from Barnes & Noble')).toBeTruthy()
+    expect(screen.getByAltText('The cover the lookup found').getAttribute('src')).toBe(bn)
+    fireEvent.click(screen.getByRole('button', { name: 'Add book' }))
+    await screen.findByText('Book page')
+    expect(posts[0].edition.cover_from_url).toBe(bn)
+  })
+
   it("fills the form from Claude's record, credits the listing and saves with its cover", async () => {
     const posts = fakeServer({ identified: { 9781969253096: CLAUDE }, create: () => json({ id: 9, title: CLAUDE.title, cover_url: '/covers/e9-0123abcd.jpg' }, 201) })
     mount()
@@ -103,6 +116,17 @@ describe('AddBook', () => {
     expect(posts).toHaveLength(1)
     expect(posts[0].author_name).toBe('Iris Vane')
     expect(posts[0].edition).toMatchObject({ format: 'paperback', isbn: '9781969253096', publisher: 'Nightshade Press', published: '2025-09-16', cover_from_url: CLAUDE.cover_url })
+  })
+
+  it("credits Barnes & Noble for the cover of a book Claude identified", async () => {
+    const bn = 'https://cdn.shopify.com/s/files/1/0674/5433/7265/files/9781969253096_p0.jpg'
+    const record = { ...CLAUDE, cover_url: bn, sources: { anthropic: 'ok', fields: { title: 'anthropic', cover_url: 'barnes_noble' } } }
+    fakeServer({ identified: { 9781969253096: record } })
+    mount()
+    await lookUp('9781969253096', 'The Poison Garden')
+    const credit = screen.getByRole('link', { name: 'amazon.com' })
+    expect(credit.closest('p').textContent).toBe('Book data from amazon.com, found by Claude; cover from Barnes & Noble')
+    expect(screen.getByAltText('The cover the lookup found').getAttribute('src')).toBe(bn)
   })
 
   it('brings a title conflict into view and offers to add the copy as an edition', async () => {

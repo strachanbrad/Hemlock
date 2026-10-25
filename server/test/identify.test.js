@@ -20,6 +20,7 @@ const RECORD = {
   isbn: ISBN, title: 'The Poison Garden', authors: ['Iris Vane'], publisher: 'Nightshade Press', published: '2025-09-16',
   synopsis: null, format: 'paperback', cover_url: 'https://m.media-amazon.com/images/I/71PoisonGarden.jpg', source_url: 'https://www.amazon.com/dp/1969253096',
 }
+const NO_COVERS = { status: 'ok', barnes_noble: null, amazon: null }
 const anthropicFixture = (name) => JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'fixtures/anthropic', `${name}.json`), 'utf8'))
 
 describe('GET /api/lookup/:isbn offers Claude', () => {
@@ -57,17 +58,22 @@ describe('GET /api/lookup/:isbn offers Claude', () => {
 })
 
 describe('createIdentify', () => {
-  function setup({ key = KEY, model = null, answer = async () => ({ status: 'ok', record: RECORD }) } = {}) {
+  function setup({ key = KEY, model = null, answer = async () => ({ status: 'ok', record: RECORD }), covers = async () => NO_COVERS } = {}) {
     const clock = instantClock(1_000_000)
     const made = []
     const logs = []
+    const probed = []
     const state = { key, model }
     const anthropic = (options) => {
       made.push(options)
       return { identify: (isbn) => answer(isbn) }
     }
-    const identify = createIdentify({ apiKey: () => state.key, model: () => state.model, now: clock.now, anthropic, log: (line) => logs.push(line) })
-    return { identify, made, logs, clock, state }
+    const probeCovers = (isbn) => {
+      probed.push(isbn)
+      return covers(isbn)
+    }
+    const identify = createIdentify({ apiKey: () => state.key, model: () => state.model, now: clock.now, anthropic, probeCovers, log: (line) => logs.push(line) })
+    return { identify, made, probed, logs, clock, state }
   }
 
   it('answers 503 without a key and asks nothing', async () => {
@@ -189,7 +195,7 @@ describe('identify through the app, from the replayed fixtures', () => {
     const fetch = async () => json(anthropicFixture(script.shift()))
     const logs = []
     const app = await startServer({
-      identify: createIdentify({ apiKey: KEY, fetch, log: (line) => logs.push(line), anthropic: (options) => createAnthropic(options) }),
+      identify: createIdentify({ apiKey: KEY, fetch, log: (line) => logs.push(line), anthropic: (options) => createAnthropic(options), probeCovers: async () => NO_COVERS }),
     })
     try {
       const response = await globalThis.fetch(`${app.base}/api/lookup/${ISBN}/identify`, { method: 'POST' })
@@ -205,5 +211,84 @@ describe('identify through the app, from the replayed fixtures', () => {
     } finally {
       await app.close()
     }
+  })
+
+  const BN_PAGE = 'https://www.barnesandnoble.com/w/the-poison-garden-iris-vane/1146000000'
+  const PAGE_COVER = 'https://prodimage.images-bn.com/pimages/9781969253096_p0_v1_s1200x630.jpg'
+  const BN = 'https://cdn.shopify.com/s/files/1/0674/5433/7265/files/9781969253096_p0.jpg'
+
+  async function identifyWith(fixture, covers) {
+    const fetch = async () => json(anthropicFixture(fixture))
+    const app = await startServer({ identify: createIdentify({ apiKey: KEY, fetch, log: () => {}, anthropic: (options) => createAnthropic(options), probeCovers: async () => covers }) })
+    try {
+      const response = await globalThis.fetch(`${app.base}/api/lookup/${ISBN}/identify`, { method: 'POST' })
+      return { status: response.status, body: await response.json() }
+    } finally {
+      await app.close()
+    }
+  }
+
+  it('copies the fields from the page Claude opened, and keeps its cover when no retailer has one', async () => {
+    const { status, body } = await identifyWith('report-book-fetched', NO_COVERS)
+    assert.equal(status, 200)
+    assert.deepEqual([body.publisher, body.source_url, body.cover_url, body.sources.fields.cover_url], ['Nightshade Press', BN_PAGE, PAGE_COVER, 'anthropic'])
+  })
+
+  it("takes Barnes & Noble's cover over the page's", async () => {
+    const { body } = await identifyWith('report-book-fetched', { status: 'ok', barnes_noble: BN, amazon: null })
+    assert.deepEqual([body.cover_url, body.sources.fields.cover_url, body.title], [BN, 'barnes_noble', 'The Poison Garden'])
+  })
+})
+
+describe('the cover of an identified book', () => {
+  const AMAZON = 'https://images-na.ssl-images-amazon.com/images/P/1969253096.01.LZZZZZZZ.jpg'
+  const BN = 'https://cdn.shopify.com/s/files/1/0674/5433/7265/files/9781969253096_p0.jpg'
+  const setupWith = (options) => {
+    const clock = instantClock(1_000_000)
+    const probed = []
+    const identify = createIdentify({
+      apiKey: KEY,
+      now: clock.now,
+      log: () => {},
+      anthropic: () => ({ identify: options.answer ?? (async () => ({ status: 'ok', record: RECORD })) }),
+      probeCovers: async (isbn) => {
+        probed.push(isbn)
+        return options.covers()
+      },
+    })
+    return { identify, probed }
+  }
+  const cover = ({ body }) => [body.cover_url, body.sources.fields.cover_url]
+
+  it('takes Barnes & Noble, then Amazon, then the page', async () => {
+    assert.deepEqual(cover(await setupWith({ covers: async () => ({ status: 'ok', barnes_noble: BN, amazon: AMAZON }) }).identify(ISBN)), [BN, 'barnes_noble'])
+    assert.deepEqual(cover(await setupWith({ covers: async () => ({ status: 'ok', barnes_noble: null, amazon: AMAZON }) }).identify(ISBN)), [AMAZON, 'amazon'])
+    assert.deepEqual(cover(await setupWith({ covers: async () => NO_COVERS }).identify(ISBN)), [RECORD.cover_url, 'anthropic'])
+  })
+
+  it('has no cover when the page gave none on the allow-list and no retailer has one', async () => {
+    const { body } = await setupWith({ covers: async () => NO_COVERS, answer: async () => ({ status: 'ok', record: { ...RECORD, cover_url: null } }) }).identify(ISBN)
+    assert.equal(body.cover_url, null)
+    assert.equal(body.sources.fields.cover_url, undefined)
+  })
+
+  it('probes while Claude searches, keeps the page cover when a probe throws, and probes again for a kept answer', { timeout: 5000 }, async () => {
+    let release
+    let calls = 0
+    const { identify, probed } = setupWith({
+      answer: () => new Promise((resolve) => (release = () => resolve({ status: 'ok', record: RECORD }))),
+      covers: async () => {
+        calls++
+        if (calls === 1) throw new Error('probe exploded')
+        return { status: 'ok', barnes_noble: BN, amazon: null }
+      },
+    })
+    const pending = identify(ISBN)
+    await new Promise((resolve) => setImmediate(resolve))
+    assert.deepEqual(probed, [ISBN])
+    release()
+    assert.deepEqual(cover(await pending), [RECORD.cover_url, 'anthropic'])
+    assert.deepEqual(cover(await identify(ISBN)), [BN, 'barnes_noble'])
+    assert.equal(probed.length, 2)
   })
 })

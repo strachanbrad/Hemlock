@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 
-import { creditLine, fromClaude, sourceHost } from '../lib/prefill.js'
+import { coverCredit, creditLine, fromClaude, sourceHost } from '../lib/prefill.js'
 
 // A record from Claude credits the listing it was copied from; any other names the catalogues.
 const LookupCredit = ({ record }) => {
@@ -12,9 +12,9 @@ const LookupCredit = ({ record }) => {
   return (
     <p className="credit secondary">
       {host ? (
-        <>Book data from <a href={record.source_url} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">{host}</a>, found by Claude</>
+        <>Book data from <a href={record.source_url} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">{host}</a>, found by Claude{coverCredit(record)}</>
       ) : (
-        'Book data found by Claude'
+        `Book data found by Claude${coverCredit(record)}`
       )}
     </p>
   )

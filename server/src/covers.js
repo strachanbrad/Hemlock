@@ -6,10 +6,14 @@
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
+import sharp from 'sharp'
 import { config } from './config.js'
+import { httpError } from './errors.js'
 
 export const coversDir = path.join(config.dataDir, 'covers')
 export const MAX_COVER_BYTES = 10 * 1024 * 1024
+export const MAX_COVER_SIDE = 1600
+const MAX_INPUT_PIXELS = 50_000_000
 
 const COVER_NAME = /^[eb][1-9]\d*-[0-9a-f]{8}\.(jpg|png|webp)$/
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
@@ -19,6 +23,31 @@ export function imageType(buffer) {
   if (buffer.length >= 8 && buffer.subarray(0, 8).equals(PNG_SIGNATURE)) return 'png'
   if (buffer.length >= 12 && buffer.toString('latin1', 0, 4) === 'RIFF' && buffer.toString('latin1', 8, 12) === 'WEBP') return 'webp'
   return null
+}
+
+// Resolves to { buffer, ext } as the cover is stored: a JPEG at most MAX_COVER_SIDE on its long side,
+// turned upright, with no metadata. A JPEG that already fits and carries no EXIF, XMP or IPTC is kept
+// byte for byte. Rejects with a 400 for anything else.
+export async function prepareCover(buffer) {
+  if (!imageType(buffer)) throw httpError(400, 'The cover must be a JPEG, PNG or WebP image')
+  try {
+    const image = sharp(buffer, { limitInputPixels: MAX_INPUT_PIXELS, failOn: 'error' })
+    const { format, width, height, exif, xmp, iptc } = await image.metadata()
+    if (format === 'jpeg' && Math.max(width, height) <= MAX_COVER_SIDE && !exif && !xmp && !iptc) {
+      // metadata() reads only the header; stats() decodes every pixel, so a truncated file is refused.
+      await image.stats()
+      return { buffer, ext: 'jpg' }
+    }
+    const output = await image
+      .autoOrient()
+      .resize(MAX_COVER_SIDE, MAX_COVER_SIDE, { fit: 'inside', withoutEnlargement: true })
+      .flatten({ background: '#ffffff' })
+      .jpeg({ quality: 85, mozjpeg: true })
+      .toBuffer()
+    return { buffer: output, ext: 'jpg' }
+  } catch {
+    throw httpError(400, 'The cover could not be read as an image')
+  }
 }
 
 export function deleteCover(filename) {
@@ -38,10 +67,13 @@ const COVER_STEM = /^[eb][1-9]\d*$/
 
 class DownloadError extends Error {}
 
-// A cover URL comes from the client, so the server fetches only the lookup sources' image hosts:
-// Open Library (redirecting to archive.org), Google Books, and the Amazon and Goodreads images a
-// Claude lookup finds on a listing.
-const COVER_HOSTS = new Set(['covers.openlibrary.org', 'archive.org', 'books.google.com', 'm.media-amazon.com', 'images-na.ssl-images-amazon.com', 'i.gr-assets.com', 'images.gr-assets.com'])
+// A cover URL comes from the client, so the server fetches only the cover sources' image hosts:
+// Open Library (redirecting to archive.org), Google Books, Barnes & Noble (its Shopify CDN, where any
+// Shopify store's images live too), Amazon, AbeBooks and Goodreads.
+const COVER_HOSTS = new Set([
+  'covers.openlibrary.org', 'archive.org', 'books.google.com', 'cdn.shopify.com', 'prodimage.images-bn.com',
+  'm.media-amazon.com', 'images-na.ssl-images-amazon.com', 'pictures.abebooks.com', 'i.gr-assets.com', 'images.gr-assets.com',
+])
 const COVER_DOMAINS = ['.archive.org', '.images-amazon.com']
 
 export function allowedCoverUrl(input) {
@@ -71,8 +103,7 @@ async function readCapped(body) {
 const discard = (response) => response.body?.cancel().catch(() => {})
 
 // Redirects are followed by hand so that every hop is checked against the allow-list.
-async function download(start, { fetch, timeoutMs, userAgent }) {
-  const signal = AbortSignal.timeout(timeoutMs)
+async function download(start, { fetch, signal, userAgent }) {
   let url = allowedCoverUrl(start)
   if (!url) throw new DownloadError('not an https URL on an allowed host')
   for (let hop = 0; ; hop++) {
@@ -116,6 +147,17 @@ async function writeCover(buffer, filename) {
   return filename
 }
 
+const isPlaceholder = (buffer) => crypto.createHash('sha256').update(buffer).digest('hex') === GOOGLE_PLACEHOLDER_SHA256
+
+// With fife, Google answers for a volume it holds page scans of with the scanned front page, a PNG, in
+// place of the cover; the same URL without fife gives the cover's thumbnail.
+function googleThumbnailFor(url, buffer) {
+  const parsed = new URL(url)
+  if (parsed.hostname !== 'books.google.com' || !parsed.searchParams.has('fife') || imageType(buffer) !== 'png' || isPlaceholder(buffer)) return null
+  parsed.searchParams.delete('fife')
+  return parsed.href
+}
+
 function hostOf(url) {
   try {
     return new URL(url).host
@@ -130,11 +172,14 @@ export async function saveCoverFromUrl(url, base, { fetch = globalThis.fetch, ti
   if (typeof base !== 'string' || !COVER_STEM.test(base)) throw new TypeError(`A cover needs 'e<edition id>' or 'b<book id>', not ${JSON.stringify(base)}`)
 
   try {
-    const buffer = await download(url, { fetch, timeoutMs, userAgent })
-    const type = imageType(buffer)
-    if (!type) throw new DownloadError('not a JPEG, PNG or WebP image')
-    if (crypto.createHash('sha256').update(buffer).digest('hex') === GOOGLE_PLACEHOLDER_SHA256) throw new DownloadError("Google's image-not-available placeholder")
-    return await writeCover(buffer, `${base}-${crypto.randomBytes(4).toString('hex')}.${type}`)
+    const options = { fetch, signal: AbortSignal.timeout(timeoutMs), userAgent }
+    let buffer = await download(url, options)
+    const thumbnail = googleThumbnailFor(url, buffer)
+    if (thumbnail) buffer = await download(thumbnail, options)
+    if (!imageType(buffer)) throw new DownloadError('not a JPEG, PNG or WebP image')
+    if (isPlaceholder(buffer)) throw new DownloadError("Google's image-not-available placeholder")
+    const cover = await prepareCover(buffer)
+    return await writeCover(cover.buffer, `${base}-${crypto.randomBytes(4).toString('hex')}.${cover.ext}`)
   } catch (err) {
     log(`Cover not saved from ${hostOf(url)}: ${err.name === 'TimeoutError' ? `no answer in ${timeoutMs} ms` : err.message}`)
     return null

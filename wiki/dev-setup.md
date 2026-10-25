@@ -10,8 +10,10 @@ from the root of the checkout, unless it says otherwise.
   root `package.json` refuses older ones through `engines`.
 - git.
 
-Nothing else: the database driver (better-sqlite3) ships a prebuilt binary, so
-there is no compiler step and no `sqlite3` command-line tool to install.
+Nothing else: the database driver (better-sqlite3) and the image library
+that resizes covers (sharp, with libvips) ship prebuilt binaries, so there is
+no compiler step, and no `sqlite3` command-line tool or system image library
+to install.
 
 ## First run
 

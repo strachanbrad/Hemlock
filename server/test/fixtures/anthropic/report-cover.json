@@ -1,0 +1,39 @@
+{
+  "_source": "hand-written from the documented Messages API shape: the report_cover call after a search; the book is invented",
+  "id": "msg_01ReportCover",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-opus-5-5",
+  "content": [
+    { "type": "thinking", "thinking": "", "signature": "c2lnbmF0dXJlLWNvdmVy" },
+    { "type": "server_tool_use", "id": "srvtoolu_01Cover", "name": "web_search", "input": { "query": "\"9781969253096\" cover" } },
+    {
+      "type": "web_search_tool_result",
+      "tool_use_id": "srvtoolu_01Cover",
+      "content": [
+        { "type": "web_search_result", "url": "https://www.amazon.com/dp/1969253096", "title": "The Poison Garden: Paperback", "encrypted_content": "ZW5jcnlwdGVkLWNvdmVy", "page_age": null }
+      ]
+    },
+    {
+      "type": "text",
+      "text": "The Amazon listing shows this ISBN and its cover.",
+      "citations": [
+        { "type": "web_search_result_location", "url": "https://www.amazon.com/dp/1969253096", "title": "The Poison Garden: Paperback", "encrypted_index": "aW5kZXg=", "cited_text": "ISBN-13: 978-1969253096" }
+      ]
+    },
+    {
+      "type": "tool_use",
+      "id": "toolu_01ReportCover",
+      "name": "report_cover",
+      "input": {
+        "found": true,
+        "cover_url": "https://m.media-amazon.com/images/I/71PoisonGardenL._SY466_.jpg",
+        "source_url": "https://www.amazon.com/dp/1969253096",
+        "isbn_on_listing": "978-1969253096"
+      }
+    }
+  ],
+  "stop_reason": "tool_use",
+  "stop_sequence": null,
+  "usage": { "input_tokens": 8400, "output_tokens": 310, "server_tool_use": { "web_search_requests": 1 } }
+}

@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 
+import { retailCover } from './isbnCovers.js'
+
 const GOOGLE = 'google'
 const OPEN_LIBRARY = 'open_library'
 const OPEN_LIBRARY_WORK = 'open_library_work'
@@ -113,7 +115,8 @@ const coverId = (id) => (Number.isSafeInteger(id) && id > 0 ? id : null)
 const firstCover = (covers) => (Array.isArray(covers) ? (covers.map(coverId).find((id) => id !== null) ?? null) : null)
 export const coverUrl = (id) => (id === null ? null : `https://covers.openlibrary.org/b/id/${id}-L.jpg`)
 
-// zoom=1 is the one size Google serves reliably; edge=curl paints a page curl onto the image.
+// zoom=1 is the one size Google serves reliably; fife=w1600 asks for the largest image Google holds up
+// to that width; edge=curl paints a page curl onto the image.
 export function googleThumbnail(imageLinks) {
   if (typeof imageLinks?.thumbnail !== 'string') return null
   let url
@@ -126,11 +129,14 @@ export function googleThumbnail(imageLinks) {
   url.protocol = 'https:'
   url.port = ''
   url.searchParams.delete('edge')
+  url.searchParams.set('fife', 'w1600')
   return url.href
 }
 
-export function merge(isbn, google, openLibrary) {
+// `covers` is probeIsbnCovers()'s answer: the Barnes & Noble and Amazon cover URLs that exist for the ISBN.
+export function merge(isbn, google, openLibrary, covers = {}) {
   const volume = (google.status === 'ok' && google.volume) || {}
+  const retail = retailCover(covers)
   const { doc = {}, searchEdition = null, edition = null, work = null } = openLibrary.status === 'ok' ? openLibrary : {}
   const fields = {}
   const choose = (field, candidates) => {
@@ -169,6 +175,7 @@ export function merge(isbn, google, openLibrary) {
     ]),
     format: choose('format', [[mapFormat(edition?.physical_format), OPEN_LIBRARY]]),
     cover_url: choose('cover_url', [
+      [retail?.url, retail?.source],
       [coverUrl(firstCover(edition?.covers) ?? coverId(searchEdition?.cover_i)), OPEN_LIBRARY],
       [googleThumbnail(volume.imageLinks), GOOGLE],
       [coverUrl(coverId(doc.cover_i) ?? firstCover(work?.covers)), OPEN_LIBRARY_WORK],
@@ -179,10 +186,10 @@ export function merge(isbn, google, openLibrary) {
 }
 
 // sources.anthropic says whether the page may ask Claude: only when no catalogue answered and a key is set.
-export function answer(isbn, google, openLibrary, { claude = false } = {}) {
+export function answer(isbn, google, openLibrary, { claude = false, covers } = {}) {
   const statuses = [google.status, openLibrary.status]
   if (statuses.includes('ok')) {
-    const body = merge(isbn, google, openLibrary)
+    const body = merge(isbn, google, openLibrary, covers)
     return { status: 200, body: { ...body, sources: { ...body.sources, anthropic: 'disabled' } } }
   }
   const sources = { google: google.status, open_library: openLibrary.status, anthropic: claude ? 'available' : 'disabled' }

@@ -81,6 +81,13 @@ describe('creditLine', () => {
     expect(creditLine(RECORD)).toBe('Book data from Open Library')
     expect(creditLine({ ...RECORD, sources: { ...RECORD.sources, google: 'not_found' } })).toBe('Book data from Open Library and Google Books')
   })
+
+  it('names a cover taken from Barnes & Noble or Amazon, and no catalogue cover', () => {
+    const coverFrom = (cover_url, google = 'disabled') => creditLine({ ...RECORD, sources: { ...RECORD.sources, google, fields: { ...RECORD.sources.fields, cover_url } } })
+    expect(coverFrom('barnes_noble')).toBe('Book data from Open Library; cover from Barnes & Noble')
+    expect(coverFrom('amazon', 'ok')).toBe('Book data from Open Library and Google Books; cover from Amazon')
+    for (const source of ['open_library', 'open_library_work', 'google', undefined]) expect(coverFrom(source)).toBe('Book data from Open Library')
+  })
 })
 
 describe('sourceHost', () => {

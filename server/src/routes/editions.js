@@ -5,7 +5,7 @@
 
 import { Router } from 'express'
 import { readBody } from '../body.js'
-import { attachDownloadedCovers, checkCoverSources, coverDownload, withCoverFiles } from '../coverFiles.js'
+import { attachDownloadedCovers, coverDownload, prepareUpload, withCoverFiles } from '../coverFiles.js'
 import { createLibrary, pick } from '../library.js'
 import { PHYSICAL, editionPayload, pathId } from '../validate.js'
 
@@ -19,12 +19,12 @@ export default function editionRoutes(db, saveCover) {
   router.post('/books/:id/editions', readBody, async (req, res) => {
     const id = pathId(req.params.id, 'Book')
     const input = editionPayload(req.payload, { create: true })
-    checkCoverSources(req.cover, input.cover_from_url)
+    const cover = await prepareUpload(req.cover, input.cover_from_url)
 
     const editionId = withCoverFiles(db, (files) => {
       library.bookRow(id)
       const newId = library.insertEdition(id, input)
-      if (req.cover) library.updateEdition(newId, { cover: files.write(req.cover, `e${newId}`) })
+      if (cover) library.updateEdition(newId, { cover: files.write(cover, `e${newId}`) })
       if (PHYSICAL.has(input.format)) library.updateBook(id, { wishlist: 0 })
       return newId
     })
@@ -35,7 +35,7 @@ export default function editionRoutes(db, saveCover) {
   router.patch('/editions/:id', readBody, async (req, res) => {
     const id = pathId(req.params.id, 'Edition')
     const input = editionPayload(req.payload, { create: false })
-    checkCoverSources(req.cover, input.cover_from_url, input.remove_cover)
+    const cover = await prepareUpload(req.cover, input.cover_from_url, input.remove_cover)
 
     const bookId = withCoverFiles(db, (files) => {
       const edition = library.editionRow(id)
@@ -43,9 +43,9 @@ export default function editionRoutes(db, saveCover) {
       if (values.format !== undefined || values.isbn !== undefined) {
         library.checkEdition({ ...edition, ...values }, id)
       }
-      if (req.cover || input.remove_cover) {
+      if (cover || input.remove_cover) {
         files.discard(edition.cover)
-        values.cover = req.cover ? files.write(req.cover, `e${id}`) : null
+        values.cover = cover ? files.write(cover, `e${id}`) : null
       }
       library.updateEdition(id, values)
       // Only an ebook turning physical: a wishlist set by hand on a physical book stays.

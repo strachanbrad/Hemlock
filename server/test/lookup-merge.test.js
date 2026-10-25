@@ -37,7 +37,7 @@ const googleExact = () => ({
   },
 })
 
-const GOOGLE_COVER = 'https://books.google.com/books/content?id=g1&printsec=frontcover&img=1&zoom=1&source=gbs_api'
+const GOOGLE_COVER = 'https://books.google.com/books/content?id=g1&printsec=frontcover&img=1&zoom=1&source=gbs_api&fife=w1600'
 const olCover = (id) => `https://covers.openlibrary.org/b/id/${id}-L.jpg`
 
 function without(record, path) {
@@ -94,7 +94,7 @@ describe('merge', () => {
       fields: { title: 'open_library_work', authors: 'open_library', synopsis: 'open_library_work', cover_url: 'open_library_work' },
     },
     {
-      name: 'the Google exact cover beats the work cover, on https without edge=curl',
+      name: 'the Google exact cover beats the work cover, on https with fife=w1600 and without edge=curl',
       google: googleExact(),
       openLibrary: { ...olFull(), searchEdition: null, edition: null },
       expect: { cover_url: GOOGLE_COVER },
@@ -175,6 +175,31 @@ describe('merge', () => {
   it('does not need the optional parts of an Open Library answer', () => {
     const record = merge(ISBN, DISABLED, without(olFull(), 'work'))
     assert.equal(record.synopsis, 'Edition text')
+  })
+})
+
+describe('the cover choice', () => {
+  const BN = 'https://cdn.shopify.com/s/files/1/0674/5433/7265/files/9780553212587_p0.jpg'
+  const AMAZON = 'https://images-na.ssl-images-amazon.com/images/P/0553212583.01.LZZZZZZZ.jpg'
+  const noEditionCover = () => without(without(olFull(), 'edition.covers'), 'searchEdition.cover_i')
+  const cover = (google, openLibrary, covers) => {
+    const record = merge(ISBN, google, openLibrary, covers)
+    return [record.cover_url, record.sources.fields.cover_url]
+  }
+
+  it('takes Barnes & Noble, then Amazon, then the Open Library edition, then Google, then the work', () => {
+    assert.deepEqual(cover(googleExact(), olFull(), { barnes_noble: BN, amazon: AMAZON }), [BN, 'barnes_noble'])
+    assert.deepEqual(cover(googleExact(), olFull(), { barnes_noble: null, amazon: AMAZON }), [AMAZON, 'amazon'])
+    assert.deepEqual(cover(googleExact(), olFull(), { barnes_noble: null, amazon: null }), [olCover(111), 'open_library'])
+    assert.deepEqual(cover(googleExact(), noEditionCover(), { barnes_noble: null, amazon: null }), [GOOGLE_COVER, 'google'])
+    assert.deepEqual(cover(DISABLED, noEditionCover(), {}), [olCover(222), 'open_library_work'])
+  })
+
+  it('takes the probes through answer(), and none from a failed probe', () => {
+    const covers = { status: 'ok', barnes_noble: BN, amazon: null }
+    assert.equal(answer(ISBN, DISABLED, olFull(), { covers }).body.cover_url, BN)
+    assert.equal(answer(ISBN, DISABLED, olFull(), { covers: { status: 'failed' } }).body.cover_url, olCover(111))
+    assert.equal(answer(ISBN, DISABLED, olFull()).body.cover_url, olCover(111))
   })
 })
 
@@ -297,8 +322,10 @@ describe('stripHtml', () => {
 })
 
 describe('googleThumbnail', () => {
-  it('forces https, drops edge=curl and keeps the rest', () => {
+  it('forces https, drops edge=curl, asks for up to 1600 px wide and keeps the rest', () => {
     assert.equal(googleThumbnail({ thumbnail: 'http://books.google.com/books/content?id=g1&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api' }), GOOGLE_COVER)
+    const sized = new URL(googleThumbnail({ thumbnail: 'https://books.google.com/books/content?id=g1&zoom=1&fife=w200&edge=curl' }))
+    assert.deepEqual([...sized.searchParams], [['id', 'g1'], ['zoom', '1'], ['fife', 'w1600']])
   })
 
   it('refuses a thumbnail from any other host or no thumbnail', () => {

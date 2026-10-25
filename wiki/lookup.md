@@ -3,7 +3,8 @@
 How Hemlock fills in a book from its ISBN. The server asks Open Library, and
 Google Books when a key is configured, and merges the answers into one
 record. When neither knows the ISBN and an Anthropic key is configured, the
-page can ask Claude, which searches the web for a listing of the edition.
+page can ask Claude, which searches the web for a listing of the edition;
+for a book already in the library, Claude can also look for a larger cover.
 The client reads the ISBN from the book's barcode with the phone camera.
 Every lookup and every cover download goes through the server; the only
 image the browser loads from another host is the preview of a lookup's
@@ -11,7 +12,8 @@ cover ([Library § Add a book](library.md#add-a-book)).
 
 Code: `server/src/lookup/` (the clients, the limiter, the merge and
 `anthropic.js`), `server/src/routes/lookup.js`, `saveCoverFromUrl()` in
-`server/src/covers.js`, `client/src/components/BarcodeScanner.jsx`,
+`server/src/covers.js`, `server/src/coverFinder.js`,
+`client/src/components/BarcodeScanner.jsx`,
 `client/src/components/IsbnField.jsx` and `client/src/api/lookup.js`.
 
 The keys, the Claude model and the Open Library contact are settings: saved
@@ -40,7 +42,9 @@ GET /api/lookup/:isbn
   `failed` or `disabled`. `sources.fields` names the source of every field
   the answer has: `google`, `open_library`, or `open_library_work` when the
   value comes from the work record rather than this edition (the same book,
-  possibly another edition's cover or text). `sources.fields.synopsis` is
+  possibly another edition's cover or text); for `cover_url` also
+  `barnes_noble` or `amazon` ([Covers by ISBN](#covers-by-isbn)).
+  `sources.fields.synopsis` is
   `failed` when the synopsis is null because Open Library's work request
   failed and no other source had one; the rest of the answer stands.
 - The status is 200 when any source is `ok`, even if the other failed; 502
@@ -55,7 +59,9 @@ GET /api/lookup/:isbn
   preselects `ebook` for a scanned barcode, since the person is holding a
   printed book.
 - `cover_url` is the upstream image. Nothing is downloaded until a book or
-  edition is saved with it ([Cover downloads](#cover-downloads)).
+  edition is saved with it ([Cover downloads](#cover-downloads)). The page
+  credits a cover from Barnes & Noble or Amazon on its credit line ("…; cover
+  from Barnes & Noble").
 
 ## Sources
 
@@ -138,13 +144,26 @@ POST /api/lookup/:isbn/identify
   503 { error }   'Claude is not configured': no key is set
 ```
 
-It asks Claude only, never Open Library or Google again.
+It asks Claude, never Open Library or Google again; the Barnes & Noble and
+Amazon probes ([Covers by ISBN](#covers-by-isbn)) run beside the call.
 `sources.fields.<field>` is `anthropic` for every field the answer has, and
-`source_url` is the listing the fields were copied from.
+`source_url` is the listing the fields were copied from. The cover is a
+retailer's when a probe finds one, Barnes & Noble before Amazon, with
+`sources.fields.cover_url` `barnes_noble` or `amazon`; otherwise the opened
+page's own cover (`anthropic`), or null. Claude's answer is cached (below);
+the probes are asked at every call.
+
+**What it can open.** Search results carry snippets, not pages and never an
+image URL, so the step also has `web_fetch`. Barnes & Noble and Google
+Books pages open and carry the title, authors, publisher, date, binding and
+the publisher's description; AbeBooks opens too. Amazon, Goodreads and
+Bookshop.org refuse (`url_not_allowed`), and a URL that appeared in no
+search result is refused too (`url_not_in_prior_context`).
 
 **The request.** One request shape, sent at most three times per lookup:
-the web search tool (`web_search_20260209`, at most 5 searches) and a
-`report_book` tool, `tool_choice: auto`, `output_config: { effort: 'medium'
+the web search tool (`web_search_20260209`, at most 4 searches), the web
+fetch tool (`web_fetch_20260209`, at most 3 pages), and a `report_book`
+tool, `tool_choice: auto`, `output_config: { effort: 'medium'
 }`, `max_tokens` 8000. `report_book` is a tool whose input is the
 answer (not a strict one: strict tools share structured outputs' limits,
 which reject citations, and web search answers carry citations; `verdict()`
@@ -163,17 +182,18 @@ such turn fails the lookup. A turn cut off by `max_tokens` or ended by a
 `refusal` fails it without reading any partial call.
 
 **The prompt.** The system prompt in `anthropic.js` tells Claude to
-identify the exact edition: to search the ISBN-13 and its ISBN-10 as quoted
-strings; to use the best listing (the publisher's page, Amazon, Goodreads,
-Bookshop.org, Google Books, WorldCat, Barnes & Noble, the author's site);
-to accept only a listing that shows this ISBN-13 or its ISBN-10 and report
-that ISBN; to copy each field as the listing shows it: the authors as
-printed, in order, without roles, the date as `YYYY`, `YYYY-MM` or
-`YYYY-MM-DD`, the format from the binding, the publisher's description
-rather than its own summary, trimmed to about 1,500 characters, and the
-cover only as an image URL that appears on the listing; and to report
-`found: false` when no listing matches, never guessing from a similar
-title.
+identify the exact edition: to search the ISBN-13 once as a quoted string,
+then the ISBN-10 once; to open one listing with `web_fetch`, only at a URL
+from a search result, naming the sites above that open and those that do
+not (whose results serve only to confirm the ISBN); to accept only a
+listing that shows this ISBN-13 or its ISBN-10 and report that ISBN; to
+copy each field from the opened page (from the search results only when no
+listing of the ISBN could be opened): the authors as printed, in order,
+without roles, the date as `YYYY`, `YYYY-MM` or `YYYY-MM-DD`, the format
+from the binding, the publisher's description rather than its own summary,
+trimmed to about 1,500 characters, and the cover only as an image URL from
+the opened page (its `og:image`); and to report `found: false` when no
+listing matches, never guessing from a similar title.
 
 **What the server accepts.** The answer is checked whatever the model
 said (`verdict()`):
@@ -189,6 +209,12 @@ said (`verdict()`):
   must pass `allowedCoverUrl()` ([Security § Downloads](security.md#downloads)),
   which adds Amazon's and Goodreads' image hosts for these covers. Either
   becomes null otherwise.
+- An Amazon image URL (`m.media-amazon.com`, `images-na.ssl-images-amazon.com`
+  or any subdomain of `images-amazon.com`) loses its size modifier, the
+  `._<modifiers>_` part before the extension: `…/I/81abcXYZL._SY466_.jpg`
+  becomes `…/I/81abcXYZL.jpg`, for which the CDN serves the original image,
+  usually 1000 px or more on its long side (`largestCover()`). Other hosts'
+  URLs are kept as sent.
 
 **Cost.** Claude Opus 5.5 costs $4 per million input tokens and $20 per
 million output tokens, and each web search adds its own charge; a lookup
@@ -208,6 +234,85 @@ hand.", or the failure. A newer lookup, or leaving the page, drops the
 answer when it arrives. The person can type or look up another ISBN while
 Claude searches.
 
+### Finding a better cover
+
+A cover from a lookup can be small (Open Library's and Amazon's are about
+500 px tall, and for some books Google holds 300 px or only its 128 px
+thumbnail), so a book's page has a button that looks for a wider cover of
+that edition. It is never automatic and nothing is cached. It runs in two
+stages; only the second costs anything (one Claude search, a few cents).
+
+```
+POST /api/books/:id/cover/find      no body
+  200 { replaced, book, source, source_url, width, height }
+  404 { error }   'Book not found', or 'No cover found for this book'
+  409 { error }   the book's cover changed during the search
+  502 { error }   the search or the download failed; the message says why
+  503 { error }   'Claude is not configured': stage two is needed and no key is set
+```
+
+`createCoverFinder()` in `server/src/coverFinder.js` answers it:
+
+1. **What the search is given.** The ISBN of the edition whose cover the
+   book shows (the cover rule's order,
+   [Library § The cover rule](library.md#the-cover-rule)), else the ISBN of
+   any of its editions, else the book's title and author's name.
+2. **Stage one, free, by ISBN.** Barnes & Noble's, Amazon's and Open
+   Library's covers by ISBN ([Covers by ISBN](#covers-by-isbn); Open
+   Library's as `https://covers.openlibrary.org/b/isbn/<isbn13>-L.jpg`) are
+   downloaded at once through `saveCoverFromUrl()`, so each is stored as
+   every cover is and a source without the book (a 404, Amazon's or Open
+   Library's 1x1 GIF) gives nothing. The widest is kept when it is wider
+   than the current cover, with `source` `barnes_noble`, `amazon` or
+   `open_library` and `source_url` null; the others are deleted. It needs
+   no key. A book without an ISBN skips it.
+3. **Stage two, Claude**, only when stage one found nothing wider (or the
+   book has no ISBN), and only with a key, else 503. `findCover()` in
+   `anthropic.js` runs the same loop as a lookup (the same model, at most
+   three requests of 90 seconds, the same handling of `pause_turn`, the
+   nudge, `max_tokens` and a refusal) with `web_search` (at most 3
+   searches), `web_fetch` (at most 5 pages; [Claude](#claude) says which
+   sites open) and a `report_cover` tool: `found`, `cover_url`, `source_url`
+   and `isbn_on_listing`. The prompt says to search the ISBN once as a
+   quoted string (and the title and author once when that finds nothing,
+   or alone when no ISBN is given); to open a listing with `web_fetch`, only
+   at a URL from a search result, never Amazon, Goodreads or Bookshop.org,
+   which refuse; to report the page's `og:image` or main cover image exactly
+   as the page gives it; to accept a listing only when it shows the ISBN
+   given or, without one, the exact title and author; otherwise
+   `found: false`, never a similar edition's cover. Its answer has `source`
+   `claude` and the listing as `source_url`.
+4. **What the server accepts from Claude** (`coverVerdict()`). With an
+   ISBN, the listing's `isbn_on_listing` must be it or its ISBN-10.
+   `cover_url` must pass `allowedCoverUrl()` and loses an Amazon size
+   modifier, as for a lookup; a cover off the allow-list counts as not
+   found. `source_url` is kept only when it is https.
+5. **Wider or nothing.** Every candidate is measured with sharp and compared
+   with the width of the file the book shows now (no cover, or a missing
+   file, counts as 0). The widest candidate that is wider becomes the cover
+   of the slot the cover rule reads first (that edition when the book has
+   editions, else the book); the old file of that slot is discarded inside
+   the `withCoverFiles()` transaction, and the answer is `replaced: true`
+   with the whole book. When nothing is wider the answer is
+   `replaced: false` with the widest candidate's `source` and size; when
+   neither stage found any cover, 404. `width` and `height` are the found
+   image's as stored, at most 1600 px on its long side. Every downloaded
+   file but the one kept is deleted.
+6. **A book that changed meanwhile.** Stage two takes up to a few minutes.
+   When the book is deleted meanwhile the answer is 404; when its shown
+   cover or that slot changed (an upload, a new edition with a cover), 409.
+
+Concurrent presses for one book share one run. The answer is a 2xx on
+`/api/books`, so it publishes a `changed` event and every open page and the
+display fetch the new cover by themselves
+([Library § Live updates](library.md#live-updates)). In the page
+(`BookDetail.jsx`), **Find a better cover** sits with the book's buttons
+for every book, says "Asking Claude…" while it waits, and then shows "Cover
+replaced, from <source> (<width> × <height>)", the source named (Barnes &
+Noble, Amazon, Open Library) or, for Claude's find, the listing's host;
+"The current cover is already the largest found"; or the error as the
+server states it. The page shows the book the server returns.
+
 ## Limits and courtesy
 
 - **Rate.** Open Library allows 1 request a second, or 3 when the
@@ -223,7 +328,8 @@ Claude searches.
   `LOOKUP_CONTACT` is not an email address, and the admin page refuses one
   that is not.
 - **Failures.** Each request has an 8 second timeout and one retry on a
-  network error, a timeout or a 5xx; another 4xx is not retried. A 403 or
+  network error, a timeout or a 5xx; another 4xx is not retried. The cover
+  probes are not retried. A 403 or
   429 pauses that source for its `Retry-After` (at most an hour) or for a
   minute, and while it is paused a lookup reports it `failed` without
   sending anything.
@@ -231,19 +337,22 @@ Claude searches.
   500 entries), so scanning, saving and reopening a book costs one lookup. A
   miss, a failure, or a partial Open Library answer (its work request
   failed) is not kept, so the next lookup asks again. Concurrent lookups of
-  one ISBN share their requests. Claude's answers follow the same rules in
-  a cache of their own. A server restart empties both.
+  one ISBN share their requests. The cover probes' answer is kept the same
+  way, unless a probe went unanswered. Claude's answers follow the same
+  rules in a cache of their own. A server restart empties both.
 - **Credit.** A page that shows lookup data carries the line "Book data from
   Open Library", extended with "and Google Books" when `sources.google` is
   not `disabled`. A record from Claude is credited to its listing instead:
   "Book data from <host>, found by Claude", the host linking to
-  `source_url` (`client/src/components/LookupCredit.jsx`).
+  `source_url` (`client/src/components/LookupCredit.jsx`). A cover from
+  Barnes & Noble or Amazon adds "; cover from Barnes & Noble" (or Amazon)
+  to either line (`coverCredit()` in `client/src/lib/prefill.js`).
 
 ## Merging
 
 `merge()` in `server/src/lookup/merge.js` is a pure function of the two
-sources' answers. For each field the first non-empty value wins; "exact"
-means a Google volume carrying the ISBN.
+sources' answers and the cover probes'. For each field the first non-empty
+value wins; "exact" means a Google volume carrying the ISBN.
 
 | Field | 1st | 2nd | 3rd |
 |---|---|---|---|
@@ -253,7 +362,11 @@ means a Google volume carrying the ISBN.
 | `publisher` | Google exact `publisher` | Open Library edition `publishers[0]` | |
 | `published` | Google exact `publishedDate` | Open Library edition `publish_date` | |
 | `format` | Open Library edition `physical_format` | | |
-| `cover_url` | Open Library edition cover | Google exact `imageLinks.thumbnail` | Open Library work cover |
+| `cover_url` | Barnes & Noble by ISBN | Amazon by ISBN | Open Library edition cover, then Google exact `imageLinks.thumbnail`, then Open Library work cover |
+
+Amazon comes before Open Library's edition cover because it is the retail
+cover of that exact ISBN at the same 500 px, where an Open Library upload
+can be another printing.
 
 Normalisation:
 
@@ -275,8 +388,41 @@ Normalisation:
 - An Open Library cover is `https://covers.openlibrary.org/b/id/<id>-L.jpg`,
   built from a cover id, never from the ISBN: covers by id are not rate
   limited, covers by ISBN are (100 per 5 minutes). Ids of zero or below are
-  ignored. A Google thumbnail is used only from `books.google.com`, on https,
-  with `edge=curl` (a painted page curl) removed.
+  ignored. `-L` is the largest size Open Library serves.
+- A Google thumbnail is used only from `books.google.com`, on https, with
+  `edge=curl` (a painted page curl) removed and `fife=w1600` added. The
+  thumbnail URL's `zoom=1` alone gives a 128 px wide image; with `fife`
+  Google answers the largest cover it holds up to 1600 px wide (1600 or
+  300 px for most books), and for a volume without a cover the same
+  placeholder PNG as without it. For a volume Google holds page scans of,
+  `fife` answers the scanned front page instead, often a title page, as a
+  PNG; the download then falls back to the thumbnail
+  ([Cover downloads](#cover-downloads)). The by-id `imageLinks` sizes are
+  not used: they need the key and carry tokenized URLs.
+
+## Covers by ISBN
+
+Three cover images are addressed by the ISBN alone and need no key
+(`ISBN_COVERS` in `server/src/lookup/isbnCovers.js`):
+
+| Source | URL | What it answers |
+|---|---|---|
+| Barnes & Noble | `https://cdn.shopify.com/s/files/1/0674/5433/7265/files/<isbn13>_p0.jpg` | The largest where it exists (876x1356 for Locked In, 1574x2000 for Cruel King); 404, sometimes 502, for a book it lacks |
+| Amazon | `https://images-na.ssl-images-amazon.com/images/P/<isbn10>.01.LZZZZZZZ.jpg` | 500 px tall for nearly every ISBN; a 43-byte 1x1 GIF with status 200 for one it lacks; none for a 979 ISBN, which has no ISBN-10 |
+| Open Library | `https://covers.openlibrary.org/b/isbn/<isbn13>-L.jpg` | About 500 px, through a redirect to archive.org; a 1x1 GIF for a book it lacks; rate limited (100 per 5 minutes) |
+
+AbeBooks (`pictures.abebooks.com/isbn/<isbn13>-us.jpg`) answers the same
+image as Amazon and is not asked.
+
+During a lookup `probeIsbnCovers()` sends one `HEAD` request each to
+Barnes & Noble and Amazon, beside the catalogue requests and with the same
+8-second timeout. A hit is a 200 with an `image/` content type, and for
+Amazon a `Content-Length` above 1000. A probe that fails or times out is no
+hit and never fails the lookup. A probe answer is cached like a source's
+(below); one with a probe that went unanswered is asked again. The Claude
+identify step runs the same probes beside its call
+([Claude](#claude)). Open Library's cover by ISBN is used only by the
+book page's button ([Finding a better cover](#finding-a-better-cover)).
 
 ## Cover downloads
 
@@ -295,14 +441,24 @@ commit and points the row at the file in a second statement
   rejects for an upstream problem, so a caller treats `null` as "saved
   without the cover".
 - The URL comes from the client, so the download is bounded by the rules in
-  [Security § Downloads](security.md#downloads): https only, the sources'
-  image hosts only (Amazon's and Goodreads' included, for Claude's covers), at most three redirects each re-checked, 10 seconds, and
-  10 MB counted while streaming.
+  [Security § Downloads](security.md#downloads): https only, the cover
+  sources' image hosts only (Barnes & Noble's, Amazon's, AbeBooks' and
+  Goodreads' included), at most three redirects each re-checked, 10
+  seconds, and 10 MB counted while streaming.
 - The type comes from the magic bytes (`imageType()`), never from the URL or
   the `Content-Type`: an HTML error page behind a `.jpg` URL is refused.
+- A `books.google.com` URL with `fife` that answers a PNG other than the
+  placeholder has answered a scanned page, not the cover: the same URL
+  without `fife` is downloaded instead, the cover's thumbnail, within the
+  same 10 seconds (`googleThumbnailFor()`). Google's covers are JPEGs.
 - Google answers a volume without a cover with a 1269-byte "image not
   available" PNG rather than a 404; that exact image (SHA-256
-  `e3f8c414…eca12`) is refused.
+  `e3f8c414…eca12`) is refused, before it is decoded.
+- The image is then stored as an upload is: `prepareCover()` decodes it and
+  keeps a JPEG of at most 1600 px on its long side
+  ([Library § Cover files](library.md#cover-files)), so a large Amazon
+  original arrives at 1600 px and a 300 px Google image unchanged. An image
+  that does not decode is a failed download.
 - The file is written to a temp name inside `DATA_DIR/covers/` and renamed
   into place ([Security § Cover file names](security.md#cover-file-names)).
 
@@ -382,7 +538,10 @@ The lookup and download tests never touch the network.
 their `fetch`, clock and logger from the caller (a key or contact may be a
 value or a function read at each lookup), and
 `server/test/support/fixtures.js` answers each upstream URL from a file in
-`server/test/fixtures/lookup/`.
+`server/test/fixtures/lookup/`; its `fixtureFetch()` answers the cover
+probes' `HEAD` requests apart (404 unless a test says otherwise) and
+records them in `probes`. `createIdentify()` takes `probeCovers` the same
+way, so no test reaches Barnes & Noble or Amazon.
 
 - `openlibrary/` holds real answers, recorded and trimmed to the fields used.
   To record an ISBN, run on the dev machine, from the root of the checkout,
@@ -405,10 +564,15 @@ value or a function read at each lookup), and
   `google/placeholder.png` its real "image not available" image.
 - `server/test/fixtures/anthropic/` holds Messages API answers written by hand from the
   documented shape (each says so in `_source`; the book in them is
-  invented): a paused search, a `report_book` call, a turn without one,
-  `found: false`, a refusal, a cut-off call and a 401.
+  invented): a paused search, a `report_book` call, the same after a
+  refused fetch of Amazon and a fetch of the Barnes & Noble listing, a turn
+  without the call, `found: false`, a refusal, a cut-off call and a 401,
+  and for the cover search a `report_cover` call and its `found: false`.
   `server/test/anthropic.test.js` replays them through the client's
-  injected `fetch` and checks each request it sends.
+  injected `fetch` and checks each request it sends;
+  `server/test/coverFinder.test.js` replays them behind
+  `POST /api/books/:id/cover/find`, with the image host's answers built
+  with sharp.
 - `client/test/BarcodeScanner.test.jsx` mounts the scanner under StrictMode
   with a fake `getUserMedia` whose streams the test releases, so a stream that
   arrives after cleanup is covered.

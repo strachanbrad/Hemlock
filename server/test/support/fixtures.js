@@ -54,9 +54,15 @@ export const json = (body, status = 200, headers = {}) =>
 
 // Answers from the fixture files, 404 for a URL without one, unless `answer(url, init)` returns a
 // Response first (or throws, as a network error does). Records every call with the clock's time.
-export function fixtureFetch({ answer = () => undefined, now = () => 0 } = {}) {
+// The cover probes' HEAD requests go to `probe(url, init)` (404 by default) and are recorded apart.
+export function fixtureFetch({ answer = () => undefined, now = () => 0, probe = () => new Response(null, { status: 404 }) } = {}) {
   const calls = []
+  const probes = []
   async function fetch(url, init = {}) {
+    if (init.method === 'HEAD') {
+      probes.push({ url: String(url), init, at: now() })
+      return probe(String(url), init)
+    }
     calls.push({ url: String(url), init, at: now() })
     const special = await answer(String(url), init)
     if (special) return special
@@ -66,7 +72,7 @@ export function fixtureFetch({ answer = () => undefined, now = () => 0 } = {}) {
     if (name.endsWith('.txt')) return new Response(fs.readFileSync(path.join(fixturesDir, name), 'utf8'), { headers: { 'content-type': 'application/javascript; charset=ISO-8859-1' } })
     return json(readFixture(name))
   }
-  return { fetch, calls }
+  return { fetch, calls, probes }
 }
 
 // A clock whose sleep returns at once and moves time forward, for tests that need no real waiting.

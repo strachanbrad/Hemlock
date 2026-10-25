@@ -76,7 +76,7 @@ describe('cover_from_url', () => {
   it('refuses a URL off the allow-list without a request and stores nothing', async () => {
     for (const url of ['https://example.com/cover.jpg', 'https://covers.openlibrary.org.evil.test/x.jpg', 'http://covers.openlibrary.org/b/id/1-L.jpg', 'https://127.0.0.1/x.jpg']) {
       const { status, body } = await api.post('/api/books', { title: 'Shirley', author_id: 1, edition: { format: 'paperback', cover_from_url: url } })
-      assert.deepEqual({ status, body }, { status: 400, body: { error: 'cover_from_url must be an https URL from Open Library, archive.org, Google Books, Amazon or Goodreads' } }, url)
+      assert.deepEqual({ status, body }, { status: 400, body: { error: 'cover_from_url must be an https URL from Open Library, archive.org, Google Books, Barnes & Noble, Amazon, AbeBooks or Goodreads' } }, url)
       assert.equal((await api.post('/api/books/1/editions', { format: 'hardcover', cover_from_url: url })).status, 400, url)
     }
     assert.deepEqual(requests, [])

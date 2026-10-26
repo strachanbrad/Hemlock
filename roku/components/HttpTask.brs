@@ -1,9 +1,10 @@
 ' Copyright (c) 2023 Hemlock
 ' SPDX-License-Identifier: GPL-3.0-only
 
-' Every request of the channel runs on this one thread: the long poll on GET /api/changes, and each
-' { id, method, url, body } set on `request`, answered on `response` as { id, code, body, reason }.
-' `changed` counts up whenever the library may have changed.
+' Every request of the channel runs on this one thread: the long poll on GET /api/changes while `polling` is on,
+' and each { id, method, url, body, auth } set on `request`, answered on `response` as { id, code, body, reason }.
+' `changed` counts up whenever the library may have changed, `unauthorized` when the long poll answers 401.
+' Requests carry the device token unless `auth` is false; the token is never logged.
 
 sub init()
     m.top.functionName = "serve"
@@ -13,9 +14,12 @@ sub serve()
     m.port = CreateObject("roMessagePort")
     m.top.ObserveField("request", m.port)
     m.top.ObserveField("base", m.port)
+    m.top.ObserveField("token", m.port)
+    m.top.ObserveField("polling", m.port)
     m.versionPattern = CreateObject("roRegex", Chr(34) + "version" + Chr(34) + "\s*:\s*(-?\d+)", "")
     m.transfers = {}
     m.changes = 0
+    m.refusals = 0
     m.poll = invalid
     restartPoll()
     m.top.ready = true
@@ -25,7 +29,7 @@ sub serve()
         if kind = "roSGNodeEvent"
             if msg.GetField() = "request"
                 startRequest(msg.GetData())
-            else if msg.GetField() = "base"
+            else
                 restartPoll()
             end if
         else if kind = "roUrlEvent"
@@ -39,6 +43,8 @@ sub restartPoll()
     if m.poll <> invalid then m.poll.xfer.AsyncCancel()
     m.poll = invalid
     m.base = m.top.base
+    m.token = m.top.token
+    m.polling = m.top.polling
     m.version = ""
     m.fallback = false
     m.pollAt = 0#
@@ -47,7 +53,7 @@ end sub
 sub checkTimers()
     t = nowMs()
     if m.poll = invalid
-        if m.base <> "" and t >= m.pollAt then startPoll(t)
+        if m.polling and m.base <> "" and t >= m.pollAt then startPoll(t)
     else if t - m.poll.startedAt > 40000
         ' The server answers within 30 seconds; a longer hold is a dead connection.
         m.poll.xfer.AsyncCancel()
@@ -75,7 +81,7 @@ sub startPoll(t as Double)
     end if
     url = m.base + "/api/changes?wait=25"
     if m.version <> "" then url = m.base + "/api/changes?since=" + m.version + "&wait=25"
-    xfer = newTransfer(url)
+    xfer = newTransfer(url, true)
     if xfer.AsyncGetToString()
         m.poll = { xfer: xfer, identity: xfer.GetIdentity(), startedAt: t }
     else
@@ -104,6 +110,11 @@ sub onPoll(code as Integer, body as String, startedAt as Double)
     else if code = 404
         m.fallback = true
         m.pollAt = t + 60000
+    else if code = 401
+        ' The TV is not paired, or was removed on the admin page; the scene pairs it again.
+        m.polling = false
+        m.refusals = m.refusals + 1
+        m.top.unauthorized = m.refusals
     else
         m.pollAt = t + 5000
     end if
@@ -115,7 +126,11 @@ sub signalChange()
 end sub
 
 sub startRequest(request as Object)
-    xfer = newTransfer(request.url)
+    auth = true
+    if type(request.auth) = "Boolean" or type(request.auth) = "roBoolean"
+        if not request.auth then auth = false
+    end if
+    xfer = newTransfer(request.url, auth)
     started = false
     if request.method = "GET"
         started = xfer.AsyncGetToString()
@@ -152,13 +167,14 @@ sub respond(id as String, code as Integer, body as String, reason as String)
 end sub
 
 ' The transfer must stay referenced until its event arrives, or it is cancelled.
-function newTransfer(url as String) as Object
+function newTransfer(url as String, auth as Boolean) as Object
     xfer = CreateObject("roUrlTransfer")
     xfer.SetMessagePort(m.port)
     xfer.SetUrl(url)
     xfer.RetainBodyOnError(true)
     xfer.EnableEncodings(true)
     xfer.AddHeader("Accept", "application/json")
+    if auth and m.token <> "" then xfer.AddHeader("Authorization", "Bearer " + m.token)
     if LCase(Left(url, 6)) = "https:"
         xfer.SetCertificatesFile("common:/certs/ca-bundle.crt")
         xfer.InitClientCertificates()

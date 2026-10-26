@@ -6,6 +6,9 @@ SPDX-License-Identifier: GPL-3.0-only
 <component name="HttpTask" extends="Task">
   <interface>
     <field id="base" type="string" />
+    <field id="token" type="string" />
+    <field id="polling" type="boolean" />
+    <field id="unauthorized" type="integer" alwaysNotify="true" />
     <field id="request" type="assocarray" alwaysNotify="true" />
     <field id="response" type="assocarray" alwaysNotify="true" />
     <field id="changed" type="integer" alwaysNotify="true" />

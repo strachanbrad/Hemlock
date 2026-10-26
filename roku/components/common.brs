@@ -40,3 +40,9 @@ function parseBody(body as String) as Dynamic
     if first <> "{" and first <> "[" then return invalid
     return ParseJson(body)
 end function
+
+' A text field of a parsed JSON object, or "" when the body is not an object or the field is not text.
+function textIn(body as Dynamic, name as String) as String
+    if type(body) <> "roAssociativeArray" then return ""
+    return textOf(body[name])
+end function

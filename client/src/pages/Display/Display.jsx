@@ -4,7 +4,9 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router'
 import { fetchDisplayBooks } from '../../api/display.js'
+import { session } from '../../api/session.js'
 import config from '../../config/config.json'
 import { Umbel } from '../../images/ornaments/index.js'
 import { useChanges } from '../../lib/useChanges.js'
@@ -100,7 +102,23 @@ function Slide({ book, current, ratings, effects }) {
   )
 }
 
-export default function Display() {
+const Caption = () => (
+  <p className="display-caption">
+    <Umbel className="display-caption-umbel" aria-hidden="true" />
+    {config.website.title}
+  </p>
+)
+
+const SignInNeeded = () => (
+  <div className="display">
+    <div className="display-stage">
+      <Link className="display-signin" to="/login?next=/display">Sign in to show the library</Link>
+      <Caption />
+    </div>
+  </div>
+)
+
+function Slideshow({ onSignedOut }) {
   const [options] = useState(() => readOptions(window.location.search))
   const [show] = useState(() => createShow(options.seconds * 1000, Date.now()))
   const [view, setView] = useState({ books: [], index: -1, paused: false, previous: null })
@@ -145,8 +163,9 @@ export default function Display() {
         present(t)
         setStatus('ready')
         if (!live) timer = setTimeout(load, REFRESH_MS)
-      } catch {
+      } catch (err) {
         if (controller.signal.aborted) return
+        if (err.status === 401) return onSignedOut()
         setStatus((current) => (current === 'ready' ? current : 'failed'))
         timer = setTimeout(load, RETRY_MS)
       }
@@ -156,7 +175,7 @@ export default function Display() {
       controller.abort()
       clearTimeout(timer)
     }
-  }, [options.filter, show, present, live, changes])
+  }, [options.filter, show, present, live, changes, onSignedOut])
 
   useEffect(() => {
     const onKey = (event) => {
@@ -261,10 +280,7 @@ export default function Display() {
         ))}
         {message && <p className="display-message">{message}</p>}
         {view.paused && <p className="display-paused">Paused</p>}
-        <p className="display-caption">
-          <Umbel className="display-caption-umbel" aria-hidden="true" />
-          {config.website.title}
-        </p>
+        <Caption />
       </div>
       {canFullscreen && (
         <button
@@ -280,4 +296,24 @@ export default function Display() {
       )}
     </div>
   )
+}
+
+// The slideshow, its event stream included, runs only once the session check says this browser is
+// signed in; an unreachable server lets it start, and it shows its own retry notice.
+export default function Display() {
+  const [signedIn, setSignedIn] = useState(null)
+  const signedOut = useCallback(() => setSignedIn(false), [])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    session({ signal: controller.signal }).then(
+      (found) => controller.signal.aborted || setSignedIn(found !== null),
+      () => controller.signal.aborted || setSignedIn(true),
+    )
+    return () => controller.abort()
+  }, [])
+
+  if (signedIn === null) return <div className="display" />
+  if (!signedIn) return <SignInNeeded />
+  return <Slideshow onSignedOut={signedOut} />
 }

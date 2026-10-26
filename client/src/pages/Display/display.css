@@ -363,6 +363,27 @@
   color: var(--muted, #b8a9a0);
 }
 
+.display-signin {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: calc(0.6 * var(--u)) calc(1.2 * var(--u));
+  color: var(--brass, #c9a86a);
+  font-family: var(--font-display, Garamond, serif);
+  font-size: calc(3 * var(--u));
+  font-style: italic;
+  white-space: nowrap;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+.display-signin:hover,
+.display-signin:focus-visible {
+  color: var(--brass-light, #dcc08a);
+}
+
 .display-paused {
   position: absolute;
   top: calc(1.2 * var(--u));

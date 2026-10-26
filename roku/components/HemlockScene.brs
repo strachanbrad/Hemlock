@@ -21,12 +21,16 @@ sub init()
     m.panel = m.top.FindNode("ratingsPanel")
     m.settingsDialog = m.top.FindNode("settings")
     m.settingsDialog.ObserveField("result", "onSettingsClosed")
+    m.pairing = m.top.FindNode("pairing")
+    m.pairTimer = m.top.FindNode("pairTimer")
+    m.pairTimer.ObserveField("fire", "onPairTimer")
     layoutCaption()
 
     m.http = m.top.FindNode("http")
     m.http.ObserveField("response", "onResponse")
     m.http.ObserveField("changed", "onChanged")
     m.http.ObserveField("ready", "onHttpReady")
+    m.http.ObserveField("unauthorized", "onUnauthorized")
     m.outbox = []
     m.tick = m.top.FindNode("tick")
     m.tick.ObserveField("fire", "onTick")
@@ -46,13 +50,22 @@ sub init()
     m.deferred = invalid
     m.status = "loading"
     m.show = createShow(m.settings.seconds * 1000#, nowMs())
+    m.mode = ""
+    m.pairRequest = ""
+    m.pairStep = ""
+    m.pollHandle = ""
+    m.token = m.registry.Read("device_token")
 
     setBase()
     m.http.control = "run"
     m.tick.control = "start"
-    loadBooks()
     m.top.SetFocus(true)
     note("started with " + FormatJson(m.settings))
+    if m.token = ""
+        startPairing("no device token")
+    else
+        startShow()
+    end if
 end sub
 
 sub note(text as String)
@@ -111,6 +124,18 @@ sub onSettingsClosed(event as Object)
     m.settings = { base: values.base, filter: values.filter, seconds: values.seconds }
     saveSettings()
     note("settings closed with " + FormatJson(m.settings))
+    if values.unpair = true
+        startPairing("unpaired on the TV")
+        return
+    end if
+    if m.mode = "pairing"
+        if m.settings.base <> previous.base
+            setBase()
+            m.pairing.address = m.settings.base
+            requestCode()
+        end if
+        return
+    end if
 
     if m.settings.seconds <> previous.seconds
         index = currentIndex(m.show, t)
@@ -133,12 +158,140 @@ sub onSettingsClosed(event as Object)
     end if
 end sub
 
+' ── pairing ───────────────────────────────────────────────
+
+' Without a device token the channel shows the pairing screen and asks Hemlock for a code; once the code is
+' typed on the admin page, the next poll answers the token once. A 401 from Hemlock forgets the token and
+' starts over. The token is kept in the registry and never logged.
+sub startPairing(reason as String)
+    note("pairing: " + reason)
+    m.mode = "pairing"
+    m.token = ""
+    m.registry.Delete("device_token")
+    m.registry.Flush()
+    m.http.polling = false
+    m.http.token = ""
+    m.retry.control = "stop"
+    m.listRequest = ""
+    m.listAgain = false
+    m.saves = []
+    m.saving = invalid
+    m.pending = {}
+    m.confirmed = {}
+    m.deferred = invalid
+    setHighlight("")
+    m.show = createShow(m.settings.seconds * 1000#, nowMs())
+    present(nowMs())
+    m.slideGroup.visible = false
+    m.message.visible = false
+    m.notice.visible = false
+    m.pairing.address = m.settings.base
+    m.pairing.visible = true
+    requestCode()
+end sub
+
+sub requestCode()
+    m.pairTimer.control = "stop"
+    m.pollHandle = ""
+    m.pairing.code = ""
+    m.pairing.status = "Asking Hemlock for a code."
+    m.pairStep = "code"
+    m.pairRequest = send("POST", m.settings.base + "/api/devices/pair", "{}", false)
+end sub
+
+sub pollPairing()
+    m.pairStep = "poll"
+    m.pairRequest = send("GET", m.settings.base + "/api/devices/pair/" + m.pollHandle, "", false)
+end sub
+
+sub waitThenRetry(seconds as Integer, nextStep as String)
+    m.pairStep = nextStep
+    m.pairTimer.control = "stop"
+    m.pairTimer.duration = seconds
+    m.pairTimer.control = "start"
+end sub
+
+sub onPairTimer()
+    if m.mode <> "pairing" then return
+    if m.pairStep = "poll" and m.pollHandle <> ""
+        pollPairing()
+    else
+        requestCode()
+    end if
+end sub
+
+sub onPairResponse(response as Object)
+    m.pairRequest = ""
+    code = response.code
+    body = parseBody(response.body)
+    if m.pairStep = "code"
+        if (code = 200 or code = 201) and textIn(body, "code") <> "" and textIn(body, "poll") <> ""
+            m.pollHandle = textIn(body, "poll")
+            m.pairing.code = textIn(body, "code")
+            m.pairing.status = "Waiting for the code to be typed."
+            note("pairing code shown")
+            waitThenRetry(3, "poll")
+        else if code = 404
+            ' A Hemlock without sign-in has no pairing and answers without a token.
+            note("this Hemlock has no pairing")
+            startShow()
+        else
+            pairingTrouble(response, "code")
+        end if
+        return
+    end if
+    if code = 204
+        waitThenRetry(3, "poll")
+    else if code = 200 and textIn(body, "token") <> ""
+        m.token = textIn(body, "token")
+        m.registry.Write("device_token", m.token)
+        m.registry.Flush()
+        note("paired")
+        startShow()
+    else if code = 410
+        note("pairing code expired")
+        requestCode()
+    else
+        pairingTrouble(response, "poll")
+    end if
+end sub
+
+sub pairingTrouble(response as Object, nextStep as String)
+    note("pairing " + m.pairStep + " failed: " + failureOf(response))
+    if response.code = 429 or response.code = 503
+        m.pairing.status = "Hemlock is busy. Trying again in a minute."
+        waitThenRetry(60, nextStep)
+    else if response.code <= 0
+        m.pairing.status = "Can't reach Hemlock. Trying again in 30 seconds."
+        waitThenRetry(30, nextStep)
+    else
+        m.pairing.status = "Hemlock answered: " + failureOf(response) + ". Trying again in 30 seconds."
+        waitThenRetry(30, nextStep)
+    end if
+end sub
+
+sub startShow()
+    m.mode = "show"
+    m.pairTimer.control = "stop"
+    m.pairing.visible = false
+    m.http.token = m.token
+    m.http.polling = true
+    m.status = "loading"
+    m.show = createShow(m.settings.seconds * 1000#, nowMs())
+    m.slideGroup.visible = true
+    loadBooks()
+end sub
+
+sub onUnauthorized()
+    if m.mode = "show" then startPairing("the long poll answered 401")
+end sub
+
 ' ── the list ──────────────────────────────────────────────
 
-function send(method as String, url as String, body as String) as String
+function send(method as String, url as String, body as String, auth as Boolean) as String
     m.requests = m.requests + 1
     id = "r" + m.requests.ToStr()
-    request = { id: id, method: method, url: url, body: body }
+    request = { id: id, method: method, url: url, body: body, auth: auth }
     if m.http.ready
         m.http.request = request
     else
@@ -155,24 +308,36 @@ sub onHttpReady()
 end sub
 
 sub loadBooks()
+    if m.mode <> "show" then return
     if m.listRequest <> ""
         m.listAgain = true
         return
     end if
     m.retry.control = "stop"
-    m.listRequest = send("GET", m.settings.base + "/api/display?filter=" + m.settings.filter, "")
+    m.listRequest = send("GET", m.settings.base + "/api/display?filter=" + m.settings.filter, "", true)
 end sub
 
 sub onChanged()
+    if m.mode <> "show" then return
     note("library changed")
     loadBooks()
 end sub
 
 sub onResponse(event as Object)
     response = event.GetData()
-    if response.id = m.listRequest
+    if m.mode = "pairing"
+        if response.id = m.pairRequest then onPairResponse(response)
+        return
+    end if
+    isList = response.id = m.listRequest
+    isSave = m.saving <> invalid and response.id = m.saving.request
+    if response.code = 401 and (isList or isSave)
+        startPairing("Hemlock answered 401")
+        return
+    end if
+    if isList
         onBooks(response)
-    else if m.saving <> invalid and response.id = m.saving.request
+    else if isSave
         onSaved(response)
     end if
 end sub
@@ -228,8 +393,8 @@ end sub
 
 function failureOf(response as Object) as String
     if response.code <= 0 then return "can't reach Hemlock"
-    body = parseBody(response.body)
-    if type(body) = "roAssociativeArray" and textOf(body.error) <> "" then return body.error
+    message = textIn(parseBody(response.body), "error")
+    if message <> "" then return message
     return "HTTP " + response.code.ToStr()
 end function
 
@@ -316,6 +481,11 @@ end sub
 function onKeyEvent(key as String, press as Boolean) as Boolean
     if m.settingsDialog.visible then return true
     if not press then return false
+    if m.mode = "pairing"
+        if key = "back" then return false
+        if key = "options" then openSettings()
+        return true
+    end if
     t = nowMs()
     if key = "play"
         togglePlay(t)
@@ -438,7 +608,7 @@ sub sendSave()
     m.saving = invalid
     if m.saves.Count() = 0 then return
     save = m.saves.Shift()
-    save.request = send("PATCH", m.settings.base + "/api/books/" + save.key, save.body)
+    save.request = send("PATCH", m.settings.base + "/api/books/" + save.key, save.body, true)
     m.saving = save
 end sub
 

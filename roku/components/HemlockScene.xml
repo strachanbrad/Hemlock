@@ -14,6 +14,7 @@ SPDX-License-Identifier: GPL-3.0-only
       <Slide id="slideB" />
       <Slide id="slideC" />
     </Group>
+    <PairingScreen id="pairing" visible="false" />
     <!-- Over the lower text column, never the cover, and clear of the caption below it. -->
     <RatingsPanel id="ratingsPanel" translation="[816, 680]" visible="false" />
     <Label id="message" width="1920" height="1080" horizAlign="center" vertAlign="center" wrap="true" color="0xB8A9A0FF" visible="false">
@@ -45,5 +46,6 @@ SPDX-License-Identifier: GPL-3.0-only
     <Timer id="tick" duration="0.5" repeat="true" />
     <Timer id="retry" duration="30" />
     <Timer id="noticeTimer" duration="3" />
+    <Timer id="pairTimer" duration="3" />
   </children>
 </component>

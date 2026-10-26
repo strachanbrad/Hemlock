@@ -9,11 +9,12 @@ sub init()
         "OK changes the address. Back saves and closes.",
         "Left and Right choose which books show. Back saves and closes.",
         "Left and Right change the seconds per book. Back saves and closes.",
+        "OK twice forgets this TV's pairing and shows a new code.",
     ]
     m.hint = m.top.FindNode("hint")
     m.rows = []
     rows = m.top.FindNode("rows")
-    labels = ["HEMLOCK ADDRESS", "BOOKS", "SECONDS PER BOOK"]
+    labels = ["HEMLOCK ADDRESS", "BOOKS", "SECONDS PER BOOK", "PAIRING"]
     for i = 0 to labels.Count() - 1
         row = rows.CreateChild("Group")
         row.translation = [0, i * 100]
@@ -38,6 +39,7 @@ sub init()
         m.rows.Push({ wash: wash, bar: bar, value: value })
     end for
     m.focus = 0
+    m.confirmUnpair = false
     m.dialog = invalid
 end sub
 
@@ -50,6 +52,8 @@ end function
 
 sub onValues()
     m.values = m.top.values
+    m.values.unpair = false
+    m.confirmUnpair = false
     m.focus = 0
     render()
 end sub
@@ -58,6 +62,8 @@ sub render()
     m.rows[0].value.text = m.values.base
     m.rows[1].value.text = m.filterNames[m.values.filter]
     m.rows[2].value.text = m.values.seconds.ToStr()
+    m.rows[3].value.text = "Unpair this TV"
+    if m.confirmUnpair then m.rows[3].value.text = "Press OK again to unpair this TV"
     for i = 0 to m.rows.Count() - 1
         m.rows[i].wash.visible = i = m.focus
         m.rows[i].bar.visible = i = m.focus
@@ -67,12 +73,20 @@ end sub
 
 function onKeyEvent(key as String, press as Boolean) as Boolean
     if not press then return true
+    if key <> "OK" then m.confirmUnpair = false
     if key = "up" and m.focus > 0
         m.focus = m.focus - 1
     else if key = "down" and m.focus < m.rows.Count() - 1
         m.focus = m.focus + 1
     else if key = "OK" and m.focus = 0
         editAddress()
+    else if key = "OK" and m.focus = 3
+        if m.confirmUnpair
+            m.values.unpair = true
+            m.top.result = m.values
+            return true
+        end if
+        m.confirmUnpair = true
     else if key = "left" or key = "right"
         delta = 1
         if key = "left" then delta = -1

@@ -23,6 +23,7 @@
     "db:reset": "node server/scripts/reset.js",
     "lookup:record": "node server/scripts/lookup-record.js",
     "admin:password": "node server/scripts/admin-password.js",
+    "user:add": "node server/scripts/user-add.js",
     "roku:build": "node roku/scripts/build.js",
     "roku:install": "node roku/scripts/install.js",
     "roku:check": "bsc --project roku/bsconfig.json"

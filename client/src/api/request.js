@@ -20,6 +20,26 @@ function parseJson(text) {
   }
 }
 
+// A 401 is these routes' own answer; from any other request it means the session has ended.
+const answersSignIn = (url) => url === '/api/login' || url === '/api/session' || url.startsWith('/api/admin/')
+let signedOut = null
+
+// The shell's handler, called once for the first 401 after it is set, so a burst of failing
+// requests sends the visitor to the login page once. Answers the function that removes it.
+export function onSignedOut(handler) {
+  signedOut = handler
+  return () => {
+    if (signedOut === handler) signedOut = null
+  }
+}
+
+export function noteStatus(url, status) {
+  if (status !== 401 || answersSignIn(url) || !signedOut) return
+  const handler = signedOut
+  signedOut = null
+  handler()
+}
+
 export async function errorMessage(response, fallback) {
   const text = await response.text().catch(() => '')
   const error = parseJson(text)?.error
@@ -46,6 +66,7 @@ export async function request(url, { method = 'GET', json, form, signal } = {}) 
 
   const response = await fetch(url, init)
   if (!response.ok) {
+    noteStatus(url, response.status)
     const body = parseJson(await response.text().catch(() => ''))
     let message = typeof body?.error === 'string' && body.error ? body.error : `The request failed (HTTP ${response.status})`
     if (response.status === 413 && !body) message = 'The cover is larger than 10 MB'

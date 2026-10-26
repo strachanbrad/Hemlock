@@ -8,6 +8,7 @@ import { createSessions } from './auth.js'
 import { config, userAgent } from './config.js'
 import { createCoverFinder } from './coverFinder.js'
 import { coversDir, saveCoverFromUrl } from './covers.js'
+import { createDevices } from './devices.js'
 import { errorHandler } from './errors.js'
 import { createEvents } from './events.js'
 import { DEFAULT_MODEL, createAnthropic } from './lookup/anthropic.js'
@@ -17,15 +18,20 @@ import adminRoutes from './routes/admin.js'
 import authorRoutes from './routes/authors.js'
 import bookRoutes from './routes/books.js'
 import displayRoutes from './routes/display.js'
+import deviceRoutes from './routes/devices.js'
 import editionRoutes from './routes/editions.js'
 import healthRoutes from './routes/health.js'
 import lookupRoutes from './routes/lookup.js'
+import sessionRoutes, { signInGuard } from './routes/session.js'
 import { createSettings } from './settings.js'
+import { createUsers } from './users.js'
 
 const WRITES = new Set(['POST', 'PATCH', 'PUT', 'DELETE'])
 
 // Every consumer reads its key, contact and model from `settings` at request time.
 export function createApp({ db, settings = createSettings(db), lookup, identify, probes, saveCover, findCover, events = createEvents(), secure = config.production, now = Date.now }) {
+  const users = createUsers(db, { now })
+  const devices = createDevices(db, { now })
   const setting = (name) => () => settings.get(name)
   const agent = () => userAgent(config.version, settings.get('lookup_contact'))
   lookup ??= createLookup({ googleKey: setting('google_books_api_key'), contact: setting('lookup_contact'), anthropicKey: setting('anthropic_api_key') })
@@ -39,6 +45,7 @@ export function createApp({ db, settings = createSettings(db), lookup, identify,
 
   const app = express()
   app.disable('x-powered-by')
+  app.use('/api', signInGuard({ users, devices, secure }))
   app.use(express.json())
 
   // A library write that succeeded tells every open page; a refused one changed nothing.
@@ -55,7 +62,9 @@ export function createApp({ db, settings = createSettings(db), lookup, identify,
 
   app.use(
     '/api',
-    adminRoutes({ db, settings, sessions: createSessions(db, { now }), probes, secure, now }),
+    sessionRoutes({ users, secure, now }),
+    deviceRoutes(devices),
+    adminRoutes({ db, settings, sessions: createSessions(db, { now }), users, devices, probes, secure, now }),
     healthRoutes(db),
     lookupRoutes(lookup, identify),
     authorRoutes(db),

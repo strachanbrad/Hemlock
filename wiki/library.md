@@ -110,6 +110,10 @@ is harmless.
 ## The API
 
 JSON in and out; lists are arrays. Every route is in `server/src/routes/`.
+Every route but the health check, the login, the logout and the TV pairing
+needs a signed-in user's `hemlock_session` cookie or a paired TV's
+`Authorization: Bearer` token, and answers 401 `{ error: 'Sign in' }`
+without one ([Security § Sessions](security.md#sessions)).
 
 | Request | Answer |
 |---|---|
@@ -125,7 +129,11 @@ JSON in and out; lists are arrays. Every route is in `server/src/routes/`.
 | `GET /api/authors` | 200, `[{ id, name, book_count }]` ordered by name |
 | `PATCH /api/authors/:id` | 200, `{ id, name, book_count }` |
 | `DELETE /api/authors/:id` | 204 |
-| `GET /api/health` | 200, `{ ok: true, version, schema }` |
+| `GET /api/health` | 200, `{ ok: true, version, schema }`, without a session |
+| `POST /api/login { name, password }` | 200, `{ name }` and the session cookie; 401, 429, 503 ([Security § Sessions](security.md#sessions)) |
+| `POST /api/logout` | 204; the session ends and the cookie is cleared |
+| `GET /api/session` | 200, `{ name }`; 401 without a user's session |
+| `POST /api/devices/pair`, `GET /api/devices/pair/<poll>` | A TV's pairing, without a session ([Admin § Televisions](admin.md#televisions)) |
 | `GET /api/events` | 200, an event stream that stays open ([Live updates](#live-updates)); 503 `{ error }` past 50 open streams and polls |
 | `GET /api/changes?since=&wait=` | 200, `{ version }`, at once or after a hold of up to `wait` seconds ([Live updates](#live-updates)); 503 `{ error }` past 50 open streams and polls |
 
@@ -203,6 +211,7 @@ server log only ([Security](security.md#error-bodies)).
 | Status | When |
 |---|---|
 | 400 | Invalid input; a constraint the validator missed. |
+| 401 | No session and no paired TV's token: `{ "error": "Sign in" }`. |
 | 404 | An unknown or malformed id. |
 | 409 | A conflict, with the existing record: `{ error, conflict: { book_id } }` for a title the author already has; `{ error, conflict: { book_id, edition_id } }` for an ISBN already in the library, or a second edition of one format without an ISBN; `{ error, conflict: { author_id } }` for an author name in use; `{ error, conflict: { book_count } }` for deleting an author who has books. |
 | 413 | A cover over 10 MB (nginx answers its own 413 with an HTML body). |
@@ -280,8 +289,8 @@ reconnecting, the 300 ms window), `useLibrary.test.jsx`, `fieldSaves.test.js`,
 ## The pages
 
 The client asks the server only through `client/src/api/books.js`,
-`editions.js` and `authors.js`, over `request.js`, which never assumes an
-error body is JSON, and hears of changes through `events.js`. A phone is
+`editions.js`, `authors.js` and `session.js`, over `request.js`, which never
+assumes an error body is JSON, and hears of changes through `events.js`. A phone is
 below 768px: `useIsPhone()` in `client/src/lib/viewport.js` reads
 `matchMedia('(max-width: 767.98px)')` through `useSyncExternalStore`, so the
 first render already has the right layout. Styles are in `client/src/styles/`; the palette, fonts, ornaments and
@@ -292,11 +301,38 @@ the rules for a new page are in [Theme](theme.md).
 `client/src/App.jsx`. The header carries the wordmark, the logo and "The
 Hemlock". On a desktop, a sider with Library, Wishlist, Add book, Authors,
 and Display (opens `/display` in a new tab); the current item has a brass bar
-and a small umbel. On a phone, a 56px header and a fixed bottom tab bar of
-Library, Wishlist, Add and Authors; Display is not on it. Content padding is
+and a small umbel. Below a divider, the signed-in user's name over Sign
+out. On a phone, a 56px header and a fixed bottom tab bar of Library,
+Wishlist, Add, Authors and Sign out; Display is not on it. Content padding is
 24px, 16px on a phone. `/` goes to `/library`. Every page title is a
 `PageHeading` (`components/Headings.jsx`), with the count of what it lists
 beside it on Library, Wishlist and Authors.
+
+### Signing in
+
+The shell (`Shell` in `client/src/App.jsx`) asks `GET /api/session` once
+when it loads and shows nothing until the answer comes. Signed out, it goes
+to `/login?next=<the page asked for>`; signed in, it shows the pages. A
+server that cannot be reached is not a signed-out visitor: the shell shows,
+and the page says what failed.
+
+`/login` (`client/src/pages/Login/`) is outside the shell's chrome: a card
+with the logo, "Hemlock" and the rule, a Name field
+(`autoComplete="username"`), a Password field
+(`autoComplete="current-password"`) and Sign in. A wrong name or password,
+the lockout and "No user exists yet" show under the password field as the
+server words them ([Security § Sessions](security.md#sessions)). After a
+sign-in it goes to `next` when that is a path on this site (`nextPath()`:
+not `//host`, not another origin, not `/login` itself), and to `/library`
+otherwise.
+
+A 401 from any later request (the session expired, or was ended on
+`/admin`) sends the visitor to `/login?next=<this page>`. `request.js`
+calls the shell's handler (`onSignedOut()`) for the first 401 only, so a
+burst of failing requests navigates once; the lookups in `lookup.js` report
+theirs through `noteStatus()`. A 401 from `/api/login`, `/api/session` or
+`/api/admin/*` is that route's own answer and never sends anyone anywhere.
+Sign out posts `POST /api/logout` and goes to `/login`.
 
 ### Library
 
@@ -497,7 +533,8 @@ only for an author with no books.
 `server/seed/seed.sql`, loaded by `npm run db:reset` (run on the dev machine
 from the root of the checkout; [Development setup](dev-setup.md#the-dev-data-directory)),
 with its covers in `server/seed/covers/`. It holds 13 authors, 23 books and
-25 editions, and covers the cases the model has:
+25 editions (the reset adds the user `dev`, password `hemlock-dev`, beside
+it), and covers the cases the model has:
 
 - physical books with real ISBN-13s for their titles, publishers and dates;
 - ebooks without an ISBN, several on the wishlist;

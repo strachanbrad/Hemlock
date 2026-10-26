@@ -16,13 +16,13 @@ let app
 let api
 before(async () => {
   app = await startServer()
-  api = client(app.base)
+  api = client(app.base, app.cookie)
 })
 after(() => app.close())
 
 describe('GET /api/health', () => {
   it('answers ok with the app version and the highest applied migration', async () => {
-    assert.deepEqual(await api.get('/api/health'), { status: 200, body: { ok: true, version: rootVersion, schema: 2 } })
+    assert.deepEqual(await api.get('/api/health'), { status: 200, body: { ok: true, version: rootVersion, schema: 3 } })
   })
 })
 
@@ -46,7 +46,7 @@ describe('the generic routes', () => {
       ['POST', '/api/Books/9780553212587/update'],
       ['POST', '/api/convertEBookToBook'],
     ]) {
-      const response = await fetch(app.base + url, { method })
+      const response = await fetch(app.base + url, { method, headers: { Cookie: app.cookie } })
       assert.equal(response.status, 404, `${method} ${url}`)
     }
   })

@@ -15,10 +15,10 @@ A newcomer starts with [Development setup](dev-setup.md) to run the app,
 - [Development setup](dev-setup.md): install, the dev library, ports and
   `DATA_DIR`, the everyday commands, tests.
 - [Library](library.md): books, editions and authors, the cover rule, the
-  API with its errors, live updates, the pages on desktop and phone, and the
-  dev seed.
+  API with its errors, live updates, signing in, the pages on desktop and
+  phone, and the dev seed.
 - [TV display](display.md): the `/display` slideshow, `GET /api/display`,
-  and the ways to get the page onto a television.
+  its sign-in screen, and the ways to get the page onto a television.
 - [Roku channel](roku.md): the slideshow as a sideloaded Roku channel, its
   keys and rating edits, its settings, building and installing it, and the
   screensaver.
@@ -28,14 +28,17 @@ A newcomer starts with [Development setup](dev-setup.md) to run the app,
   Claude lookup when both miss, cover downloads, finding a better cover
   with Claude, and barcode scanning with the phone camera.
 - [Admin](admin.md): the hidden `/admin` page, its password and sessions,
-  the lookup keys and settings, and how their secrets are encrypted.
+  the users and the first one, pairing televisions, the lookup keys and
+  settings, and how their secrets are encrypted.
 - [Security](security.md): bind address, error bodies, upload bounds,
   generated cover names, downloads, the live updates stream, SQL, raw
-  markup, admin sessions and secrets.
+  markup, user sessions and the guard, TV tokens, admin sessions and
+  secrets.
 - [Style](style.md): comments, license headers, wiki pages, commits, Ant
   Design usage and responsive layout.
 - [Theme](theme.md): the look of Hemlock: palette and contrast, fonts,
   ornaments, texture, covers without an image, and the rules for a new page.
 - [Deployment](deployment.md): the box, install and redeploy, the paths,
-  secrets, backups and restore, logs, and the reverse proxy's requirements.
+  secrets, the admin password and the first user, backups and restore,
+  logs, and the reverse proxy's requirements.
 - [Roadmap](roadmap.md): planned work, in order, and what was decided against.

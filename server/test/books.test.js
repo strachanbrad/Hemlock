@@ -16,7 +16,7 @@ let api
 let coversDir
 before(async () => {
   app = await startServer()
-  api = client(app.base)
+  api = client(app.base, app.cookie)
   coversDir = (await loadApp()).coversDir
 })
 after(() => app.close())

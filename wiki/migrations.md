@@ -62,9 +62,7 @@ reference.
 ## Rules
 
 - **Append-only, no down migrations.** Once a migration has been applied in
-  production it never changes; a correction is the next numbered file. Until
-  the first production deploy, `001_init.sql` may be rewritten and the dev
-  database rebuilt with `npm run db:reset`.
+  production it never changes; a correction is the next numbered file.
 - **SQL only, against its own shape.** A migration sees the tables as the
   migrations before it left them; it never calls application code.
 - **No PRAGMA.** `migrate()` refuses a file with a line starting with

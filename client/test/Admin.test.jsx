@@ -9,6 +9,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { App } from 'antd'
 import Admin from '../src/pages/Admin/Admin.jsx'
 import { checkSession, getSettings, signIn } from '../src/api/admin.js'
+import { localDateTime } from '../src/lib/dates.js'
 
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 const empty = (status) => new Response(null, { status })
@@ -20,8 +21,10 @@ const STATUSES = {
   lookup_contact: NOT_SET,
 }
 
-// routes maps "METHOD /path" to a function of the parsed JSON body; anything else answers 404.
-function fakeServer(routes) {
+// routes maps "METHOD /path" to a function of the parsed JSON body; the user and TV lists are empty
+// unless routes says otherwise, and anything else answers 404.
+function fakeServer(given) {
+  const routes = { 'GET /api/admin/users': () => json([]), 'GET /api/admin/devices': () => json([]), ...given }
   const calls = []
   const fetch = vi.fn(async (url, init = {}) => {
     const key = `${init.method ?? 'GET'} ${url}`
@@ -131,8 +134,10 @@ describe('Admin page', () => {
     expect(await within(google).findByText('Works: 2 volumes for ISBN 9780553212587 (312 ms)')).toBeTruthy()
     expect(calls.at(-1).body).toEqual({ service: 'google' })
     test = () => json({ error: 'Google Books answered HTTP 400: API key not valid: [redacted]' }, 502)
-    // The loading icon of the first test can still be leaving, which adds "loading" to the name.
-    fireEvent.click(within(google).getByRole('button', { name: /Test/ }))
+    // A button still loading ignores a click, and its leaving icon adds "loading" to the name.
+    const again = within(google).getByRole('button', { name: /Test/ })
+    await waitFor(() => expect(again.classList.contains('ant-btn-loading')).toBe(false))
+    fireEvent.click(again)
     expect(await within(google).findByText('Google Books answered HTTP 400: API key not valid: [redacted]')).toBeTruthy()
   })
 
@@ -156,9 +161,155 @@ describe('Admin page', () => {
       'POST /api/admin/logout': () => empty(204),
     })
     mount()
-    fireEvent.click(await screen.findByRole('button', { name: 'Sign out' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Sign out of admin' }))
     expect(await screen.findByLabelText('Password')).toBeTruthy()
     expect(calls.some(({ key }) => key === 'POST /api/admin/logout')).toBe(true)
+  })
+})
+
+const ANA = { id: 1, name: 'Ana', created_at: '2026-10-01T10:00:00.000Z', last_login_at: '2026-10-25T09:05:00.000Z' }
+const BO = { id: 2, name: 'Bo', created_at: '2026-10-02T10:00:00.000Z', last_login_at: null }
+const LOUNGE = { id: 7, name: 'Lounge', created_at: '2026-10-20T18:00:00.000Z', last_seen_at: '2026-10-25T20:00:00.000Z' }
+
+const signedIn = (routes) => fakeServer({
+  'GET /api/admin/session': () => json({ admin: true }),
+  'GET /api/admin/settings': () => json(STATUSES),
+  'GET /api/admin/users': () => json([ANA, BO]),
+  'GET /api/admin/devices': () => json([LOUNGE]),
+  ...routes,
+})
+
+async function confirm(button) {
+  fireEvent.click(button)
+  const popup = await waitFor(() => {
+    const found = document.querySelector('.ant-popconfirm')
+    expect(found).toBeTruthy()
+    return found
+  })
+  fireEvent.click(within(popup).getByRole('button', { name: 'Remove' }))
+}
+
+const row = (scope, name) => within(scope).getByText(name, { selector: '.admin-row-name' }).closest('.admin-row')
+
+describe('the Users card', () => {
+  it('lists each user with their last sign-in', async () => {
+    signedIn({})
+    mount()
+    const users = await waitFor(() => card('Users'))
+    expect(await within(users).findByText(`Last signed in ${localDateTime(ANA.last_login_at)}`)).toBeTruthy()
+    expect(within(row(users, 'Bo')).getByText('Never signed in')).toBeTruthy()
+    expect(within(users).getByText(/npm run user:add/)).toBeTruthy()
+  })
+
+  it('adds a user with the trimmed name, and shows a name taken under the name field', async () => {
+    let add = () => json({ id: 3, name: 'Cy', created_at: '2026-10-25T12:00:00.000Z', last_login_at: null }, 201)
+    const calls = signedIn({ 'POST /api/admin/users': () => add() })
+    mount()
+    const users = await waitFor(() => card('Users'))
+    await within(users).findByText('Bo')
+    fireEvent.change(within(users).getByLabelText('Name'), { target: { value: '  Cy ' } })
+    fireEvent.change(within(users).getByLabelText('Password'), { target: { value: 'a long password' } })
+    fireEvent.click(within(users).getByRole('button', { name: 'Add user' }))
+    expect(await within(users).findByText('Cy', { selector: '.admin-row-name' })).toBeTruthy()
+    expect(calls.find(({ key }) => key === 'POST /api/admin/users').body).toEqual({ name: 'Cy', password: 'a long password' })
+    expect(within(users).getByLabelText('Name').value).toBe('')
+
+    add = () => json({ error: 'The name ana is taken' }, 409)
+    fireEvent.change(within(users).getByLabelText('Name'), { target: { value: 'ana' } })
+    fireEvent.change(within(users).getByLabelText('Password'), { target: { value: 'a long password' } })
+    fireEvent.click(within(users).getByRole('button', { name: 'Add user' }))
+    expect(await within(users).findByText('The name ana is taken')).toBeTruthy()
+  })
+
+  it('refuses a password under 8 characters before it sends anything', async () => {
+    const calls = signedIn({})
+    mount()
+    const users = await waitFor(() => card('Users'))
+    fireEvent.change(within(users).getByLabelText('Name'), { target: { value: 'Cy' } })
+    fireEvent.change(within(users).getByLabelText('Password'), { target: { value: 'seven77' } })
+    fireEvent.click(within(users).getByRole('button', { name: 'Add user' }))
+    expect(await within(users).findByText('At least 8 characters')).toBeTruthy()
+    expect(calls.some(({ key }) => key === 'POST /api/admin/users')).toBe(false)
+  })
+
+  it('sets a password for one user', async () => {
+    const calls = signedIn({ 'PUT /api/admin/users/2/password': () => empty(204) })
+    mount()
+    const users = await waitFor(() => card('Users'))
+    await within(users).findByText('Bo')
+    fireEvent.click(within(row(users, 'Bo')).getByRole('button', { name: 'Set password' }))
+    fireEvent.change(within(users).getByLabelText('New password for Bo'), { target: { value: 'a new password' } })
+    fireEvent.click(within(row(users, 'Bo')).getByRole('button', { name: 'Save password' }))
+    await waitFor(() => expect(within(users).queryByLabelText('New password for Bo')).toBeNull())
+    expect(calls.find(({ key }) => key === 'PUT /api/admin/users/2/password').body).toEqual({ password: 'a new password' })
+  })
+
+  it('removes a user after the confirmation', async () => {
+    const calls = signedIn({ 'DELETE /api/admin/users/1': () => empty(204) })
+    mount()
+    const users = await waitFor(() => card('Users'))
+    await within(users).findByText('Ana')
+    await confirm(within(row(users, 'Ana')).getByRole('button', { name: 'Remove' }))
+    await waitFor(() => expect(within(users).queryByText('Ana', { selector: '.admin-row-name' })).toBeNull())
+    expect(calls.some(({ key }) => key === 'DELETE /api/admin/users/1')).toBe(true)
+  })
+
+  it('goes back to the sign-in form when the admin session has ended', async () => {
+    signedIn({ 'GET /api/admin/users': () => json({ error: 'Not signed in' }, 401) })
+    mount()
+    expect(await screen.findByLabelText('Password')).toBeTruthy()
+    expect(await screen.findByText('The session has ended; sign in again')).toBeTruthy()
+  })
+})
+
+describe('the Televisions card', () => {
+  it('says how to pair, and lists each TV with when it was paired and last seen', async () => {
+    signedIn({ 'GET /api/admin/devices': () => json([LOUNGE, { ...LOUNGE, id: 8, name: 'Kitchen', last_seen_at: null }]) })
+    mount()
+    const tvs = await waitFor(() => card('Televisions'))
+    expect(within(tvs).getByText('To pair a TV, open Hemlock on it and type the code it shows.')).toBeTruthy()
+    expect(await within(tvs).findByText(`Paired ${localDateTime(LOUNGE.created_at)}, last seen ${localDateTime(LOUNGE.last_seen_at)}`)).toBeTruthy()
+    expect(within(row(tvs, 'Kitchen')).getByText(/not seen yet/)).toBeTruthy()
+  })
+
+  it('pairs the code a TV shows, spaces ignored, and adds it to the list', async () => {
+    const calls = signedIn({
+      'GET /api/admin/devices': () => json([]),
+      'POST /api/admin/devices': () => json({ id: 9, name: 'Bedroom', created_at: '2026-10-25T21:00:00.000Z' }, 201),
+    })
+    mount()
+    const tvs = await waitFor(() => card('Televisions'))
+    fireEvent.change(within(tvs).getByLabelText('Code'), { target: { value: ' 048 213 ' } })
+    fireEvent.change(within(tvs).getByLabelText('Name'), { target: { value: ' Bedroom ' } })
+    fireEvent.click(within(tvs).getByRole('button', { name: 'Pair' }))
+    expect(await within(tvs).findByText('Bedroom', { selector: '.admin-row-name' })).toBeTruthy()
+    expect(calls.find(({ key }) => key === 'POST /api/admin/devices').body).toEqual({ code: '048213', name: 'Bedroom' })
+    expect(within(row(tvs, 'Bedroom')).getByText(/not seen yet/)).toBeTruthy()
+  })
+
+  it('refuses anything but six digits, and shows a code no TV shows under the code field', async () => {
+    const calls = signedIn({ 'POST /api/admin/devices': () => json({ error: 'No television is showing that code' }, 404) })
+    mount()
+    const tvs = await waitFor(() => card('Televisions'))
+    fireEvent.change(within(tvs).getByLabelText('Code'), { target: { value: '12345' } })
+    fireEvent.change(within(tvs).getByLabelText('Name'), { target: { value: 'Den' } })
+    fireEvent.click(within(tvs).getByRole('button', { name: 'Pair' }))
+    expect(await within(tvs).findByText('Type the six digits the TV shows')).toBeTruthy()
+    expect(calls.some(({ key }) => key === 'POST /api/admin/devices')).toBe(false)
+
+    fireEvent.change(within(tvs).getByLabelText('Code'), { target: { value: '123456' } })
+    fireEvent.click(within(tvs).getByRole('button', { name: 'Pair' }))
+    expect(await within(tvs).findByText('No television is showing that code')).toBeTruthy()
+  })
+
+  it('removes a TV after the confirmation', async () => {
+    const calls = signedIn({ 'DELETE /api/admin/devices/7': () => empty(204) })
+    mount()
+    const tvs = await waitFor(() => card('Televisions'))
+    await within(tvs).findByText('Lounge')
+    await confirm(within(row(tvs, 'Lounge')).getByRole('button', { name: 'Remove' }))
+    await waitFor(() => expect(within(tvs).queryByText('Lounge', { selector: '.admin-row-name' })).toBeNull())
+    expect(calls.some(({ key }) => key === 'DELETE /api/admin/devices/7')).toBe(true)
   })
 })
 

@@ -33,8 +33,8 @@ to install.
    ```
 
    This applies the migrations to `data/hemlock.db`, loads
-   `server/seed/seed.sql` and copies `server/seed/covers/` into
-   `data/covers/`.
+   `server/seed/seed.sql`, copies `server/seed/covers/` into
+   `data/covers/`, and adds the user `dev` with the password `hemlock-dev`.
 
 3. Start the server and the client together:
 
@@ -43,7 +43,8 @@ to install.
    ```
 
    Express listens on `127.0.0.1:5000` and Vite on `http://localhost:5173`.
-   Open `http://localhost:5173`; Vite proxies `/api` and `/covers` to Express.
+   Open `http://localhost:5173` and sign in as `dev` with the password
+   `hemlock-dev`; Vite proxies `/api` and `/covers` to Express.
    `/api/events` has a proxy entry of its own in `client/vite.config.js`:
    Vite's proxy streams it as it comes, but when Express restarts under
    `node --watch` it would keep the browser's end of the stream open with
@@ -57,11 +58,11 @@ to install.
 | `client/` | The React and Ant Design client, built by Vite (`client/vite.config.js`, `client/index.html`, `client/src/`). |
 | `client/src/api/` | The only modules that call `fetch`, one per resource. |
 | `client/src/lib/isbn.js` | ISBN-10/13 validation and conversion; identical to `server/src/lib/isbn.js`. |
-| `server/src/` | The Express server: `index.js` starts it, `app.js` builds it, `config.js` reads the environment, `db.js` opens the database, `migrate.js` applies migrations, `covers.js` downloads and deletes cover files, `coverFiles.js` writes uploads and ties cover files to transactions, `body.js` reads JSON and multipart bodies, `validate.js` checks every payload, `library.js` holds the book queries, `settings.js` keeps the settings and encrypts their secrets, `auth.js` holds the admin password and sessions ([Admin](admin.md)), `events.js` holds the live updates stream ([Library § Live updates](library.md#live-updates)), `routes/` holds one module per resource ([Library](library.md)). |
+| `server/src/` | The Express server: `index.js` starts it, `app.js` builds it, `config.js` reads the environment, `db.js` opens the database, `migrate.js` applies migrations, `covers.js` downloads and deletes cover files, `coverFiles.js` writes uploads and ties cover files to transactions, `body.js` reads JSON and multipart bodies, `validate.js` checks every payload, `library.js` holds the book queries, `settings.js` keeps the settings and encrypts their secrets, `auth.js` holds the password hashing, the tokens, the login lockout and the cookies, `users.js` the users and their sessions, `devices.js` the paired televisions ([Admin](admin.md), [Security § Sessions](security.md#sessions)), `events.js` holds the live updates stream ([Library § Live updates](library.md#live-updates)), `routes/` holds one module per resource ([Library](library.md)). |
 | `server/src/lookup/` | The Open Library, Google Books and Claude clients and the merge of the catalogues' answers ([Lookup](lookup.md)). |
 | `server/migrations/` | The numbered SQL migrations ([Migrations](migrations.md)). |
 | `server/seed/` | The dev library: `seed.sql` and `covers/`. |
-| `server/scripts/` | The `db:migrate`, `db:new`, `db:reset`, `lookup:record` and `admin:password` commands. |
+| `server/scripts/` | The `db:migrate`, `db:new`, `db:reset`, `lookup:record`, `admin:password` and `user:add` commands; `password.js` reads a password from a hidden prompt or a pipe for the last two. |
 | `roku/` | The Roku channel: BrightScript and SceneGraph sources, fonts, and the scripts that build and install it ([Roku channel](roku.md)). |
 | `data/` | The dev data directory (gitignored): `hemlock.db`, `covers/`, and `secrets.key` once a secret is saved. |
 | `dist/` | The Roku package that `npm run roku:build` writes (gitignored). |
@@ -82,6 +83,7 @@ All run from the root of the checkout.
 | `npm run db:reset` | Rebuilds the dev library from `server/seed/` (below). |
 | `npm run lookup:record -- <isbn>` | Asks Open Library for an ISBN, over the network, and writes its answers as test fixtures ([Lookup § Tests](lookup.md#tests)). |
 | `npm run admin:password` | Sets the password of `/admin`, read from a hidden prompt or a pipe, and signs every browser out ([Admin § The password](admin.md#the-password)). |
+| `npm run user:add <name>` | Adds a user who can sign in, the password read from a hidden prompt or a pipe ([Admin § Users](admin.md#users)). |
 | `npm run roku:build` | Builds the Roku channel into `dist/hemlock-roku.zip` for the address in `HEMLOCK_BASE_URL` ([Roku channel § Commands](roku.md#commands)). |
 | `npm run roku:install` | Sideloads that package to the TV named by `ROKU_IP`, `ROKU_USERNAME` and `ROKU_PASSWORD`, which come from `~/.config/hemlock/rokudev.env` and never from the repository ([Roku channel § Developer mode and sideloading](roku.md#developer-mode-and-sideloading)). |
 | `npm run roku:check` | Validates the channel's BrightScript and SceneGraph XML with BrighterScript. |
@@ -151,7 +153,8 @@ Vite's proxy.
    <address> (unsafe)". Firefox: "Advanced…", then "Accept the Risk and
    Continue". The certificate lasts 30 days; a new one brings the warning
    back.
-5. Tap "Scan" beside the ISBN, allow the camera, and hold the barcode on the
+5. Sign in as `dev` (`hemlock-dev`) if the login page shows. Tap "Scan"
+   beside the ISBN, allow the camera, and hold the barcode on the
    back of a book inside the frame. The form fills in from the lookup;
    nothing is saved until "Add book".
 
@@ -167,9 +170,12 @@ server runs), `covers/`, which Express serves at `/covers/` in dev, and
 tracked in the checkout is written at runtime.
 
 `npm run db:reset` empties the database in place, applies the migrations,
-loads `server/seed/seed.sql`, and replaces `DATA_DIR/covers/` with
-`server/seed/covers/`. The settings go with the rest: run
-`npm run admin:password` again to use `/admin`. Because it empties the file rather than deleting it, a
+loads `server/seed/seed.sql`, replaces `DATA_DIR/covers/` with
+`server/seed/covers/`, and adds the user `dev` with the password
+`hemlock-dev` (`DEV_USER` in `server/src/reset.js`), so the dev library can
+be signed in to at once. Every other user, session and paired TV goes with
+the rest, and so do the settings: run `npm run admin:password` again to use
+`/admin`, and `npm run user:add <name>` for another user. Because it empties the file rather than deleting it, a
 running `npm run dev` sees the reset library at once. It refuses to run:
 
 - when `NODE_ENV=production`, always;
@@ -186,7 +192,10 @@ creates an empty database with the current schema.
   `server/test/support/` from running as tests). Each file runs in its own
   process on a temporary `DATA_DIR`; a test reaches the app's modules through
   `server/test/support/server.js`, because `config.js` reads `DATA_DIR` once,
-  when it is first imported. One file: `node --test server/test/api.test.js`.
+  when it is first imported. `startServer()` there also signs in a user
+  named `test` and answers its `Cookie` header as `cookie`, which
+  `client(base, cookie)` in `server/test/support/http.js` sends, since
+  every API route needs a session. One file: `node --test server/test/api.test.js`.
 - **Client:** Vitest with jsdom and React Testing Library, files in
   `client/test/`. `client/test/setup.js` stubs `window.matchMedia` and
   `ResizeObserver`, which jsdom lacks and Ant Design calls. Vitest reads the

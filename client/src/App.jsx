@@ -3,13 +3,16 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 
-import { lazy, Suspense } from 'react'
-import { Layout, Menu } from 'antd'
-import { BookOutlined, DesktopOutlined, PlusOutlined, UserOutlined } from '@ant-design/icons'
-import { Link, Navigate, Outlet, Route, Routes, useLocation } from 'react-router'
+import { lazy, Suspense, useEffect, useState } from 'react'
+import { App as AntApp, Layout, Menu } from 'antd'
+import { BookOutlined, DesktopOutlined, LogoutOutlined, PlusOutlined, UserOutlined } from '@ant-design/icons'
+import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router'
+import { onSignedOut } from './api/request.js'
+import { logout, session } from './api/session.js'
 import AddBook from './pages/AddBook/AddBook.jsx'
 import Authors from './pages/Authors/Authors.jsx'
 import Library from './pages/Library/Library.jsx'
+import Login from './pages/Login/Login.jsx'
 import config from './config/config.json'
 import { BookmarkOutline } from './images/index.js'
 import { Ribcage, Umbel } from './images/ornaments/index.js'
@@ -36,10 +39,17 @@ const navLabel = (label) => (
   </>
 )
 
-const MENU_ITEMS = [
+const SIGN_OUT = { key: 'signout', icon: <LogoutOutlined />, label: 'Sign out' }
+
+// The signed-in user's name titles Sign out; it is null when the session check could not answer.
+const menuItems = (name) => [
   ...NAV.map(({ key, to, label, icon }) => ({ key, icon, label: <Link to={to}>{navLabel(label)}</Link> })),
   { key: 'display', icon: <DesktopOutlined />, label: <a href="/display" target="_blank" rel="noopener">Display</a> },
+  { type: 'divider' },
+  name ? { type: 'group', key: 'user', label: name, children: [SIGN_OUT] } : SIGN_OUT,
 ]
+
+const loginPath = ({ pathname, search, hash }) => `/login?${new URLSearchParams({ next: `${pathname}${search}${hash}` })}`
 
 function currentKey({ pathname, search }) {
   if (pathname.startsWith('/library')) return new URLSearchParams(search).get('wishlist') === '1' ? 'wishlist' : 'library'
@@ -55,10 +65,39 @@ const Wordmark = () => (
   </Link>
 )
 
+// Checks the session once when it mounts; a later 401 from any request sends the visitor to the
+// login page, back to this page once signed in.
 const Shell = () => {
   const isPhone = useIsPhone()
   const location = useLocation()
+  const navigate = useNavigate()
+  const { message } = AntApp.useApp()
+  const [user, setUser] = useState(undefined)
   const current = currentKey(location)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    // An unreachable server is not a signed-out visitor: the pages say what failed.
+    session({ signal: controller.signal }).then(
+      (found) => controller.signal.aborted || setUser(found),
+      () => controller.signal.aborted || setUser({ name: null }),
+    )
+    return () => controller.abort()
+  }, [])
+
+  useEffect(() => onSignedOut(() => navigate(loginPath(location), { replace: true })), [location, navigate])
+
+  const signOut = async () => {
+    try {
+      await logout()
+      navigate('/login', { replace: true })
+    } catch (err) {
+      message.error(err.message)
+    }
+  }
+
+  if (user === undefined) return null
+  if (user === null) return <Navigate to={loginPath(location)} replace />
 
   return (
     <Layout className={isPhone ? 'shell shell-phone' : 'shell shell-desktop'}>
@@ -80,12 +119,22 @@ const Shell = () => {
                 <span>{item.short ?? item.label}</span>
               </Link>
             ))}
+            <button type="button" className="tab-bar-item" onClick={signOut}>
+              <LogoutOutlined />
+              <span>Sign out</span>
+            </button>
           </nav>
         </>
       ) : (
         <Layout>
           <Sider width={200} className="shell-sider">
-            <Menu mode="inline" selectedKeys={current ? [current] : []} items={MENU_ITEMS} className="shell-menu" />
+            <Menu
+              mode="inline"
+              selectedKeys={current ? [current] : []}
+              items={menuItems(user.name)}
+              onClick={({ key }) => key === 'signout' && signOut()}
+              className="shell-menu"
+            />
           </Sider>
           <Content className="shell-content">
             <Ribcage className="shell-watermark" aria-hidden="true" />
@@ -99,6 +148,7 @@ const Shell = () => {
 
 const App = () => (
   <Routes>
+    <Route path="/login" element={<Login />} />
     <Route path="/" element={<Shell />}>
       <Route index element={<Navigate to="/library" replace />} />
       <Route path="library/:id?" element={<Library />} />

@@ -3,10 +3,12 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Alert, App, Button, Card, Form, Input, Popconfirm, Select, Spin } from 'antd'
 import { checkSession, getSettings, saveSettings, signIn, signOut, testService } from '../../api/admin.js'
 import { PageHeading } from '../../components/Headings.jsx'
+import TelevisionsCard from './TelevisionsCard.jsx'
+import UsersCard from './UsersCard.jsx'
 import './admin.css'
 
 export const MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5']
@@ -187,12 +189,14 @@ const Settings = ({ statuses, onChange, onSignedOut }) => {
             </div>
           </Form>
         </Card>
+        <UsersCard onSignedOut={onSignedOut} />
+        <TelevisionsCard onSignedOut={onSignedOut} />
       </div>
       <div className="admin-session">
         <p className="admin-help reading">
-          The admin password is set on the server with <code>npm run admin:password</code>; setting it again signs every device out.
+          The admin password is set on the server with <code>npm run admin:password</code>; setting it again signs every browser out of this page.
         </p>
-        <Button onClick={leave} loading={busy === 'signout'}>Sign out</Button>
+        <Button onClick={leave} loading={busy === 'signout'}>Sign out of admin</Button>
       </div>
     </>
   )
@@ -248,10 +252,11 @@ const Admin = () => {
   }, [])
 
   const signedIn = async () => setStatuses(await getSettings())
-  const signedOut = ({ expired }) => {
+  // Stable, since the cards load their lists in an effect that depends on it.
+  const signedOut = useCallback(({ expired }) => {
     setStatuses(null)
     if (expired) message.warning('The session has ended; sign in again')
-  }
+  }, [message])
 
   let body
   if (failure) body = <Alert type="error" showIcon title={failure} />

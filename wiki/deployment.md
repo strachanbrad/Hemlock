@@ -100,9 +100,12 @@ nginx.
    sudo /opt/hemlock/deploy/deploy.sh
    ```
 
-5. Set the admin password ([The admin password](#the-admin-password)), then
-   enter the Google Books and Anthropic keys on `/admin`
-   ([Admin](admin.md)).
+5. Add the first user ([The first user](#the-first-user)) and set the admin
+   password ([The admin password](#the-admin-password)).
+
+6. Sign in, enter the Google Books and Anthropic keys on `/admin`
+   ([Admin](admin.md)), and pair the television with the code it shows
+   ([Admin § Televisions](admin.md#televisions)).
 
 ## Redeploy
 
@@ -114,6 +117,16 @@ sudo git -C /opt/hemlock pull --ff-only && sudo /opt/hemlock/deploy/deploy.sh
 
 `deploy.sh` deploys exactly what is checked out and never fetches code itself.
 A rerun repeats every step: one more backup, the same files, a restart.
+
+A pull that brings a new migration is applied by the restart, after the
+deploy's backup ([Migrations](migrations.md)). `003_users.sql` adds the
+users, their sessions and the televisions, and from that deploy on every
+page and every API route needs a signed-in user or a paired TV: until the
+first user exists, every page shows the login page and the login answers
+`No user exists yet; run npm run user:add on the server`. Add the first
+user right after that deploy ([The first user](#the-first-user)), sign in,
+then pair the television on `/admin`; until it is paired, the
+[Roku channel](roku.md) shows its pairing code instead of the slideshow.
 
 A tab opened before a redeploy still runs the old build, whose lazy chunks
 (the barcode scanner, the display page) the new build no longer has: Vite
@@ -255,6 +268,22 @@ sudo sh -c 'set -a; [ -f /etc/hemlock/hemlock.env ] && . /etc/hemlock/hemlock.en
 
 It prompts twice for the password, without echoing it, and signs every
 browser out. Running it again changes the password.
+
+### The first user
+
+Nobody can sign in until a user exists, and the users after the first are
+added on `/admin` ([Admin § Users](admin.md#users)). The first is added on
+the command line, run like the admin password's script: as `hemlock`, with
+the service's environment. The name is the argument (`Ana` here; it is not
+a secret); the password is read from the prompt, twice, without echoing it,
+and never from an argument. On the box:
+
+```bash
+sudo sh -c 'set -a; [ -f /etc/hemlock/hemlock.env ] && . /etc/hemlock/hemlock.env; cd /opt/hemlock && exec runuser -u hemlock -- env NODE_ENV=production DATA_DIR=/var/lib/hemlock node server/scripts/user-add.js Ana'
+```
+
+It prints `Added Ana to /var/lib/hemlock/hemlock.db`, or refuses a name
+already taken or a password under 8 characters and changes nothing.
 
 ## Backups
 
@@ -412,19 +441,27 @@ The owner's reverse proxy sits in front of nginx and needs:
   needs no location of its own: it holds a request for at most 30 seconds,
   inside nginx's default 60-second `proxy_read_timeout`, so only a proxy
   whose read timeout is under 30 seconds cuts it (with a 504).
-- **Access control.** Hemlock has no login: anyone who reaches it can edit or
-  delete the library. Keep it LAN-only, or authenticate at the proxy.
-- **The TV.** The TV's browser opens `/display` without an interactive login.
-  That page loads the client (`/`, `/assets/`) and then reads `/api/display`,
-  `/api/events` and `/covers/`; with authentication at the proxy, these paths
-  reach the TV without it (by the TV's LAN address, for one).
+- **Access control.** Hemlock has its own login: every page and every
+  `/api` route needs a signed-in user or a paired television
+  ([Security § Sessions](security.md#sessions)). The proxy needs no
+  authentication of its own; one in front adds a second login.
+- **Cookies and headers.** The proxy passes `Cookie`, `Set-Cookie` and
+  `Authorization` through unchanged. The session cookie is `Secure` in
+  production, so the browser sends it only over the proxy's HTTPS.
+- **The TV.** A TV's browser on `/display` signs in once on `/login`, like
+  any browser, and stays signed in while it is used
+  ([TV display](display.md#signing-in)). The page then reads
+  `/api/display`, `/api/events` and `/covers/`.
 - **The Roku channel.** The channel talks to the box over the LAN at the
   address built into it (`http://10.0.5.10` unless `HEMLOCK_BASE_URL` says
   otherwise, [Roku channel § Settings](roku.md#settings)), straight to nginx,
-  so the proxy plays no part and nginx needs nothing more. A channel built
-  with the proxy's name instead needs the proxy to pass `GET /api/display`,
-  `GET /api/changes`, `GET /covers/` and `PATCH /api/books/<id>` without a
-  login, and to hold a request open for at least 30 seconds. The channel
+  so the proxy plays no part and nginx needs nothing more. It pairs once
+  ([Admin § Televisions](admin.md#televisions)) and sends its token as
+  `Authorization: Bearer` with every request. A channel built with the
+  proxy's name instead needs the proxy to pass `POST /api/devices/pair`,
+  `GET /api/devices/pair/<poll>`, `GET /api/display`, `GET /api/changes`,
+  `GET /covers/` and `PATCH /api/books/<id>` with their `Authorization`
+  header, and to hold a request open for at least 30 seconds. The channel
   checks an https certificate against the TV's own bundle
   (`common:/certs/ca-bundle.crt`).
 

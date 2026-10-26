@@ -1,9 +1,10 @@
 # Security
 
 The defaults every change to Hemlock keeps. Hemlock serves one household from
-behind the owner's TLS-terminating reverse proxy, which owns access control;
-Hemlock itself has no accounts. The one exception is the admin page, which
-holds the lookup keys behind a password ([Admin sessions](#admin-sessions)).
+behind the owner's TLS-terminating reverse proxy, and is reachable from the
+internet through it. Every page and every API route needs a signed-in user
+or a paired television ([Sessions](#sessions)); the admin page holds the
+lookup keys behind a password of its own ([Admin sessions](#admin-sessions)).
 These rules keep a mistake in the client, a crafted request or a hostile
 upload from reaching the database, the file system or another host.
 
@@ -126,7 +127,9 @@ after a write that succeeded. The long poll, `GET /api/changes`, answers only
 a version number. Each open stream and each held poll holds a socket, so
 `createEvents()` (`server/src/events.js`) caps them together at 50 and
 answers 503 past that; a page that is refused or closed tries again after 5
-seconds. A poll holds for at most 30 seconds, whatever `wait` asks.
+seconds. A poll holds for at most 30 seconds, whatever `wait` asks. Both are
+behind the guard like every API route ([Sessions](#sessions)): `EventSource`
+sends the page's cookie, and the Roku channel's long poll sends its token.
 
 ## SQL
 
@@ -157,9 +160,75 @@ and that markup is made from numbers and the page's own ids only, never from
 a book's text. Nothing else on the site renders raw markup; every title,
 author and synopsis reaches the page as text.
 
-## Admin sessions
+## Sessions
 
-`/admin` and `/api/admin/*` ([Admin](admin.md)):
+Code: `server/src/routes/session.js` (the login, the logout, the session
+check and the guard), `server/src/users.js`, `server/src/devices.js`,
+`server/src/auth.js` (hashing, tokens, the lockout, the cookies).
+
+- **Users.** One kind: every user sees and edits everything
+  ([Admin § Users](admin.md#users)). A password is stored as a scrypt hash
+  and checked with `timingSafeEqual`; a name that does not exist still
+  costs one scrypt, so the answer's timing does not say which names exist.
+  The first user is added on the command line, never by a first visit.
+- **The login.** `POST /api/login { name, password }` answers 200
+  `{ name }` (the name as stored) with the cookie, 401 `{ error: 'Wrong name
+  or password' }` whichever was wrong, 400 without both fields, and 503
+  `{ error: 'No user exists yet; run npm run user:add on the server' }`
+  while the `users` table is empty. Five failures within 15 minutes for one
+  name, or from one client address, answer 429 with `Retry-After` for the
+  rest of the window, even for the right password; a right password clears
+  both counts. The counts are in memory, and behind nginx every request
+  comes from `127.0.0.1`, so there the address count is one count for the
+  whole box: someone on the internet can keep the household from signing
+  in for 15 minutes, but cannot keep guessing, and browsers already signed
+  in are not affected. A login with a session cookie already present ends
+  that session first.
+- **The cookie** `hemlock_session` holds 32 random bytes; the
+  `user_sessions` table keeps only their SHA-256, the user and an expiry.
+  It is `HttpOnly`, `SameSite=Lax`, `Path=/`, `Max-Age` 180 days and
+  `Secure` when `NODE_ENV=production` (as the admin cookie, below). Lax,
+  not Strict, so a link to a book opened from a message or another site
+  still carries it; a cross-site request that is not a top-level `GET`
+  carries no cookie, and every `GET` reads only. A session lasts 180 days
+  from its last renewal: a request renews it at most once a day, moving
+  the expiry to 180 days from then and sending the cookie again with a
+  fresh `Max-Age`, so a browser in use stays signed in and one left alone
+  for 180 days is signed out. A login deletes the expired rows.
+- **The session check and the logout.** `GET /api/session` answers
+  `{ name }` or 401. `POST /api/logout` answers 204, deletes the row and
+  clears the cookie, signed in or not. Setting a user's password or
+  removing the user deletes every session they hold.
+- **The guard** (`signInGuard()`, mounted on `/api` in
+  `server/src/app.js` ahead of every router and of the live updates
+  trigger, so a route added later is guarded by default). A request passes
+  when its `hemlock_session` cookie names a live session, or its
+  `Authorization: Bearer <token>` names a paired television. Only these
+  pass without either: `GET /api/health`, `POST /api/login`,
+  `POST /api/logout`, `POST /api/devices/pair`,
+  `GET /api/devices/pair/<poll>`, and everything under `/api/admin`, which
+  has its own gate. Anything else, an unknown path included, answers 401
+  `{ error: 'Sign in' }` before a router runs, so a refused write changes
+  nothing and tells no page. The paths are compared exactly: another case
+  or a trailing slash is not an exception, and answers 401.
+- **Televisions.** A TV's token is 32 random bytes given once, in the one
+  poll answer that ends its pairing ([Admin § Televisions](admin.md#televisions));
+  the `devices` table keeps only its SHA-256. It never appears in any other
+  answer, an error or a log line. Removing the TV on the admin page ends
+  it. Pairing needs the admin password; the code alone is worth nothing.
+- **Covers are public by design.** `/covers/` is not under `/api`: nginx
+  serves the files without asking Express, and the TV's image loader sends
+  no credentials. Every cover name carries 8 random hex digits
+  ([Cover file names](#cover-file-names)) and no answer outside a session
+  lists one, so a cover is reachable only by someone who already saw its
+  address.
+- **The client.** The shell checks `GET /api/session` once when it loads,
+  and a 401 from any later request sends the visitor to the login page
+  once ([Library § Signing in](library.md#signing-in)).
+
+### Admin sessions
+
+`/admin` and `/api/admin/*` ([Admin](admin.md)), after a user's session:
 
 - **The password** is set only from the command line, never by a first
   visit, and read from standard input, never an argument. The database
@@ -185,10 +254,9 @@ author and synopsis reaches the page as text.
   answer.
 - **Setting the password again** deletes every session.
 
-The identify endpoint is not behind the session: like the rest of the API,
-anyone who can reach Hemlock can ask it, and each call can cost a few cents
-of the owner's Anthropic credit. Keeping Hemlock LAN-only, or behind the
-proxy's authentication, bounds that ([Deployment § The reverse proxy](deployment.md#the-reverse-proxy)).
+The identify endpoint and the cover search, each of which can cost a few
+cents of the owner's Anthropic credit, are behind a user's session like
+the rest of the API.
 
 ## Secrets
 

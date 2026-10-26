@@ -6,6 +6,7 @@
 import { StrictMode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render } from '@testing-library/react'
+import { MemoryRouter } from 'react-router'
 import Display from '../src/pages/Display/Display.jsx'
 import { stubEventSource } from './eventSource.js'
 
@@ -19,7 +20,9 @@ const books = (...titles) => titles.map((title) => ({
 
 const ok = (body) => ({ ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) })
 const failure = () => ({ ok: false, status: 502, json: async () => { throw new Error('html') }, text: async () => '<html></html>' })
-const serve = (handler) => vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => handler(url))
+const signIn = () => ({ ok: false, status: 401, json: async () => ({ error: 'Sign in' }), text: async () => '{"error":"Sign in"}' })
+// Signed in: the session check answers a name, and handler answers everything else.
+const serve = (handler) => vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => (url === '/api/session' ? ok({ name: 'Ana' }) : handler(url)))
 
 // Lets the mocked fetch chain resolve and React commit what it set.
 const flush = () => act(async () => {
@@ -30,7 +33,7 @@ const advance = async (ms) => {
   await flush()
 }
 const mount = async () => {
-  const result = render(<StrictMode><Display /></StrictMode>)
+  const result = render(<StrictMode><MemoryRouter><Display /></MemoryRouter></StrictMode>)
   await flush()
   return result
 }
@@ -52,6 +55,45 @@ afterEach(() => {
 })
 
 describe('Display', () => {
+  it('shows only the sign-in screen without a session, with no stream, no list and no timer', async () => {
+    const { sources } = stubEventSource()
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => signIn())
+    const { container, getByRole } = await mount()
+    expect(getByRole('link', { name: 'Sign in to show the library' }).getAttribute('href')).toBe('/login?next=/display')
+    expect(container.querySelector('.display-slide')).toBeNull()
+    expect(sources).toEqual([])
+    await advance(10 * 60 * 1000)
+    expect(new Set(fetch.mock.calls.map(([url]) => url))).toEqual(new Set(['/api/session']))
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('turns to the sign-in screen when a fetch answers 401, closing the stream', async () => {
+    const { live } = stubEventSource()
+    let signedIn = true
+    const fetch = serve(() => (signedIn ? ok(books('Alpha', 'Beta')) : signIn()))
+    const { container, queryByRole } = await mount()
+    expect(titleOf(container)).toBe('Alpha')
+    signedIn = false
+    live()[0].emit('changed')
+    await advance(300)
+    expect(queryByRole('link', { name: 'Sign in to show the library' })).not.toBeNull()
+    expect(container.querySelector('.display-slide')).toBeNull()
+    expect(live()).toEqual([])
+    const calls = fetch.mock.calls.length
+    await advance(60 * 1000)
+    expect(fetch.mock.calls.length).toBe(calls)
+  })
+
+  it('starts the slideshow when the session check cannot reach the server, and retries the list', async () => {
+    let up = false
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => (up ? ok(books('Alpha')) : failure()))
+    const { container, queryByText } = await mount()
+    expect(queryByText('Cannot reach the library. Retrying.')).not.toBeNull()
+    up = true
+    await advance(30_000)
+    expect(titleOf(container)).toBe('Alpha')
+  })
+
   it('shows the first book, then the next one after ten seconds', async () => {
     serve(() => ok(books('Alpha', 'Beta', 'Gamma')))
     const { container } = await mount()

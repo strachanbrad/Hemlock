@@ -1,17 +1,23 @@
 # Admin page
 
-`/admin` is where the owner enters the keys and addresses the lookups use:
-the Google Books API key, the Anthropic API key and Claude model for the
-Claude lookup ([Lookup § Claude](lookup.md#claude)), and the Open Library
-contact address. Nothing links to it: it is not in the sider or the phone's
-tab bar, and it is reached by typing its address. One password guards it;
-there are no accounts.
+`/admin` is where the owner enters the keys and addresses the lookups use
+(the Google Books API key, the Anthropic API key and Claude model for the
+Claude lookup, [Lookup § Claude](lookup.md#claude), and the Open Library
+contact address), manages the people who sign in to Hemlock, and pairs
+televisions. Nothing links to it: it is not in the sider or the phone's tab
+bar, and it is reached by typing its address. It is a page of the shell, so
+it needs a user's session like every page
+([Security § Sessions](security.md#sessions)), and then its own password.
+The admin password is not a user, and no user is an admin.
 
-Code: `client/src/pages/Admin/` (the page and `admin.css`),
+Code: `client/src/pages/Admin/` (the page, `UsersCard.jsx`,
+`TelevisionsCard.jsx`, `useAdminList.js` and `admin.css`),
 `client/src/api/admin.js`, `server/src/routes/admin.js`,
 `server/src/auth.js` (password hashing, sessions, the login lockout, the
-cookie), `server/src/settings.js` (the settings store and its encryption),
-`server/scripts/admin-password.js` and `server/migrations/002_settings.sql`.
+cookies), `server/src/settings.js` (the settings store and its encryption),
+`server/src/users.js`, `server/src/devices.js`,
+`server/scripts/admin-password.js`, `server/scripts/user-add.js`,
+`server/migrations/002_settings.sql` and `server/migrations/003_users.sql`.
 
 ## The page
 
@@ -20,7 +26,8 @@ The page first asks the server whether this browser is signed in
 shows one password field and Sign in; a wrong password, the lockout and
 "no password is set" show beneath the field as the server words them.
 
-Signed in, it shows three cards and Sign out:
+Signed in, it shows five cards and Sign out of admin, which ends only the
+admin session (the shell's Sign out ends the user's):
 
 - **Google Books**: the key's status ("Set, ends in …abcd", "From the
   environment" or "Not set"), a key field, Save, Clear (only for a key
@@ -32,6 +39,8 @@ Signed in, it shows three cards and Sign out:
   clears a saved model.
 - **Open Library contact**: the email address and its status, Save and
   Clear.
+- **Users** ([Users](#users)) and **Televisions**
+  ([Televisions](#televisions)).
 
 A key field is write-only. The server never sends a key back, only its last
 four characters, so the field starts empty with the placeholder "Leave blank
@@ -66,7 +75,7 @@ in [Deployment § The admin password](deployment.md#the-admin-password).
 `npm run db:reset` drops the settings with the rest of the dev library, the
 password included.
 
-## Sessions
+## Admin sessions
 
 - `POST /api/admin/login { password }` checks the password with scrypt and
   `timingSafeEqual`. It answers 204 with the session cookie, 401
@@ -87,6 +96,107 @@ password included.
   cookie, signed in or not.
 - Every other `/api/admin/*` path, an unknown one included, answers 401
   `{ error: 'Not signed in' }` before it reads or changes a setting.
+
+## Users
+
+There is one kind of user: everyone signed in sees and edits the whole
+library. How a user signs in, and what their session is, is in
+[Security § Sessions](security.md#sessions); the login page is in
+[Library § Signing in](library.md#signing-in).
+
+A name is trimmed, 1 to 64 characters, without control characters, and
+unique without regard to ASCII case (`Ana` and `ana` are one name; the
+login finds it either way). A password has at least 8 characters. The
+`users` table keeps a scrypt hash, as for the admin password
+([The password](#the-password)), never the password.
+
+The first user is added on the command line, since nobody can sign in to
+reach this page before one exists. `npm run user:add <name>` takes the
+name as its argument (it is not a secret) and reads the password as
+`admin:password` does: a hidden prompt, asked twice, on a terminal, or the
+first line of a pipe, never an argument. It refuses a name already taken.
+On the dev machine, from the root of the checkout:
+
+```bash
+npm run user:add Ana
+```
+
+On the box it runs as written in
+[Deployment § The first user](deployment.md#the-first-user). The dev
+library has a user already: `npm run db:reset` adds `dev` with the password
+`hemlock-dev` ([Development setup](dev-setup.md#the-dev-data-directory)).
+
+After that, users are managed on the **Users** card: the list with each
+name and its last sign-in ("Last signed in 2026-10-25 21:46" or "Never
+signed in"), **Set password** (a field under the row, Save password),
+**Remove** behind a `Popconfirm`, and the Name and Password fields with
+**Add user**. A name already taken shows under the name field as the server
+words it. Setting a user's password or removing them ends every session
+they hold, so each of their browsers lands on the login page at its next
+request; setting your own password signs you out too.
+
+| Request (behind the admin cookie) | Answer |
+|---|---|
+| `GET /api/admin/users` | 200, `[{ id, name, created_at, last_login_at }]` by name |
+| `POST /api/admin/users { name, password }` | 201, the user; 400 naming the field; 409 `The name <name> is taken` |
+| `PUT /api/admin/users/:id/password { password }` | 204; 400 naming the field; 404 |
+| `DELETE /api/admin/users/:id` | 204; 404 |
+
+`created_at` and `last_login_at` are UTC instants (`toISOString()`); the
+card shows them in the browser's time zone (`localDateTime()` in
+`client/src/lib/dates.js`).
+
+## Televisions
+
+A television (the [Roku channel](roku.md)) reads the library with a
+token of its own instead of a user's session. It gets one by pairing: it
+shows a six-digit code, and the owner types the code here. The token is
+never typed on a remote, each TV has its own, and removing a TV here ends
+it. The token is a credential like a session
+([Security § Sessions](security.md#sessions)).
+
+The **Televisions** card says "To pair a TV, open Hemlock on it and type
+the code it shows", then a Code field (six digits; spaces are ignored, so
+"048 213" works), a Name field ("Living room") and **Pair**, then the
+paired TVs, each with when it was paired and when it was last seen, and
+**Remove** behind a `Popconfirm`. A code no TV is showing shows under the
+code field.
+
+The pairing, from the TV's side (`server/src/routes/devices.js`, open to
+anyone; a code is worth nothing until it is typed on this page):
+
+1. `POST /api/devices/pair` answers `{ code, poll }`: `code` is six digits
+   as a string (`"048213"`, which the TV shows as two groups of three) and
+   `poll` a random handle. Both are unique among the pairings waiting. A
+   pairing waits in the server's memory for 10 minutes; a restart forgets
+   it, and the TV asks again. At most 20 wait at once (503 beyond) and at
+   most 3 start per minute from one client address (429); both answers
+   carry `Retry-After` in seconds. Behind nginx every request comes from
+   `127.0.0.1`, so the per-address count is one count for the whole box
+   there.
+2. The TV asks `GET /api/devices/pair/<poll>` every few seconds: 204 while
+   the pairing waits, 200 `{ token }` once it is approved, and 410 when it
+   expired, was already collected or never existed. The token is handed
+   over once; the pairing is then gone. Both answers are `Cache-Control:
+   no-store`.
+3. Pair on this page sends `POST /api/admin/devices { code, name }`
+   (behind the admin cookie). It approves the waiting pairing with that
+   code and stores the TV with the name (1 to 64 characters) and the
+   token's SHA-256 (`devices.token_hash`), never the token. It answers 201
+   `{ id, name, created_at }`; 404 `No television is showing that code` for
+   a wrong, expired or already approved code; 400 naming the field.
+
+From then on the TV sends `Authorization: Bearer <token>` with every
+request; the guard accepts it on every `/api` route
+([Security § Sessions](security.md#sessions)) and stamps the TV's
+`last_seen_at` at most once an hour. `GET /api/session` answers a TV 401:
+it is not a user.
+
+| Request (behind the admin cookie) | Answer |
+|---|---|
+| `GET /api/admin/devices` | 200, `[{ id, name, created_at, last_seen_at }]` in the order paired |
+| `POST /api/admin/devices { code, name }` | 201, `{ id, name, created_at }`; 404; 400 |
+| `DELETE /api/admin/devices/:id` | 204, and that TV's next request answers 401; 404 |
 
 ## Settings
 
@@ -164,4 +274,7 @@ the environment fallback, `secrets.key`, `SECRETS_KEY`),
 401 on every route without a session, the PUT rules, the test button's
 redaction, no key in any response, the password script reading a pipe) and
 `client/test/Admin.test.jsx` (the three states, saving, testing, an ended
-session).
+session, and the Users and Televisions cards). The users, their sessions
+and the login are tested in `server/test/users.test.js` (with the
+`user:add` script), the pairing and the TV token in
+`server/test/devices.test.js`.

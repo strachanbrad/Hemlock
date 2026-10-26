@@ -67,7 +67,7 @@ before(async () => {
     const events = { handler: (req, res) => res.end(), changes: (req, res) => res.end(), publish: (kind) => published.push(kind) }
     return { saveCover, events, findCover: createCoverFinder({ db, apiKey: () => key, saveCover, fetch: claudeFetch, log: (line) => logs.push(line) }) }
   })
-  api = client(app.base)
+  api = client(app.base, app.cookie)
 })
 after(() => app.close())
 

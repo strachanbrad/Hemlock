@@ -30,7 +30,7 @@ before(async () => {
     return upstream(url, init)
   }
   app = await startServer({ saveCover: (url, base) => covers.saveCoverFromUrl(url, base, { fetch, log: (line) => logs.push(line) }) })
-  api = client(app.base)
+  api = client(app.base, app.cookie)
 })
 after(() => app.close())
 beforeEach(() => {

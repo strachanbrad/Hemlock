@@ -9,6 +9,8 @@ export const MIN_PASSWORD = 8
 export const MAX_PASSWORD = 1024
 export const COOKIE = 'hemlock_admin'
 export const SESSION_MS = 30 * 24 * 60 * 60 * 1000
+export const USER_COOKIE = 'hemlock_session'
+export const USER_SESSION_MS = 180 * 24 * 60 * 60 * 1000
 export const LOCKOUT_FAILURES = 5
 export const LOCKOUT_MS = 15 * 60 * 1000
 
@@ -38,7 +40,9 @@ export function verifyPassword(password, stored) {
 }
 
 const TOKEN = /^[A-Za-z0-9_-]{43}$/
-const digest = (token) => crypto.createHash('sha256').update(token).digest('hex')
+export const newToken = () => crypto.randomBytes(32).toString('base64url')
+export const isToken = (token) => typeof token === 'string' && TOKEN.test(token)
+export const tokenDigest = (token) => crypto.createHash('sha256').update(token).digest('hex')
 const iso = (ms) => new Date(ms).toISOString()
 
 // The database keeps only sha256(token) and a fixed expiry from login.
@@ -51,55 +55,67 @@ export function createSessions(db, { now = Date.now } = {}) {
   return {
     create() {
       removeExpired.run(iso(now()))
-      const token = crypto.randomBytes(32).toString('base64url')
-      insert.run(digest(token), iso(now()), iso(now() + SESSION_MS))
+      const token = newToken()
+      insert.run(tokenDigest(token), iso(now()), iso(now() + SESSION_MS))
       return token
     },
     valid(token) {
-      if (typeof token !== 'string' || !TOKEN.test(token)) return false
-      const expires = find.get(digest(token))
+      if (!isToken(token)) return false
+      const expires = find.get(tokenDigest(token))
       return typeof expires === 'string' && expires > iso(now())
     },
     end(token) {
-      if (typeof token === 'string' && TOKEN.test(token)) removeOne.run(digest(token))
+      if (isToken(token)) removeOne.run(tokenDigest(token))
     },
   }
 }
 
 export const endAllSessions = (db) => db.prepare('DELETE FROM sessions').run().changes
 
-// Failed logins across the whole process: one household, one password.
+// Failed logins in memory, counted per key; the admin gate counts under one key for the whole process.
 export function createLockout({ now = Date.now } = {}) {
-  let failures = []
-  const recent = () => {
-    failures = failures.filter((at) => now() - at < LOCKOUT_MS)
-    return failures
+  const failures = new Map()
+  const recent = (key) => {
+    const list = (failures.get(key) ?? []).filter((at) => now() - at < LOCKOUT_MS)
+    if (list.length > 0) failures.set(key, list)
+    else failures.delete(key)
+    return list
   }
   return {
-    retryAfter() {
-      const list = recent()
+    retryAfter(key = '') {
+      const list = recent(key)
       return list.length >= LOCKOUT_FAILURES ? Math.ceil((list[0] + LOCKOUT_MS - now()) / 1000) : 0
     },
-    fail() {
-      recent().push(now())
+    fail(key = '') {
+      for (const other of [...failures.keys()]) recent(other)
+      failures.set(key, [...recent(key), now()])
     },
-    clear() {
-      failures = []
+    clear(key = '') {
+      failures.delete(key)
     },
   }
 }
 
-export function readToken(req) {
+export function readCookie(req, cookie) {
   for (const part of (req.headers.cookie ?? '').split(';')) {
     const [name, ...value] = part.trim().split('=')
-    if (name === COOKIE) return value.join('=')
+    if (name === cookie) return value.join('=')
   }
   return null
 }
+
+export const readToken = (req) => readCookie(req, COOKIE)
 
 // Path=/api/admin keeps the cookie off every other request; Secure needs TLS, which only the proxy sees.
 export function sessionCookie(token, { secure }) {
   const attributes = ['HttpOnly', 'SameSite=Strict', 'Path=/api/admin', `Max-Age=${token ? SESSION_MS / 1000 : 0}`]
   if (secure) attributes.push('Secure')
   return [`${COOKIE}=${token ?? ''}`, ...attributes].join('; ')
+}
+
+// Lax, not Strict, so a link to a book opened from another site or an app still carries the session.
+export function userCookie(token, { secure }) {
+  const attributes = ['HttpOnly', 'SameSite=Lax', 'Path=/', `Max-Age=${token ? USER_SESSION_MS / 1000 : 0}`]
+  if (secure) attributes.push('Secure')
+  return [`${USER_COOKIE}=${token ?? ''}`, ...attributes].join('; ')
 }

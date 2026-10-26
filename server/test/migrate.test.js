@@ -10,7 +10,7 @@ import { afterEach, describe, it } from 'node:test'
 import Database from 'better-sqlite3'
 import { tempDir } from './support/temp.js'
 import { databaseFile, openDb, setPragmas } from '../src/db.js'
-import { migrate, schemaVersion } from '../src/migrate.js'
+import { migrate, migrationsDir, schemaVersion } from '../src/migrate.js'
 
 const dirs = []
 const scratch = () => {
@@ -53,8 +53,8 @@ describe('openDb', () => {
       assert.equal(db.pragma('journal_mode', { simple: true }), 'wal')
       assert.equal(db.pragma('busy_timeout', { simple: true }), 5000)
       assert.equal(db.pragma('synchronous', { simple: true }), 1)
-      assert.deepEqual(tables(db), ['authors', 'books', 'editions', 'schema_migrations', 'sessions', 'settings'])
-      assert.deepEqual(db.prepare('SELECT version, name FROM schema_migrations').all(), [{ version: 1, name: '001_init.sql' }, { version: 2, name: '002_settings.sql' }])
+      assert.deepEqual(tables(db), ['authors', 'books', 'devices', 'editions', 'schema_migrations', 'sessions', 'settings', 'user_sessions', 'users'])
+      assert.deepEqual(db.prepare('SELECT version, name FROM schema_migrations').all(), [{ version: 1, name: '001_init.sql' }, { version: 2, name: '002_settings.sql' }, { version: 3, name: '003_users.sql' }])
     } finally {
       db.close()
     }
@@ -68,7 +68,7 @@ describe('openDb', () => {
 
     const second = openDb(dataDir)
     try {
-      assert.equal(second.prepare('SELECT COUNT(*) FROM schema_migrations').pluck().get(), 2)
+      assert.equal(second.prepare('SELECT COUNT(*) FROM schema_migrations').pluck().get(), 3)
       assert.equal(second.prepare('SELECT COUNT(*) FROM authors').pluck().get(), 1)
     } finally {
       second.close()
@@ -172,6 +172,52 @@ describe('migrate', () => {
     )
     assert.ok(!tables(db).includes('never'), 'nothing is applied')
     assert.equal(schemaVersion(db), 2)
+    db.close()
+  })
+})
+
+describe('003_users.sql', () => {
+  const shipped = (name) => fs.readFileSync(path.join(migrationsDir, name), 'utf8')
+  const OLD_TABLES = ['authors', 'books', 'editions', 'settings', 'sessions']
+  const rows = (db) => Object.fromEntries(OLD_TABLES.map((table) => [table, db.prepare(`SELECT * FROM ${table} ORDER BY 1`).all()]))
+
+  it('adds users, their sessions and the televisions to a schema 2 library, keeping every row', () => {
+    const db = connection()
+    assert.equal(migrate(db, migrationsIn({ '001_init.sql': shipped('001_init.sql'), '002_settings.sql': shipped('002_settings.sql') })), 2)
+    db.exec(`
+      INSERT INTO authors (id, name) VALUES (1, 'Jane Austen'), (2, 'Emily Brontë');
+      INSERT INTO books (id, title, author_id, star_rating, read, cover) VALUES (1, 'Emma', 1, 4, 1, 'b1-0123abcd.jpg'), (2, 'Wuthering Heights', 2, 5, 0, NULL);
+      INSERT INTO editions (id, book_id, format, isbn) VALUES (1, 1, 'paperback', '9780141439587'), (2, 2, 'ebook', NULL);
+      INSERT INTO settings VALUES ('anthropic_model', 'claude-opus-5-5', 0, '2026-10-01T00:00:00.000Z'), ('admin_password_hash', 'v1:a:b:c', 1, '2026-10-01T00:00:00.000Z');
+      INSERT INTO sessions VALUES ('${'a'.repeat(64)}', '2026-10-01T00:00:00.000Z', '2026-10-31T00:00:00.000Z');
+    `)
+    const before = rows(db)
+
+    assert.equal(migrate(db), 3)
+    assert.deepEqual(rows(db), before)
+    assert.deepEqual(db.prepare('SELECT version, name FROM schema_migrations ORDER BY version').all().map(({ name }) => name), ['001_init.sql', '002_settings.sql', '003_users.sql'])
+    const added = db.pragma('table_list').filter(({ name }) => ['users', 'user_sessions', 'devices'].includes(name))
+    assert.deepEqual(added.map(({ name, strict }) => [name, strict]).sort(), [['devices', 1], ['user_sessions', 1], ['users', 1]])
+    for (const { name } of added) assert.equal(db.prepare(`SELECT COUNT(*) FROM ${name}`).pluck().get(), 0, name)
+    db.close()
+  })
+
+  it('keeps names unique in any ASCII case, refuses a value of the wrong type and cascades a user to their sessions', () => {
+    const db = connection()
+    migrate(db)
+    const at = '2026-10-25T00:00:00.000Z'
+    const user = db.prepare('INSERT INTO users (name, password_hash, created_at) VALUES (?, ?, ?)')
+    const { lastInsertRowid: ana } = user.run('Ana', 'scrypt$x', at)
+    assert.throws(() => user.run('ANA', 'scrypt$y', at), { code: 'SQLITE_CONSTRAINT_UNIQUE' })
+    const session = db.prepare('INSERT INTO user_sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)')
+    session.run('a'.repeat(64), ana, at, at)
+    assert.throws(() => session.run('b'.repeat(64), 'Ana', at, at), { code: 'SQLITE_CONSTRAINT_DATATYPE' })
+    assert.throws(() => session.run('c'.repeat(64), 99, at, at), { code: 'SQLITE_CONSTRAINT_FOREIGNKEY' })
+    const device = db.prepare('INSERT INTO devices (name, token_hash, created_at) VALUES (?, ?, ?)')
+    device.run('Living room', 'd'.repeat(64), at)
+    assert.throws(() => device.run('Kitchen', 'd'.repeat(64), at), { code: 'SQLITE_CONSTRAINT_UNIQUE' })
+    db.prepare('DELETE FROM users WHERE id = ?').run(ana)
+    assert.equal(db.prepare('SELECT COUNT(*) FROM user_sessions').pluck().get(), 0)
     db.close()
   })
 })

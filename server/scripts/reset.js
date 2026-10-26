@@ -5,7 +5,7 @@
 
 import { config } from '../src/config.js'
 import { databaseFile } from '../src/db.js'
-import { resetDatabase, resetRefusal } from '../src/reset.js'
+import { DEV_USER, resetDatabase, resetRefusal } from '../src/reset.js'
 
 const refusal = resetRefusal(config, { force: process.argv.includes('--force') })
 if (refusal) {
@@ -14,4 +14,4 @@ if (refusal) {
 }
 
 const result = resetDatabase(config.dataDir)
-console.log(`Reset ${databaseFile(config.dataDir)} to schema ${result.schema}: ${result.authors} authors, ${result.books} books, ${result.editions} editions, ${result.covers} covers`)
+console.log(`Reset ${databaseFile(config.dataDir)} to schema ${result.schema}: ${result.authors} authors, ${result.books} books, ${result.editions} editions, ${result.covers} covers, user ${DEV_USER.name}`)

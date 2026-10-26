@@ -9,8 +9,10 @@ import Database from 'better-sqlite3'
 import { defaultDataDir } from './config.js'
 import { databaseFile, openDb } from './db.js'
 import { schemaVersion } from './migrate.js'
+import { createUsers } from './users.js'
 
 export const seedDir = path.resolve(import.meta.dirname, '../seed')
+export const DEV_USER = { name: 'dev', password: 'hemlock-dev' }
 
 export function resetRefusal({ production, dataDir }, { force = false } = {}) {
   if (production) return 'db:reset never runs with NODE_ENV=production.'
@@ -46,12 +48,14 @@ export function resetDatabase(dataDir) {
   const db = openDb(dataDir)
   try {
     db.transaction(() => db.exec(fs.readFileSync(path.join(seedDir, 'seed.sql'), 'utf8')))()
+    createUsers(db).add(DEV_USER.name, DEV_USER.password)
     const count = (table) => db.prepare(`SELECT COUNT(*) FROM ${table}`).pluck().get()
     return {
       schema: schemaVersion(db),
       authors: count('authors'),
       books: count('books'),
       editions: count('editions'),
+      users: count('users'),
       covers: fs.readdirSync(covers).length,
     }
   } finally {

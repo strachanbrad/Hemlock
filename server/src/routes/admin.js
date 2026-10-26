@@ -7,6 +7,7 @@ import { Router } from 'express'
 import { MAX_PASSWORD, createLockout, readToken, sessionCookie, verifyPassword } from '../auth.js'
 import { isContact } from '../config.js'
 import { httpError } from '../errors.js'
+import { pathId } from '../validate.js'
 
 export const ADMIN_SETTINGS = ['google_books_api_key', 'anthropic_api_key', 'anthropic_model', 'lookup_contact']
 const MAX_SETTING = 256
@@ -43,7 +44,7 @@ export function settingChanges(body) {
 const redact = (text, key) => (key ? String(text).split(key).join('[redacted]') : String(text))
 
 // probes.google(key) and probes.anthropic(key) resolve to { ok: true, detail } or { ok: false, error }.
-export default function adminRoutes({ db, settings, sessions, probes, secure, now = Date.now }) {
+export default function adminRoutes({ db, settings, sessions, users, devices, probes, secure, now = Date.now }) {
   const router = Router()
   const lockout = createLockout({ now })
   const statuses = () => Object.fromEntries(ADMIN_SETTINGS.map((name) => [name, settings.status(name)]))
@@ -110,6 +111,33 @@ export default function adminRoutes({ db, settings, sessions, probes, secure, no
     }
     if (!result.ok) return res.status(502).json({ error: redact(result.error, key) })
     res.json({ ok: true, latency_ms: Math.round(now() - started), detail: redact(result.detail, key) })
+  })
+
+  router.get('/admin/users', (req, res) => res.json(users.list()))
+
+  router.post('/admin/users', (req, res) => {
+    res.status(201).json(users.add(req.body?.name, req.body?.password))
+  })
+
+  router.put('/admin/users/:id/password', (req, res) => {
+    users.setPassword(pathId(req.params.id, 'User'), req.body?.password)
+    res.status(204).end()
+  })
+
+  router.delete('/admin/users/:id', (req, res) => {
+    users.remove(pathId(req.params.id, 'User'))
+    res.status(204).end()
+  })
+
+  router.get('/admin/devices', (req, res) => res.json(devices.list()))
+
+  router.post('/admin/devices', (req, res) => {
+    res.status(201).json(devices.approve(req.body?.code, req.body?.name))
+  })
+
+  router.delete('/admin/devices/:id', (req, res) => {
+    devices.remove(pathId(req.params.id, 'Television'))
+    res.status(204).end()
   })
 
   return router

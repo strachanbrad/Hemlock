@@ -4,14 +4,16 @@
  */
 
 import fs from 'node:fs'
+import http from 'node:http'
 import path from 'node:path'
 
-export function client(base) {
+// cookie is the session's Cookie header, from startServer.
+export function client(base, cookie) {
   const call = async (method, url, body) => {
-    const init = { method }
+    const init = { method, headers: cookie ? { Cookie: cookie } : {} }
     if (body instanceof FormData) init.body = body
     else if (body !== undefined) {
-      init.headers = { 'Content-Type': 'application/json' }
+      init.headers['Content-Type'] = 'application/json'
       init.body = typeof body === 'string' ? body : JSON.stringify(body)
     }
     const response = await fetch(base + url, init)
@@ -24,6 +26,26 @@ export function client(base) {
     patch: (url, body) => call('PATCH', url, body),
     del: (url) => call('DELETE', url),
   }
+}
+
+// node:http rather than fetch, for localAddress: a client address on the loopback network, which the
+// per-address counts tell apart. Answers the raw text too, for the tests that look for a secret in it.
+export function send(base, method, url, { body, cookie, bearer, localAddress } = {}) {
+  const headers = {}
+  if (cookie) headers.Cookie = cookie
+  if (bearer) headers.Authorization = `Bearer ${bearer}`
+  const data = body === undefined ? undefined : JSON.stringify(body)
+  if (data !== undefined) headers['Content-Type'] = 'application/json'
+  return new Promise((resolve, reject) => {
+    const request = http.request(base + url, { method, headers, localAddress }, (response) => {
+      let text = ''
+      response.setEncoding('utf8')
+      response.on('data', (chunk) => (text += chunk))
+      response.on('end', () => resolve({ status: response.statusCode, body: text ? JSON.parse(text) : null, headers: response.headers, text }))
+    })
+    request.on('error', reject)
+    request.end(data)
+  })
 }
 
 export function multipart(data, cover, { type = 'image/jpeg', filename = 'cover.jpg', parts = {} } = {}) {

@@ -166,7 +166,7 @@ describe('POST /api/lookup/:isbn/identify', () => {
     requested = []
   })
   const post = async (isbn) => {
-    const response = await fetch(`${app.base}/api/lookup/${encodeURIComponent(isbn)}/identify`, { method: 'POST' })
+    const response = await fetch(`${app.base}/api/lookup/${encodeURIComponent(isbn)}/identify`, { method: 'POST', headers: { Cookie: app.cookie } })
     return { status: response.status, body: await response.json() }
   }
 
@@ -198,7 +198,7 @@ describe('identify through the app, from the replayed fixtures', () => {
       identify: createIdentify({ apiKey: KEY, fetch, log: (line) => logs.push(line), anthropic: (options) => createAnthropic(options), probeCovers: async () => NO_COVERS }),
     })
     try {
-      const response = await globalThis.fetch(`${app.base}/api/lookup/${ISBN}/identify`, { method: 'POST' })
+      const response = await globalThis.fetch(`${app.base}/api/lookup/${ISBN}/identify`, { method: 'POST', headers: { Cookie: app.cookie } })
       const text = await response.text()
       assert.equal(response.status, 200)
       const body = JSON.parse(text)
@@ -221,7 +221,7 @@ describe('identify through the app, from the replayed fixtures', () => {
     const fetch = async () => json(anthropicFixture(fixture))
     const app = await startServer({ identify: createIdentify({ apiKey: KEY, fetch, log: () => {}, anthropic: (options) => createAnthropic(options), probeCovers: async () => covers }) })
     try {
-      const response = await globalThis.fetch(`${app.base}/api/lookup/${ISBN}/identify`, { method: 'POST' })
+      const response = await globalThis.fetch(`${app.base}/api/lookup/${ISBN}/identify`, { method: 'POST', headers: { Cookie: app.cookie } })
       return { status: response.status, body: await response.json() }
     } finally {
       await app.close()

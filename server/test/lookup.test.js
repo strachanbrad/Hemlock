@@ -10,7 +10,7 @@ import { after, before, describe, it, mock } from 'node:test'
 import { loadConfig } from '../src/config.js'
 import { createLimiter } from '../src/lookup/limiter.js'
 import { CACHE_MS, createLookup } from '../src/lookup/index.js'
-import { dataDir, loadApp } from './support/server.js'
+import { dataDir, loadApp, signIn } from './support/server.js'
 import { fixtureFetch, instantClock, json, readFixture } from './support/fixtures.js'
 
 const version = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '../../package.json'), 'utf8')).version
@@ -557,6 +557,7 @@ describe('GET /api/lookup/:isbn', () => {
   let server
   let base
   let db
+  let cookie
   let requested
   const results = new Map()
 
@@ -571,6 +572,7 @@ describe('GET /api/lookup/:isbn', () => {
       const listening = createApp({ db, lookup }).listen(0, '127.0.0.1', () => resolve(listening))
     })
     base = `http://127.0.0.1:${server.address().port}`
+    cookie = await signIn(db)
   })
   after(async () => {
     await new Promise((resolve) => server.close(resolve))
@@ -580,7 +582,7 @@ describe('GET /api/lookup/:isbn', () => {
 
   const get = async (isbn) => {
     requested = []
-    const response = await fetch(`${base}/api/lookup/${encodeURIComponent(isbn)}`)
+    const response = await fetch(`${base}/api/lookup/${encodeURIComponent(isbn)}`, { headers: { Cookie: cookie } })
     return { status: response.status, body: await response.json() }
   }
 
@@ -614,7 +616,7 @@ describe('GET /api/lookup/:isbn', () => {
       const listening = app.listen(0, '127.0.0.1', () => resolve(listening))
     })
     try {
-      const answer = await globalThis.fetch(`http://127.0.0.1:${real.address().port}/api/lookup/0553212583`)
+      const answer = await globalThis.fetch(`http://127.0.0.1:${real.address().port}/api/lookup/0553212583`, { headers: { Cookie: cookie } })
       assert.equal(answer.status, 200)
       const body = await answer.json()
       assert.equal(body.isbn, WUTHERING)

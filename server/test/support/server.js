@@ -18,6 +18,15 @@ export const loadApp = async () => ({
   ...(await import('../../src/db.js')),
 })
 
+// Every API route but a few needs a session: this opens one for a user named test, whose password
+// hash matches no password, and answers the Cookie header that carries it.
+export async function signIn(db, { now } = {}) {
+  const { createUsers } = await import('../../src/users.js')
+  db.prepare("INSERT OR IGNORE INTO users (name, password_hash, created_at) VALUES ('test', 'none', '2026-01-01T00:00:00.000Z')").run()
+  const id = db.prepare("SELECT id FROM users WHERE name = 'test'").pluck().get()
+  return `hemlock_session=${createUsers(db, { now }).open(id)}`
+}
+
 // options reach createApp, for a test that injects the lookup, the settings or the cover download;
 // a function receives the database first.
 export async function startServer(options = {}) {
@@ -30,6 +39,7 @@ export async function startServer(options = {}) {
   return {
     db,
     base: `http://127.0.0.1:${server.address().port}`,
+    cookie: await signIn(db, { now: extra.now }),
     async close() {
       await new Promise((resolve) => server.close(resolve))
       db.close()

@@ -7,6 +7,7 @@ import { MAX_PASSWORD, MIN_PASSWORD, endAllSessions, hashPassword } from '../src
 import { config } from '../src/config.js'
 import { databaseFile, openDb } from '../src/db.js'
 import { createSettings } from '../src/settings.js'
+import { readPassword } from './password.js'
 
 // The password never comes from an argument: argv is visible to every local user in ps.
 if (process.argv.length > 2) {
@@ -14,50 +15,9 @@ if (process.argv.length > 2) {
   process.exit(2)
 }
 
-function hiddenPrompt(question) {
-  return new Promise((resolve, reject) => {
-    const { stdin, stderr } = process
-    let input = ''
-    const finish = (err) => {
-      stdin.off('data', onData)
-      stdin.setRawMode(false)
-      stdin.pause()
-      stderr.write('\n')
-      if (err) reject(err)
-      else resolve(input)
-    }
-    const onData = (chunk) => {
-      for (const char of chunk) {
-        if (char === '\r' || char === '\n' || char === '\u0004') return finish()
-        if (char === '\u0003') return finish(new Error('Cancelled'))
-        if (char === '\u007f' || char === '\b') input = [...input].slice(0, -1).join('')
-        else input += char
-      }
-    }
-    stderr.write(question)
-    stdin.setRawMode(true)
-    stdin.setEncoding('utf8')
-    stdin.on('data', onData)
-    stdin.resume()
-  })
-}
-
-async function firstLine() {
-  const chunks = []
-  for await (const chunk of process.stdin) chunks.push(chunk)
-  return Buffer.concat(chunks).toString('utf8').split(/\r?\n/)[0]
-}
-
-async function readPassword() {
-  if (!process.stdin.isTTY) return firstLine()
-  const password = await hiddenPrompt('New admin password: ')
-  if ((await hiddenPrompt('Again: ')) !== password) throw new Error('The two passwords differ; nothing changed')
-  return password
-}
-
 let password
 try {
-  password = await readPassword()
+  password = await readPassword('New admin password: ')
 } catch (err) {
   console.error(err.message)
   process.exit(1)

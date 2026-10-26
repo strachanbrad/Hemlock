@@ -31,7 +31,7 @@ before(async () => {
     settings = createSettings(db, { secretKey: () => key, env: {} })
     return { events, settings }
   })
-  api = client(app.base)
+  api = client(app.base, app.cookie)
   coversDir = (await loadApp()).coversDir
 })
 after(async () => {
@@ -55,7 +55,7 @@ async function waitFor(check, ms = 2000) {
 // Holds the stream's text as it arrives.
 async function openStream(base) {
   const controller = new AbortController()
-  const response = await fetch(`${base}/api/events`, { signal: controller.signal })
+  const response = await fetch(`${base}/api/events`, { signal: controller.signal, headers: { Cookie: app.cookie } })
   const stream = { response, text: '', close: () => controller.abort() }
   streams.push(stream)
   if (response.ok) {
@@ -209,7 +209,7 @@ describe('GET /api/events', { timeout: 15_000 }, () => {
     try {
       const open = [await openStream(other.base), await openStream(other.base)]
       await waitFor(() => other.events.size() === 2)
-      const refused = await fetch(`${other.base}/api/events`)
+      const refused = await fetch(`${other.base}/api/events`, { headers: { Cookie: app.cookie } })
       assert.equal(refused.status, 503)
       assert.deepEqual(await refused.json(), { error: 'Too many open pages' })
       assert.equal(other.events.size(), 2)
@@ -229,7 +229,7 @@ describe('GET /api/events', { timeout: 15_000 }, () => {
 // Starts a long poll; answers its status, body, Cache-Control and how long it took.
 function poll(base, query, signal) {
   const started = performance.now()
-  return fetch(`${base}/api/changes${query}`, { signal }).then(async (response) => ({
+  return fetch(`${base}/api/changes${query}`, { signal, headers: { Cookie: app.cookie } }).then(async (response) => ({
     status: response.status,
     body: await response.json(),
     cache: response.headers.get('cache-control'),
@@ -267,7 +267,7 @@ describe('GET /api/changes', { timeout: 15_000 }, () => {
       await settle()
       assert.equal(other.events.size(), 1)
 
-      assert.equal((await fetch(`${other.base}/api/books/1`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ read: true }) })).status, 200)
+      assert.equal((await fetch(`${other.base}/api/books/1`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', Cookie: app.cookie }, body: JSON.stringify({ read: true }) })).status, 200)
       const answer = await held
       assert.deepEqual([answer.status, answer.body, answer.cache], [200, { version: version + 1 }, 'no-store'])
       assert.equal(other.events.size(), 0)
@@ -349,7 +349,7 @@ describe('GET /api/changes', { timeout: 15_000 }, () => {
       const held = poll(other.base, `?since=${version}&wait=30`, controller.signal).catch((err) => err.name)
       await waitFor(() => other.events.size() === 2)
 
-      assert.equal((await fetch(`${other.base}/api/events`)).status, 503)
+      assert.equal((await fetch(`${other.base}/api/events`, { headers: { Cookie: app.cookie } })).status, 503)
       const refused = await poll(other.base, `?since=${version}&wait=30`)
       assert.deepEqual([refused.status, refused.body], [503, { error: 'Too many open pages' }])
       assert.deepEqual((await poll(other.base, '')).body, { version })

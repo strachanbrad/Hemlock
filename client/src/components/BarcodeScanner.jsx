@@ -8,6 +8,7 @@ import { Alert, Button, Input, Typography } from 'antd'
 import { CameraOutlined } from '@ant-design/icons'
 import { BarcodeDetector, prepareZXingModule } from 'barcode-detector/ponyfill'
 import wasmUrl from 'zxing-wasm/reader/zxing_reader.wasm?url'
+import { applyZoom, bandRect, chooseLens, videoConstraints, zoomLevel } from '../lib/camera.js'
 import { isValidIsbn13, toIsbn13 } from '../lib/isbn.js'
 import './BarcodeScanner.css'
 
@@ -17,15 +18,24 @@ prepareZXingModule({
   overrides: { locateFile: (path, prefix) => (path.endsWith('.wasm') ? wasmUrl : prefix + path) },
 })
 
-const SCAN_INTERVAL_MS = 150
+const SCAN_INTERVAL_MS = 120
 
 let detector = null
 const getDetector = () => (detector ??= new BarcodeDetector({ formats: ['ean_13'] }))
+
+// The lens chooseLens picked, kept for the page's later scans so they open it at once.
+let lens = null
+// The zoom chosen on the toggle, kept for the page's later scans; 2x until the toggle says 1x.
+let zoomFactor = 2
+const ZOOMS = [1, 2]
 
 // navigator.mediaDevices is undefined outside a secure context (https, or localhost).
 const cameraAvailable = () => Boolean(globalThis.navigator?.mediaDevices?.getUserMedia)
 
 const stopTracks = (stream) => stream?.getTracks().forEach((track) => track.stop())
+
+// A device that vanished answers OverconstrainedError to an exact deviceId.
+const lensGone = (error) => error?.name === 'OverconstrainedError' || error?.name === 'NotFoundError'
 
 function failure(error) {
   if (error?.name === 'NotAllowedError' || error?.name === 'SecurityError') return 'denied'
@@ -74,7 +84,9 @@ function ManualIsbn({ onIsbn }) {
 // the Scan tap, or at mount with autoStart (for a scanner mounted by a tap, as in a modal).
 export default function BarcodeScanner({ onDetected, autoStart = false }) {
   const [phase, setPhase] = useState(() => (!cameraAvailable() ? 'insecure' : autoStart ? 'scanning' : 'idle'))
+  const [zoom, setZoom] = useState(null)
   const videoRef = useRef(null)
+  const zoomRef = useRef(null)
   const onDetectedRef = useRef(onDetected)
 
   useEffect(() => {
@@ -86,22 +98,85 @@ export default function BarcodeScanner({ onDetected, autoStart = false }) {
     let stopped = false
     let stream = null
     let timer = null
+    let context = null
+
+    const release = () => {
+      stopTracks(stream)
+      stream = null
+    }
+
+    // Answers false when the scanner stopped while the camera was opening.
+    const open = async () => {
+      const ask = () => navigator.mediaDevices.getUserMedia({ video: videoConstraints(lens), audio: false })
+      let granted
+      try {
+        granted = await ask()
+      } catch (error) {
+        if (!lens || !lensGone(error)) throw error
+        lens = null
+        granted = await ask()
+      }
+      // StrictMode and a fast unmount both clean up before a pending stream arrives.
+      if (stopped) {
+        stopTracks(granted)
+        return false
+      }
+      stream = granted
+      videoRef.current.srcObject = granted
+      videoRef.current.play().catch(() => {})
+      return true
+    }
+
+    const track = () => stream?.getVideoTracks()[0]
+
+    // Labels exist only once the camera is open, so the first open of a page takes facingMode.
+    const pinLens = async () => {
+      const chosen = chooseLens(await navigator.mediaDevices.enumerateDevices().catch(() => []))
+      if (!chosen || stopped) return
+      lens = chosen.deviceId
+      if (track()?.getSettings().deviceId === lens) return
+      release()
+      await open()
+    }
+
+    // Answers false when the camera refuses the zoom.
+    const zoomTo = (factor) => applyZoom(track(), zoomLevel(track().getCapabilities().zoom, factor))
+
+    // A fresh track is at 1x; the chosen zoom is applied when the camera offers one.
+    const offerZoom = async () => {
+      if (stopped || zoomLevel(track()?.getCapabilities?.().zoom, 1) == null) return
+      if (zoomFactor !== 1 && !(await zoomTo(zoomFactor))) {
+        zoomFactor = 1
+        return
+      }
+      if (!stopped) setZoom(zoomFactor)
+    }
 
     const stop = () => {
       stopped = true
       clearTimeout(timer)
-      stopTracks(stream)
-      stream = null
+      setZoom(null)
+      release()
       if (videoRef.current) videoRef.current.srcObject = null
     }
 
-    const scan = async (barcodeDetector) => {
+    const drawBand = (video, band) => {
+      context ??= document.createElement('canvas').getContext('2d', { willReadFrequently: true })
+      const { canvas } = context
+      if (canvas.width !== band.width) canvas.width = band.width
+      if (canvas.height !== band.height) canvas.height = band.height
+      context.drawImage(video, band.x, band.y, band.width, band.height, 0, 0, band.width, band.height)
+      return canvas
+    }
+
+    const scan = async () => {
       if (stopped) return
       const video = videoRef.current
-      // detect() throws InvalidStateError until the video has a frame (readyState 2).
-      if (video && video.readyState >= 2) {
+      // Before a frame (readyState 2) the video has no picture to draw.
+      const band = video?.readyState >= 2 && bandRect(video.videoWidth, video.videoHeight, video.clientWidth, video.clientHeight)
+      if (band) {
         try {
-          const codes = await barcodeDetector.detect(video)
+          const codes = await getDetector().detect(drawBand(video, band))
           if (stopped) return
           const isbn = codes.map((code) => code.rawValue).find(isValidIsbn13)
           if (isbn) {
@@ -119,28 +194,35 @@ export default function BarcodeScanner({ onDetected, autoStart = false }) {
           }
         }
       }
-      timer = setTimeout(() => scan(barcodeDetector), SCAN_INTERVAL_MS)
+      timer = setTimeout(scan, SCAN_INTERVAL_MS)
     }
 
-    const barcodeDetector = getDetector()
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false }).then(
-      (granted) => {
-        // StrictMode and a fast unmount both clean up before a pending stream arrives.
-        if (stopped) {
-          stopTracks(granted)
-          return
-        }
-        stream = granted
-        videoRef.current.srcObject = granted
-        videoRef.current.play().catch(() => {})
-        scan(barcodeDetector)
-      },
-      (error) => {
+    const start = async () => {
+      try {
+        if (!(await open())) return
+        scan()
+        await pinLens()
+        await offerZoom()
+      } catch (error) {
         if (!stopped) setPhase(failure(error))
-      },
-    )
+      }
+    }
+
+    getDetector()
+    zoomRef.current = async (factor) => {
+      zoomFactor = factor
+      if (await zoomTo(factor)) return
+      zoomFactor = 1
+      if (!stopped) setZoom(null)
+    }
+    start()
     return stop
   }, [phase])
+
+  const chooseZoom = (factor) => {
+    setZoom(factor)
+    zoomRef.current(factor)
+  }
 
   if (phase === 'scanning') {
     return (
@@ -148,6 +230,15 @@ export default function BarcodeScanner({ onDetected, autoStart = false }) {
         <div className="barcode-scanner__viewport">
           <video ref={videoRef} className="barcode-scanner__video" playsInline muted autoPlay />
           <div className="barcode-scanner__aim" aria-hidden="true" />
+          {zoom && (
+            <div className="barcode-scanner__zoom" role="group" aria-label="Zoom">
+              {ZOOMS.map((factor) => (
+                <button key={factor} type="button" aria-pressed={zoom === factor} onClick={() => chooseZoom(factor)}>
+                  {factor}×
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <p className="barcode-scanner__hint">Hold the barcode on the back of the book inside the frame.</p>
         <Button onClick={() => setPhase('idle')}>Stop scanning</Button>

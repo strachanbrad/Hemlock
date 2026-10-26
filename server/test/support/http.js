@@ -30,8 +30,8 @@ export function client(base, cookie) {
 
 // node:http rather than fetch, for localAddress: a client address on the loopback network, which the
 // per-address counts tell apart. Answers the raw text too, for the tests that look for a secret in it.
-export function send(base, method, url, { body, cookie, bearer, localAddress } = {}) {
-  const headers = {}
+export function send(base, method, url, { body, cookie, bearer, localAddress, headers: extra = {} } = {}) {
+  const headers = { ...extra }
   if (cookie) headers.Cookie = cookie
   if (bearer) headers.Authorization = `Bearer ${bearer}`
   const data = body === undefined ? undefined : JSON.stringify(body)

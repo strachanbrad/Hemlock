@@ -29,7 +29,7 @@ import { createUsers } from './users.js'
 const WRITES = new Set(['POST', 'PATCH', 'PUT', 'DELETE'])
 
 // Every consumer reads its key, contact and model from `settings` at request time.
-export function createApp({ db, settings = createSettings(db), lookup, identify, probes, saveCover, findCover, events = createEvents(), secure = config.production, now = Date.now }) {
+export function createApp({ db, settings = createSettings(db), lookup, identify, probes, saveCover, findCover, events = createEvents(), secure = config.production, trustProxy = config.trustProxy, now = Date.now }) {
   const users = createUsers(db, { now })
   const devices = createDevices(db, { now })
   const setting = (name) => () => settings.get(name)
@@ -45,6 +45,8 @@ export function createApp({ db, settings = createSettings(db), lookup, identify,
 
   const app = express()
   app.disable('x-powered-by')
+  // req.ip is the first address in X-Forwarded-For that no trusted proxy added, so a visitor cannot forge it.
+  app.set('trust proxy', trustProxy)
   app.use('/api', signInGuard({ users, devices, secure }))
   app.use(express.json())
 

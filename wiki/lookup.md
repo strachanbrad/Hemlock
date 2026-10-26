@@ -13,7 +13,7 @@ cover ([Library § Add a book](library.md#add-a-book)).
 Code: `server/src/lookup/` (the clients, the limiter, the merge and
 `anthropic.js`), `server/src/routes/lookup.js`, `saveCoverFromUrl()` in
 `server/src/covers.js`, `server/src/coverFinder.js`,
-`client/src/components/BarcodeScanner.jsx`,
+`client/src/components/BarcodeScanner.jsx`, `client/src/lib/camera.js`,
 `client/src/components/IsbnField.jsx` and `client/src/api/lookup.js`.
 
 The keys, the Claude model and the Open Library contact are settings: saved
@@ -465,33 +465,94 @@ commit and points the row at the file in a second statement
 ## Barcode scanning
 
 `client/src/components/BarcodeScanner.jsx` takes `onDetected(isbn13)` and an
-optional `autoStart`.
+optional `autoStart`. The lens choice, the zoom and the band are helpers in
+`client/src/lib/camera.js`.
 
 - **Opening the camera.** The camera opens when the person taps "Scan
   barcode", with `getUserMedia({ video: { facingMode: { ideal: 'environment'
-  } }, audio: false })`. `ideal` prefers the rear camera and falls back to any
-  other; `exact` would fail outright on a laptop. With `autoStart` the camera
-  opens at mount, for a scanner that a tap mounts (in a modal, say).
+  }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false })`.
+  `ideal` prefers the rear camera and a 1080p frame and falls back to what
+  the device has; `exact` would fail outright on a laptop or an older phone.
+  With `autoStart` the camera opens at mount, for a scanner that a tap
+  mounts (in a modal, say).
+- **The lens.** A recent iPhone lists each physical back lens ("Back
+  Camera", "Back Ultra Wide Camera", "Back Telephoto Camera") and virtual
+  cameras built from them ("Back Dual Camera", "Back Dual Wide Camera",
+  "Back Triple Camera") that switch lens on their own; `facingMode` can land
+  on a virtual one. Once the camera is open the scanner lists the devices,
+  and `chooseLens()` picks the video input labelled exactly `Back Camera`
+  (the physical main lens), else the first back-facing one whose label names
+  no ultra wide, dual, triple or telephoto lens (`camera2 0, facing back` on
+  Android), else none. When the open track's `getSettings().deviceId` is
+  another device, the scanner stops it and opens the chosen one with
+  `deviceId: { exact }` and the same size. Labels are empty until the page
+  has camera permission, so the first open of a page always goes through
+  `facingMode`; the chosen device is kept in the module, and the page's
+  later scans open it at once. A kept device that answers
+  `OverconstrainedError` or `NotFoundError` is forgotten and the camera
+  opens with `facingMode` instead. iOS labels are in the phone's language,
+  so on a phone set to another language the choice falls through to none
+  and `facingMode` stands.
 - **Playing the video.** `<video playsInline muted autoPlay>`: an iPhone
   plays video inline only with `playsinline`, and a muted stream may play
   without a gesture.
+- **The band.** Each look decodes a band of the frame, not the whole frame:
+  the full width of what the preview shows and the middle 40 percent of its
+  height, drawn at the frame's own pixel size to an offscreen canvas
+  (`willReadFrequently`), which goes to `detect()`. The preview is
+  `object-fit: cover` in a 4:3 box, so it shows a centred crop of the frame;
+  `bandRect()` cuts the band from that crop, so in portrait, where the
+  crop drops the top and bottom of a tall frame, the band is still the
+  part under the guide box. The guide box (`.barcode-scanner__aim` in
+  `BarcodeScanner.css`, inset 30 percent from the top and the bottom)
+  marks the band; it and `BAND` in `camera.js` change together. A linear
+  barcode decodes from any strip across its bars, so the band need not hold
+  the whole barcode.
 - **Detecting.** `barcode-detector/ponyfill` (ZXing compiled to WASM) with
-  `formats: ['ean_13']` looks at the video about every 150 ms once it has a
-  frame (`readyState >= 2`; before that `detect()` throws). The five-digit
+  `formats: ['ean_13']` looks at the band every 120 ms once the video has a
+  frame (`readyState >= 2`). ZXing's `tryHarder`, `tryRotate`, `tryInvert`
+  and `tryDownscale` are on: the ponyfill's constructor takes only
+  `formats`, and its `detect()` sends only `formats` and `textMode` over
+  zxing-wasm's reader defaults, where all four are true. The five-digit
   price add-on beside an ISBN barcode is ignored. Only a code that
   `isValidIsbn13()` accepts counts, so a grocery or magazine EAN-13 is
   skipped. The first ISBN found is reported once, after every camera track
   has stopped.
+- **Focus.** iOS gives a page no way to make the camera focus again (Safari
+  has no `focusMode`, `focusDistance` or point of interest, and neither a
+  changed constraint nor a fresh open of the camera re-runs its autofocus),
+  so the book is held at the main lens's closest focus or further, about 15
+  to 20 cm from the phone.
+- **Zoom.** When the open track's `getCapabilities().zoom` is a zoom factor
+  (a range from 1 or below to above 1; a desktop webcam's device units, 100
+  to 500 say, count as none), a 1× / 2× toggle shows at the foot of the
+  preview, and the scanner applies 2× as the camera opens (the owner's
+  choice: a barcode decodes from a natural distance), unless the toggle
+  said 1× earlier on the page. A tap applies the factor to the live track
+  through `applyConstraints`, without reopening the camera:
+  `zoomLevel()` clamps it to the range and rounds it to the range's step,
+  and `applyZoom()` sends it with the size (`applyConstraints` replaces every
+  constraint), as a plain `zoom` first and, when that is refused or does not
+  take, as `advanced: [{ zoom }]`. The camera zooms before the frame is
+  made, so the frame stays 1080p and the band gets twice the pixels per bar
+  at 2× from the same distance. The choice is kept in the module, and the
+  page's later scans open at it. A camera with no zoom, or one that refuses
+  both forms, shows no toggle and stays at 1×, and a refused 2×, on opening
+  or on a tap, makes 1× the choice again. There is no 0.5×: on an iPhone that is the ultra wide,
+  which only a virtual camera offers and which does not focus close.
 - **Stopping.** The tracks stop on success, on "Stop scanning" and on
   unmount, including a stream that arrives after the component has cleaned
-  up (React's StrictMode runs every effect twice in development).
+  up (React's StrictMode runs every effect twice in development) or during the
+  switch to the chosen lens.
 - **Typed entry.** An ISBN field (ISBN-10 or ISBN-13) replaces the camera when
   `navigator.mediaDevices` is missing (an insecure origin), when the person
-  refuses the camera, when no camera exists, or when `detect()` throws
+  refuses the camera, when no camera exists, when the camera fails to open
+  (with "Try the camera again"), or when `detect()` throws
   `NotSupportedError` (the WASM did not load).
 - **The ponyfill, not the polyfill.** Chrome on Android has a native
   `BarcodeDetector` that would behave differently from the ZXing detector
-  every other browser uses; the ponyfill uses ZXing everywhere.
+  every other browser uses; the ponyfill uses ZXing everywhere. The native
+  one is not usable on iOS in any case.
 
 ### The WASM
 
@@ -573,6 +634,14 @@ way, so no test reaches Barnes & Noble or Amazon.
   `server/test/coverFinder.test.js` replays them behind
   `POST /api/books/:id/cover/find`, with the image host's answers built
   with sharp.
-- `client/test/BarcodeScanner.test.jsx` mounts the scanner under StrictMode
-  with a fake `getUserMedia` whose streams the test releases, so a stream that
-  arrives after cleanup is covered.
+- `client/test/camera.test.js` runs `chooseLens()` over iPhone, Android,
+  laptop and unlabelled device lists, `zoomLevel()` over factor, webcam and
+  stepped ranges, `applyZoom()` against tracks that take, refuse or ignore
+  each form, and `bandRect()` over landscape, portrait and unsized previews.
+- `client/test/BarcodeScanner.test.jsx` mounts the scanner, under StrictMode
+  where cleanup matters, with a fake `getUserMedia` whose streams the test
+  releases (so a stream that arrives after cleanup is covered), a fake
+  `enumerateDevices`, tracks with `getSettings`, `getCapabilities` and
+  `applyConstraints`, and a stubbed canvas context. Each test imports the
+  component afresh (`vi.resetModules()`), since the kept lens is module
+  state.

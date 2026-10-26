@@ -3,8 +3,9 @@
 The work planned for Hemlock and what was decided against. This page
 describes work that does not exist yet, in the present-tense voice of the rest
 of the wiki; a step leaves this page when it is built and is described on its
-own page. Nothing is deployed, so a step may change the schema, the API or the
-file layout without a compatibility path.
+own page. Hemlock is deployed and holds a real library, so a step that changes
+the schema does it with a new migration over the rows already there
+([Migrations](migrations.md)).
 
 ## Later
 
@@ -23,6 +24,5 @@ file layout without a compatibility path.
 - **A third table for individual copies.** Books and editions cover what is
   owned and what is wanted; a copies table is added only if purchase dates,
   prices or loans are wanted.
-- **User accounts.** The app sits behind the owner's reverse proxy for one
-  household; access control belongs to the proxy. The admin page's one
-  password guards only the settings.
+- **Roles and per-user libraries.** Every user sees and edits everything;
+  only the admin password reaches `/admin` ([Admin § Users](admin.md#users)).

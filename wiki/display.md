@@ -14,7 +14,9 @@ GET /api/display?filter=all|read|unread|owned        (default owned)
 ```
 
 `server/src/routes/display.js` validates `filter` and answers the array that
-`listDisplayBooks(db, filter)` returns. Every record is flat, so a client never
+`listDisplayBooks(db, filter)` returns. Like every API route it needs a
+user's session or a paired TV's token, and answers 401 without either
+([Security § Sessions](security.md#sessions)). Every record is flat, so a client never
 joins anything:
 
 | Field | Value |
@@ -33,10 +35,12 @@ least one edition, so a book only wanted stays off the television; `read` and
 `unread` split every book by read status. The order is `title COLLATE NOCASE, id`, the same on every
 call, which the slideshow relies on to keep its place.
 
-To see what the page receives, with `npm run dev` running on the dev machine:
+To see what the page receives, with `npm run dev` running on the dev machine,
+sign in as the dev library's user and send its cookie:
 
 ```bash
-curl -s 'http://localhost:5173/api/display?filter=unread'
+curl -s -c /tmp/hemlock-dev.jar -H 'Content-Type: application/json' -d '{"name":"dev","password":"hemlock-dev"}' http://localhost:5173/api/login
+curl -s -b /tmp/hemlock-dev.jar 'http://localhost:5173/api/display?filter=unread'
 ```
 
 ## The query
@@ -62,9 +66,28 @@ tables ([Library § The model](library.md#the-model)):
 | `client/src/pages/Display/effects.js` | The geometry of the cover effects: `bloodOf(gore, seed, height)` lays out the blood for a level, `seedOf(id)` seeds it per book, `faceHeight` sizes the cover's face, the path builders draw it, and `CHILLI` holds the chilli's paths and level lines. `bloodMarkup` and `chilliMarkup` build the SVG of each effect, with the class names `display.css` styles; the [Roku channel](roku.md) draws the same markup. Pure. |
 | `client/src/pages/Display/CoverEffects.jsx` | The blood and the chilli: the markup of `effects.js` in an svg over the cover. |
 | `client/src/pages/Display/display.css` | The stage, the slide layout, the effects' colours and motion, and the palette. |
-| `client/src/api/display.js` | `fetchDisplayBooks(filter)`, the page's only request besides the live updates stream it holds through `useChanges()` ([Library § Live updates](library.md#live-updates)). |
+| `client/src/api/display.js` | `fetchDisplayBooks(filter)`, the page's only request besides the session check (`session()` in `client/src/api/session.js`) and the live updates stream it holds through `useChanges()` ([Library § Live updates](library.md#live-updates)). |
 
 The shell's **Display** menu item opens `/display` in a new tab.
+
+### Signing in
+
+The page first asks `GET /api/session`, showing only its background meanwhile.
+Without a session it shows one screen in its own stylesheet, "Sign in to
+show the library" in brass italic, linking to `/login?next=/display`, with
+the caption; it starts no slideshow, no stream and no timer. After the
+sign-in the login page comes back to `/display`. The session lasts 180 days
+and renews itself while the page is open
+([Security § Sessions](security.md#sessions)), so a television's browser
+signs in once.
+
+When the session ends while the slideshow runs (the user was removed, or
+their password set, on `/admin`), the server refuses the stream, so no
+change reaches the page and it keeps its last list. Its next list fetch,
+at the latest the daily reload, finds no session, and the page turns to
+the same screen and closes its stream. A session check that
+cannot reach the server starts the slideshow, which says "Cannot reach the
+library. Retrying." until the server answers.
 
 ### A slide
 
@@ -215,10 +238,9 @@ ways:
 3. **A streaming stick's browser** on another input, such as the Silk browser
    on a Fire TV stick.
 
-Whichever way, the browser opens `/display` without an interactive login, so
-the reverse proxy has to let the page, `/api/display`, `/api/events` and
-`/covers/` through
-([Deployment § The reverse proxy](deployment.md#the-reverse-proxy)).
+Whichever way, the browser signs in once on `/login`
+([Signing in](#signing-in)); the reverse proxy passes the session cookie
+through ([Deployment § The reverse proxy](deployment.md#the-reverse-proxy)).
 
 The browser must meet Vite's default build target: Chrome or Edge 111,
 Firefox 114, Safari 16.4. A built-in smart-TV browser older than that shows a
@@ -247,7 +269,9 @@ edits from the remote: [Roku channel](roku.md).
   the pools, and the 12-unit edge), and the markup: every shape in the rim
   and the body, the glints, the chilli's ids and level line.
 - `client/test/Display.test.jsx`: the page under `StrictMode` with fake
-  timers: the schedule, catch-up on `visibilitychange`, the refetch on a
+  timers: the sign-in screen without a session (no stream, no list, no
+  timer), the turn to it on a 401, a session check that cannot reach the
+  server, the schedule, catch-up on `visibilitychange`, the refetch on a
   change and on a reconnect with no poll beside it (with `EventSource`
   stubbed), the 5-minute refetch without it, the notices, the keys,
   fullscreen, the idle cursor, and no interval, timer, listener, wake lock

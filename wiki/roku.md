@@ -13,6 +13,11 @@ is a client of the same API as the web pages:
 | `GET /covers/<file>` | The covers, each `cover_url` prefixed with the channel's address. |
 | `PATCH /api/books/:id` | One rating or Read change ([Library § The API](library.md#the-api)). |
 | `GET /api/changes?since=&wait=` | The long poll that says the library changed ([Library § Live updates](library.md#live-updates)). |
+| `POST /api/devices/pair`, `GET /api/devices/pair/<poll>` | Pairing: a code to show, then the TV's device token once the code is typed on `/admin` ([Admin § Televisions](admin.md#televisions)). |
+
+Every request but the two pairing ones carries the TV's device token,
+`Authorization: Bearer <token>`; the covers carry nothing and need nothing
+([below](#pairing)).
 
 The channel is sideloaded in Roku's developer mode, not published in the
 Channel Store; a Roku device holds one sideloaded channel at a time.
@@ -28,7 +33,8 @@ Channel Store; a Roku device holds one sideloaded channel at a time.
 | `roku/components/Slide.xml`, `.brs` | One slide: the cover box, the cloth cover, the text column and its layout. |
 | `roku/components/RatingsPanel.xml`, `.brs` | The editing panel: Read, Stars, Spice and Gore drawn with their icons, and the highlighted row. |
 | `roku/components/SettingsDialog.xml`, `.brs` | The settings dialog on the Options key. |
-| `roku/components/HttpTask.xml`, `.brs` | The one Task thread that makes every request, the long poll included. |
+| `roku/components/HttpTask.xml`, `.brs` | The one Task thread that makes every request, the long poll included, and adds the device token. |
+| `roku/components/PairingScreen.xml`, `.brs` | The pairing screen: the code, what to do with it, and the address. |
 | `roku/components/common.brs` | The clock, the address check, and number, text and JSON helpers. |
 | `roku/fonts/` | Cormorant Garamond, Lora and Inter from their official releases, with their OFL licences. |
 | `roku/scripts/` | `build.js`, `images.js` and `install.js`, the npm commands below. |
@@ -108,6 +114,9 @@ and the next one, whose cover is already loading.
 | Back | Closes the editing panel when it is open; otherwise leaves the channel. |
 | Options (`*`) | Opens the settings dialog. |
 
+On the pairing screen only Options (the settings dialog) and Back (leave the
+channel) do anything.
+
 ### Rating edits
 
 The editing panel lies over the lower part of the text column, never the
@@ -138,6 +147,36 @@ after 5 seconds, and a hold longer than 40 seconds is cancelled as a dead
 connection. A server without the long poll answers 404; the channel then
 refetches the list once a minute and asks again each time.
 
+## Pairing
+
+Hemlock answers only signed-in pages and paired TVs. A TV pairs itself with a
+code; no secret is typed on the remote or built into the channel.
+
+1. A channel with no device token in the registry (the first start, or after
+   unpairing) shows the pairing screen: "Pair this TV with Hemlock", a code
+   of six digits in two groups, "On Hemlock's admin page, under Televisions,
+   type this code", and the address it is talking to. The code comes from
+   `POST /api/devices/pair`, with a poll handle.
+2. On `/admin`, under Televisions, type the code and a name for the TV
+   ([Admin § Televisions](admin.md#televisions)).
+3. The channel asks `GET /api/devices/pair/<poll>` every 3 seconds: 204 means
+   still waiting; 200 carries the device token, once, and the slideshow
+   starts by itself; 410 means the code expired (after 10 minutes), and the
+   channel asks for a new one. A 429 or 503 (too many pairings at once) shows
+   "Hemlock is busy" and tries again a minute later; an address it cannot
+   reach, 30 seconds later.
+
+The token is kept in the registry section `hemlock` and goes on every request
+(`HttpTask` adds the header); the channel never prints it. Any 401 (from the
+list, a save or the long poll) means the TV is no longer paired: the channel
+forgets the token and shows a new code. So **Remove** on the admin page puts
+the TV back on the pairing screen within a few seconds, by its next long
+poll. **Unpair this TV** in the settings dialog (OK twice) forgets the token
+on the TV; remove it on the admin page too, or its entry stays there unused.
+
+A Hemlock without sign-in answers 404 to the pairing request; the channel
+then shows the slideshow without a token.
+
 ## Settings
 
 | Setting | Default | Changed by |
@@ -145,11 +184,14 @@ refetches the list once a minute and asks again each time.
 | Address | `hemlock_base_url` in the manifest: `HEMLOCK_BASE_URL` at build time, else `http://10.0.5.10` | The settings dialog |
 | Books | Owned (`owned`; also `all`, `read`, `unread`, the filters of `/api/display`) | The settings dialog |
 | Seconds per book | 10 (5, 10, 15, 20, 30, 45, 60, 120 or 300) | The settings dialog |
+| Pairing | The device token from [pairing](#pairing) | Unpair this TV in the settings dialog |
 
 The Options key opens the dialog over the slideshow: Up and Down choose a row,
 OK on the address opens the on-screen keyboard (Save keeps an `http://` or
-`https://` address, without a trailing slash), Left and Right change the other
-two, and Back or Options closes it and applies the changes. They are kept in
+`https://` address, without a trailing slash), Left and Right change the books
+and the seconds, OK twice on Pairing unpairs the TV, and Back or Options closes
+it and applies the changes. A new address while pairing asks it for a new
+code. They are kept in
 the registry section `hemlock` on the TV. The address is stored only when it
 differs from the build's default, so a channel rebuilt with a new default
 reaches the TV unless the address was changed on the TV.
@@ -237,7 +279,8 @@ has not been run against that.
 - **The debug console.** `nc <ip> 8085` (or `telnet <ip> 8085`) on the dev
   machine prints the channel's compile errors, runtime errors and its own
   `[hemlock hh:mm:ss.mmm]` lines: the settings at start, each fetch, each
-  slide, each pause, highlight and save, and the screensaver wait.
+  slide, each pause, highlight and save, each pairing step (never the
+  token), and the screensaver wait.
 - **A screenshot.** Open `http://<ip>` in a browser, sign in as `rokudev`,
   and use Utilities, Screenshot while the channel runs.
 - **"Can't reach Hemlock at …".** The address is wrong, the box is down, or
@@ -247,6 +290,11 @@ has not been run against that.
   TV's developer password.
 - **A control-protocol key press answers 403.** Network access is
   "Limited" (above).
+- **The pairing screen comes back.** Hemlock answered 401: the TV was
+  removed on `/admin`, or the address points at another Hemlock. Type the new
+  code on that Hemlock's admin page.
+- **"Hemlock is busy".** Too many TVs are pairing at once, or this one asked
+  for codes too often; it tries again by itself a minute later.
 - **Saves fail through the proxy's name.** A proxy that asks for a login lets
   the TV read but not write; use the box's LAN address
   ([Deployment § The reverse proxy](deployment.md#the-reverse-proxy)).

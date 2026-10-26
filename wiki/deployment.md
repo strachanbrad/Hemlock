@@ -456,12 +456,14 @@ The owner's reverse proxy sits in front of nginx and needs:
   address built into it (`http://10.0.5.10` unless `HEMLOCK_BASE_URL` says
   otherwise, [Roku channel § Settings](roku.md#settings)), straight to nginx,
   so the proxy plays no part and nginx needs nothing more. It pairs once
-  ([Admin § Televisions](admin.md#televisions)) and sends its token as
+  ([Admin § Televisions](admin.md#televisions),
+  [Roku channel § Pairing](roku.md#pairing)) and sends its token as
   `Authorization: Bearer` with every request. A channel built with the
   proxy's name instead needs the proxy to pass `POST /api/devices/pair`,
   `GET /api/devices/pair/<poll>`, `GET /api/display`, `GET /api/changes`,
-  `GET /covers/` and `PATCH /api/books/<id>` with their `Authorization`
-  header, and to hold a request open for at least 30 seconds. The channel
+  `GET /covers/` and `PATCH /api/books/<id>` without a login of its own and
+  with their `Authorization` header untouched, and to hold a request open
+  for at least 30 seconds. The channel
   checks an https certificate against the TV's own bundle
   (`common:/certs/ca-bundle.crt`).
 

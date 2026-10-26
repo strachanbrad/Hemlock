@@ -12,3 +12,10 @@ export function localDate(utc) {
   if (!date || Number.isNaN(date.getTime())) return utc.slice(0, 10)
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
+
+// An instant the server wrote with toISOString(), as YYYY-MM-DD HH:MM in the browser's time zone.
+export function localDateTime(iso) {
+  const date = typeof iso === 'string' ? new Date(iso) : null
+  if (!date || Number.isNaN(date.getTime())) return ''
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}

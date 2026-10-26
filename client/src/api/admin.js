@@ -26,3 +26,17 @@ export const getSettings = ({ signal } = {}) => request('/api/admin/settings', {
 export const saveSettings = (changes) => request('/api/admin/settings', { method: 'PUT', json: changes })
 
 export const testService = (service) => request('/api/admin/settings/test', { method: 'POST', json: { service } })
+
+export const listUsers = ({ signal } = {}) => request('/api/admin/users', { signal })
+
+export const addUser = (name, password) => request('/api/admin/users', { method: 'POST', json: { name, password } })
+
+export const setUserPassword = (id, password) => request(`/api/admin/users/${id}/password`, { method: 'PUT', json: { password } })
+
+export const removeUser = (id) => request(`/api/admin/users/${id}`, { method: 'DELETE' })
+
+export const listDevices = ({ signal } = {}) => request('/api/admin/devices', { signal })
+
+export const pairDevice = (code, name) => request('/api/admin/devices', { method: 'POST', json: { code, name } })
+
+export const removeDevice = (id) => request(`/api/admin/devices/${id}`, { method: 'DELETE' })

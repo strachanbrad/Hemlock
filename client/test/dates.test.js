@@ -5,7 +5,7 @@
 
 import process from 'node:process'
 import { afterEach, describe, expect, it } from 'vitest'
-import { localDate } from '../src/lib/dates.js'
+import { localDate, localDateTime } from '../src/lib/dates.js'
 
 const zone = process.env.TZ
 afterEach(() => {
@@ -26,5 +26,19 @@ describe('localDate', () => {
   it('falls back to the stored date for a value it cannot read', () => {
     expect(localDate('2026-10-24')).toBe('2026-10-24')
     expect(localDate('not a date')).toBe('not a date')
+  })
+})
+
+describe('localDateTime', () => {
+  it('shows an ISO instant as the date and minute where the browser is', () => {
+    process.env.TZ = 'America/New_York'
+    expect(localDateTime('2026-10-25T02:05:59.000Z')).toBe('2026-10-24 22:05')
+    process.env.TZ = 'Australia/Sydney'
+    expect(localDateTime('2026-10-24T22:30:00.000Z')).toBe('2026-10-25 09:30')
+  })
+
+  it('shows nothing for a value it cannot read', () => {
+    expect(localDateTime(null)).toBe('')
+    expect(localDateTime('not a date')).toBe('')
   })
 })

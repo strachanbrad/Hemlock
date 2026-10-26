@@ -37,4 +37,11 @@ describe('loadConfig', () => {
     assert.equal(loadConfig({ PORT: '5100' }).port, 5100)
     for (const PORT of ['abc', '70000', '-1', '50.5']) assert.throws(() => loadConfig({ PORT }), /PORT is not a port number/, PORT)
   })
+  it('trusts loopback and the proxies named in TRUSTED_PROXIES', () => {
+    assert.deepEqual(loadConfig({}).trustProxy, ['loopback'])
+    assert.deepEqual(loadConfig({ TRUSTED_PROXIES: ' 10.0.2.6, 10.0.4.0/24 ,' }).trustProxy, ['loopback', '10.0.2.6', '10.0.4.0/24'])
+    for (const TRUSTED_PROXIES of ['proxy', '10.0.2', '10.0.2.6/x', '10.0.2.6/24/1']) {
+      assert.throws(() => loadConfig({ TRUSTED_PROXIES }), /TRUSTED_PROXIES/, TRUSTED_PROXIES)
+    }
+  })
 })

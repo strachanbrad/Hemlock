@@ -39,8 +39,8 @@ export function signInGuard({ users, devices, secure }) {
   }
 }
 
-// The lockout counts per name and per client address. Behind nginx every request comes from
-// 127.0.0.1, so the address count is one count for the whole process there.
+// The lockout counts per name and per visitor address (req.ip, which trust proxy reads from
+// X-Forwarded-For behind nginx and the owner's proxy).
 export default function sessionRoutes({ users, secure, now = Date.now }) {
   const router = Router()
   const lockout = createLockout({ now })

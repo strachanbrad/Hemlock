@@ -233,6 +233,15 @@ The file holds one `NAME=value` line per variable, and all are optional:
   on the admin page, Claude is not asked.
 - `LOOKUP_CONTACT`: an email address sent in Open Library's `User-Agent`, which
   raises Open Library's limit from one request a second to three.
+- `TRUSTED_PROXIES`: the addresses of the proxies in front of nginx,
+  comma-separated (`10.0.2.6`, or a network such as `10.0.2.0/24`). nginx
+  appends each visitor's address to `X-Forwarded-For`, and the server
+  trusts loopback (nginx) plus these when it reads the visitor's address
+  back out of that header, so the login lockout and the pairing limit count
+  per visitor ([Security § Sessions](security.md#sessions)). Without it,
+  everyone who comes through the proxy counts as one visitor, the proxy's
+  address. A visitor cannot forge an address: only entries added by a
+  trusted proxy are believed.
 
 A key or contact saved on the admin page wins over this file; the file is
 the fallback. Entering keys on the page keeps them out of this file
@@ -392,8 +401,10 @@ On the box:
   defaults; the site sets no log files of its own.
 - A deploy prints its steps to the terminal and keeps no log.
 
-nginx logs the proxy's address as the client. To log the browser's address
-instead, when the proxy sends `X-Forwarded-For`, write
+nginx logs the proxy's address as the client (the server itself reads the
+visitor's address from `X-Forwarded-For`, see `TRUSTED_PROXIES` under
+[Secrets](#secrets)). To log the browser's address in nginx's own log as
+well, when the proxy sends `X-Forwarded-For`, write
 `/etc/nginx/conf.d/hemlock-realip.conf` on the box as root with these two
 lines, then run `sudo nginx -t && sudo systemctl reload nginx`:
 
@@ -405,6 +416,10 @@ real_ip_header X-Forwarded-For;
 ## The reverse proxy
 
 The owner's reverse proxy sits in front of nginx and needs:
+
+- To send `X-Forwarded-For` with the visitor's address, and to be named in
+  `TRUSTED_PROXIES` ([Secrets](#secrets)); otherwise every visitor through
+  the proxy shares one login lockout and one pairing limit.
 
 - **TLS.** The proxy terminates HTTPS. It is a requirement, not an option: a
   phone browser grants camera access for barcode scanning only on a secure

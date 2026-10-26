@@ -4,6 +4,7 @@
  */
 
 import fs from 'node:fs'
+import net from 'node:net'
 import path from 'node:path'
 
 export const repoRoot = path.resolve(import.meta.dirname, '../..')
@@ -27,6 +28,14 @@ export function loadConfig(env = process.env) {
   const secretsKey = env.SECRETS_KEY?.trim() || null
   if (secretsKey && !/^[0-9a-f]{64}$/i.test(secretsKey)) throw new Error('SECRETS_KEY is not 64 hexadecimal characters')
 
+  // Proxies in front of nginx, whose X-Forwarded-For entries name the visitor; nginx itself is loopback.
+  const trustedProxies = (env.TRUSTED_PROXIES ?? '').split(',').map((item) => item.trim()).filter(Boolean)
+  for (const proxy of trustedProxies) {
+    const [address, prefix, ...rest] = proxy.split('/')
+    const valid = net.isIP(address) && rest.length === 0 && (prefix === undefined || /^\d{1,3}$/.test(prefix))
+    if (!valid) throw new Error(`TRUSTED_PROXIES holds something that is not an IP address or network: ${proxy}`)
+  }
+
   const version = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8')).version
 
   return Object.freeze({
@@ -40,6 +49,7 @@ export function loadConfig(env = process.env) {
     anthropicApiKey: env.ANTHROPIC_API_KEY?.trim() || null,
     lookupContact,
     secretsKey,
+    trustProxy: ['loopback', ...trustedProxies],
     userAgent: userAgent(version, lookupContact),
   })
 }

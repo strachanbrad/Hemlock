@@ -178,12 +178,16 @@ check and the guard), `server/src/users.js`, `server/src/devices.js`,
   while the `users` table is empty. Five failures within 15 minutes for one
   name, or from one client address, answer 429 with `Retry-After` for the
   rest of the window, even for the right password; a right password clears
-  both counts. The counts are in memory, and behind nginx every request
-  comes from `127.0.0.1`, so there the address count is one count for the
-  whole box: someone on the internet can keep the household from signing
-  in for 15 minutes, but cannot keep guessing, and browsers already signed
-  in are not affected. A login with a session cookie already present ends
-  that session first.
+  both counts. The counts are in memory. The client address is `req.ip`,
+  which Express reads from `X-Forwarded-For` through `trust proxy`: nginx
+  (loopback) and the proxies named in `TRUSTED_PROXIES`
+  ([Deployment § Secrets](deployment.md#secrets)) are trusted, and the
+  first address that none of them added is the visitor's, so a visitor
+  cannot pose as another by sending the header. Without `TRUSTED_PROXIES`
+  everyone behind the proxy counts as one address: someone on the internet
+  could then keep the household from signing in for 15 minutes, but could
+  not keep guessing, and browsers already signed in are not affected. A
+  login with a session cookie already present ends that session first.
 - **The cookie** `hemlock_session` holds 32 random bytes; the
   `user_sessions` table keeps only their SHA-256, the user and an expiry.
   It is `HttpOnly`, `SameSite=Lax`, `Path=/`, `Max-Age` 180 days and

@@ -82,9 +82,8 @@ password included.
   `{ error: 'Wrong password' }`, 400 without a password, 503 when no
   password is set (the message names the command), and 429 with
   `Retry-After` once 5 wrong passwords fall within 15 minutes. The count is
-  in memory for the whole process, not per address: behind the proxy every
-  request comes from the same address. A right password clears it; a
-  restart empties it.
+  in memory for the whole process, not per address (one household, one
+  password). A right password clears it; a restart empties it.
 - The cookie is `hemlock_admin`: 32 random bytes in base64url, `HttpOnly`,
   `SameSite=Strict`, `Path=/api/admin` (no other request carries it),
   `Max-Age` 30 days from the login, and `Secure` when
@@ -170,10 +169,11 @@ anyone; a code is worth nothing until it is typed on this page):
    `poll` a random handle. Both are unique among the pairings waiting. A
    pairing waits in the server's memory for 10 minutes; a restart forgets
    it, and the TV asks again. At most 20 wait at once (503 beyond) and at
-   most 3 start per minute from one client address (429); both answers
-   carry `Retry-After` in seconds. Behind nginx every request comes from
-   `127.0.0.1`, so the per-address count is one count for the whole box
-   there.
+   most 3 start per minute from one visitor address (429); both answers
+   carry `Retry-After` in seconds. The address is the one `TRUSTED_PROXIES`
+   lets the server read from `X-Forwarded-For`
+   ([Deployment § Secrets](deployment.md#secrets)); without it, everyone
+   behind the proxy counts as one address.
 2. The TV asks `GET /api/devices/pair/<poll>` every few seconds: 204 while
    the pairing waits, 200 `{ token }` once it is approved, and 410 when it
    expired, was already collected or never existed. The token is handed
